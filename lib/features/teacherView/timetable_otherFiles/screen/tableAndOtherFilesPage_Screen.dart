@@ -477,13 +477,15 @@ class _TableAndOtherFilePageScreenState
                         final controller = ref.read(
                           timetableAndOtherFilesPageControllerProvider,
                         );
-                        if (val == 'delete')
+                        if (val == 'delete') {
                           controller.deleteOtherFiles(item.id);
-                        if (val == 'edit')
+                        }
+                        if (val == 'edit') {
                           controller.updateTitleOtherFiles(
                             item.id,
-                            "New Title",
+                            "New Title File",
                           );
+                        }
                       },
                       icon: const Icon(
                         Icons.more_vert,

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "458728614797",
+    "project_id": "scholo-c927b",
+    "storage_bucket": "scholo-c927b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458728614797:android:0836428db290cbf455ebc4",
+        "android_client_info": {
+          "package_name": "com.example.scholo_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBkdzKrE_xrHYirTJeuU5h1WU39bbrEKA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

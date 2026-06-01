@@ -5,11 +5,16 @@ class OtherTeacherModel {
   final String teacherId;
   final String subject;
   final String imageUrl;
+  final String email;
 
   final String employeeId;
   final int mobileNo;
+
   final bool isPermanent;
   final String? substitutedBy;
+  final String? substitutedId;
+  final String? substitutedImageUrl;
+  final int? substitutedMobileNo;
   final DateTime? substitutedDate;
 
   //<editor-fold desc="Data Methods">
@@ -23,6 +28,10 @@ class OtherTeacherModel {
     required this.isPermanent,
     this.substitutedBy,
     this.substitutedDate,
+    this.substitutedId,
+    this.substitutedImageUrl,
+    this.substitutedMobileNo,
+    required this.email,
   });
 
   OtherTeacherModel copyWith({
@@ -35,6 +44,10 @@ class OtherTeacherModel {
     bool? isPermanent,
     String? substitutedBy,
     DateTime? substitutedDate,
+    String? substitutedId,
+    String? substitutedImageUrl,
+    int? substitutedMobileNo,
+    String? email,
   }) {
     return OtherTeacherModel(
       teacherName: teacherName ?? this.teacherName,
@@ -46,6 +59,10 @@ class OtherTeacherModel {
       isPermanent: isPermanent ?? this.isPermanent,
       substitutedBy: substitutedBy ?? this.substitutedBy,
       substitutedDate: substitutedDate ?? this.substitutedDate,
+      substitutedId: substitutedId ?? this.substitutedId,
+      substitutedImageUrl: substitutedImageUrl ?? this.substitutedImageUrl,
+      substitutedMobileNo: substitutedMobileNo ?? this.substitutedMobileNo,
+      email: email ?? this.email,
     );
   }
 
@@ -60,6 +77,10 @@ class OtherTeacherModel {
       'isPermanent': this.isPermanent,
       'substitutedBy': this.substitutedBy,
       'substitutedDate': this.substitutedDate,
+      'substitutedId': this.substitutedId,
+      'substitutedImageUrl': this.substitutedImageUrl,
+      'substitutedMobileNo': this.substitutedMobileNo,
+      'email': this.email,
     };
   }
 
@@ -68,6 +89,7 @@ class OtherTeacherModel {
       teacherName: map['teacherName'] ?? '',
       teacherId: map['teacherId'] ?? '',
       subject: map['subject'] ?? '',
+      email: map['email'] ?? '',
       employeeId: map['employeeId'] ?? '',
       imageUrl: map['imageUrl'] ?? '',
       mobileNo: map['mobileNo'] ?? 0,
@@ -79,7 +101,10 @@ class OtherTeacherModel {
       substitutedDate: map['substitutedDate'] != null
           ? (map['substitutedDate'] as Timestamp).toDate()
           : null,
+      substitutedId: map['substitutedId'],
+      substitutedImageUrl: map['substitutedImageUrl'],
+      substitutedMobileNo: map['substitutedMobileNo'],
     );
   }
-  //</editor-fold>
+//</editor-fold>
 }

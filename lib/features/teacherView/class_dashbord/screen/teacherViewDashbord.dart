@@ -427,6 +427,10 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     final substitutedByController = TextEditingController(
       text: editTeacher?.substitutedBy ?? "",
     );
+    String substitutedId ='';
+     String substituteMobileNo ='';
+     String substituteImageUrl ='';
+
 
     DateTime? substitutedDate = editTeacher?.substitutedDate;
 
@@ -661,6 +665,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                           onChanged: (value) {
                             setState(() {
                               selectedSubstituteTeacher = value;
+                              log(selectedSubstituteTeacher.toString());
 
                               // ✅ Save only teacher name (same as your logic)
                               substitutedByController.text =
@@ -816,6 +821,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                               /// ✅ New Teacher Object (for Add or Edit)
                               final updatedOtherTeacher = OtherTeacherModel(
+                                email: selectedTeacher!.email,
                                 imageUrl: selectedTeacher!.imageUrl,
                                 teacherName: selectedTeacher!.teacherName,
                                 teacherId: selectedTeacher!.id,
@@ -829,6 +835,16 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                 substitutedDate: isPermanent
                                     ? null
                                     : substitutedDate,
+                                substitutedMobileNo: isPermanent
+                                    ? null
+                                    : int.parse(
+                                        substituteMobileNo),
+                                substitutedImageUrl: isPermanent
+                                    ? null
+                                    : substituteImageUrl,
+                                substitutedId: isPermanent
+                                    ? null
+                                    : substitutedId,
                               );
 
                               List<OtherTeacherModel> updatedList = [];

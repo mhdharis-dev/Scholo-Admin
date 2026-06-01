@@ -22,6 +22,7 @@ import '../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../core/constant/image_constant.dart';
 import '../../models/students_model.dart';
 import '../../models/teacher_model.dart';
+import '../notifications/screen/notifications _Page.dart';
 import '../students/screen/students_list.dart';
 import '../teacherView/class_dashbord/screen/classWiseTeacherView_screen.dart';
 import '../teachers/controller/teacher_controller.dart';
@@ -1428,8 +1429,17 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         children: [
 
                           // 🔔 Notification
-                          const Icon(Icons.notifications_none,
-                              size: 26, color: Colors.black54),
+                          GestureDetector(
+                            onTap: () {
+                              _sideMenuController.changePage(6);
+                              _pageController.jumpToPage(6);
+                            },
+                            child: const Icon(
+                              Icons.notifications_none,
+                              size: 26,
+                              color: Colors.black54,
+                            ),
+                          ),
 
                           const SizedBox(width: 25),
 
@@ -1494,6 +1504,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                       EventsScreen(),
                       ClassWiseTeacherViewScreen(),
                       RecycleBinPage(),
+                      NotificationsPage(),
                     ],
                   ),
                 ),

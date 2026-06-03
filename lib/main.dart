@@ -3,16 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/config/app_environment.dart';
 import 'features/sidemenu/side_menu_bar.dart';
-import 'firebase_options.dart';
 import 'auth/screen/splash_Screen.dart';
-
-/// 🧠 Provider to initialize Firebase
-final firebaseProvider = FutureProvider<FirebaseApp>((ref) async {
-  return await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-});
+import 'otherplatform/platformError_page.dart';
 
 /// 🔐 Provider to manage login state (SharedPreferences)
 final authStateProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -22,25 +16,20 @@ final authStateProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return {'isLoggedIn': isLoggedIn, 'role': role};
 });
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: MyApp()));
-}
-
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
-  static const Color primaryColor = Color(0xff1193D4);
+  static const Color primaryColor = Color(0xff1D9BF0);
   static const Color appbarColor = Colors.transparent;
   static const Color textColor = Colors.black;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final firebaseInit = ref.watch(firebaseProvider);
     final authState = ref.watch(authStateProvider);
+    final config = ref.watch(appConfigProvider);
 
     return MaterialApp(
-      title: 'Scholo',
+      title: config.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primaryColor: primaryColor,
@@ -92,12 +81,25 @@ class MyApp extends ConsumerWidget {
         ),
         useMaterial3: true,
       ),
-      home: firebaseInit.when(
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
-        data: (_) {
+      builder: (context, child) {
+        if (config.isProduction) return child!;
+        
+        return Banner(
+          message: "TESTING",
+          location: BannerLocation.topEnd,
+          color: Colors.red,
+          child: child!,
+        );
+      },
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          // Convert logical pixels to inches (approx. 160 dp = 1 inch)
+          final widthInInches = constraints.maxWidth / 160;
+
+          if (widthInInches < 6.4) {
+            return const SomethingWentWrongPage();
+          }
+
           return authState.when(
             loading: () => const SplashScreen(),
             error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),

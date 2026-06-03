@@ -1,0 +1,30 @@
+{
+  "projects": {
+    "prod": "scholo-c927b",
+    "test": "scholo-testing"
+  },
+  "targets": {
+    "scholo-c927b": {
+      "hosting": {
+        "prod": [
+          "scholo-c927b"
+        ]
+      }
+    },
+    "scholo-test-project": {
+      "hosting": {
+        "test": [
+          "scholo-test-project"
+        ]
+      }
+    },
+    "scholo-testing": {
+      "hosting": {
+        "test": [
+          "scholo-testing"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

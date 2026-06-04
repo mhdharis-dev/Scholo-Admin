@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/constant/firebase_constant.dart';
 import '../controller/fee_collection_controller.dart';
 
@@ -165,8 +166,20 @@ class _FeeCollectionPageState extends ConsumerState<FeeCollectionPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                          onPressed: () => context.pop(),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          "Fee Collection Details",
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: completedButton(fee),

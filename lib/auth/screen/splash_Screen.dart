@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scholo_admin/core/constant/image_constant.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../features/sidemenu/side_menu_bar.dart';
-import 'loginPage.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -61,24 +59,23 @@ class _SplashScreenState extends State<SplashScreen>
     final isLoggedIn = prefs.getBool("isLoggedIn") ?? false;
 
     if (!isLoggedIn) {
-      _goTo(const LoginPage());
+      _goTo('/login');
       return;
     }
 
     final role = prefs.getString("role");
     if (role == "admin") {
-      _goTo(const AdminPanel());
+      _goTo('/admin/dashboard');
     } else {
-      _goTo(const LoginPage());
+      _goTo('/login');
     }
   }
 
-  void _goTo(Widget page) {
+  void _goTo(String path) {
     Timer(const Duration(seconds: 4), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => page),
-      );
+      if (mounted) {
+        context.go(path);
+      }
     });
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../controller/attendance_controller.dart';
 
@@ -37,6 +38,23 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                    onPressed: () => context.pop(),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Manage Attendance",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               _buildTopCard(context, state),
               const SizedBox(height: 30),
               _headerRow(),

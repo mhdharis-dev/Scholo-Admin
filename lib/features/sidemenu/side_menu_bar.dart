@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:go_router/go_router.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
@@ -29,28 +30,113 @@ import '../teachers/controller/teacher_controller.dart';
 import '../teachers/screen/teacher_list.dart';
 
 class AdminPanel extends ConsumerStatefulWidget {
-  const AdminPanel({super.key});
+  final Widget child;
+  const AdminPanel({super.key, required this.child});
 
   @override
   ConsumerState<AdminPanel> createState() => _AdminPanelState();
 }
 
 class _AdminPanelState extends ConsumerState<AdminPanel> {
-  final PageController _pageController = PageController();
   final SideMenuController _sideMenuController = SideMenuController();
 
   late Future<List<Map<String, String>>> _searchDataFuture;
 
+  // Admin Profile Info
+  String _adminName = "Administrator";
+  String _adminSchoolName = "D.U.H.S.S THOOTHA";
+  String _adminGender = "Male";
+  String _adminMobile = "9876543210";
+  final String _adminEmail = "admin@scholo.com";
+  final String _adminPassword = "••••••••";
+
+  final GlobalKey _profileKey = GlobalKey();
+  OverlayEntry? _overlayEntry;
+
   @override
   void initState() {
     super.initState();
+    _loadAdminData();
     _fetchTeachers();
 
-
-    _sideMenuController.addListener((index) {
-      _pageController.jumpToPage(index);
-    });
     _searchDataFuture = _fetchSearchItems(); // ✅ cache search data once
+  }
+
+  @override
+  void dispose() {
+    _hideProfileTooltip();
+    super.dispose();
+  }
+
+  Future<void> _loadAdminData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _adminName = prefs.getString('admin_name') ?? "Administrator";
+      _adminSchoolName = prefs.getString('admin_school_name') ?? "D.U.H.S.S THOOTHA";
+      _adminGender = prefs.getString('admin_gender') ?? "Male";
+      _adminMobile = prefs.getString('admin_mobile') ?? "9876543210";
+    });
+  }
+
+  Future<void> _saveAdminData(String name, String school, String gender, String mobile) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('admin_name', name);
+    await prefs.setString('admin_school_name', school);
+    await prefs.setString('admin_gender', gender);
+    await prefs.setString('admin_mobile', mobile);
+    _loadAdminData();
+  }
+
+  void _showProfileTooltip() {
+    if (_overlayEntry != null) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
+      return;
+    }
+
+    final RenderBox renderBox =
+        _profileKey.currentContext!.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Dismissible background
+          GestureDetector(
+            onTap: _hideProfileTooltip,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
+          ),
+          Positioned(
+            top: offset.dy + size.height + 10,
+            right: 20,
+            child: Material(
+              color: Colors.transparent,
+              child: AdminProfileTooltipCard(
+                name: _adminName,
+                schoolName: _adminSchoolName,
+                gender: _adminGender,
+                mobile: _adminMobile,
+                email: _adminEmail,
+                password: _adminPassword,
+                onSave: (name, school, gender, mobile) {
+                  _saveAdminData(name, school, gender, mobile);
+                },
+                onClose: _hideProfileTooltip,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideProfileTooltip() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
   }
 
   /// 🔹 Fetch Students & Teachers (with display info)
@@ -148,11 +234,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 await prefs.clear();
                 if (context.mounted) {
                   Navigator.of(context).pop();
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                        (route) => false,
-                  );
+                  context.go('/login');
                 }
               },
             ),
@@ -1234,6 +1316,28 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final String location = GoRouterState.of(context).matchedLocation;
+    int activeIndex = 0;
+    if (location.startsWith('/admin/teachers')) {
+      activeIndex = 1;
+    } else if (location.startsWith('/admin/students')) {
+      activeIndex = 2;
+    } else if (location.startsWith('/admin/events')) {
+      activeIndex = 3;
+    } else if (location.startsWith('/admin/classrooms')) {
+      activeIndex = 4;
+    } else if (location.startsWith('/admin/trash')) {
+      activeIndex = 5;
+    } else if (location.startsWith('/admin/notifications')) {
+      activeIndex = 6;
+    }
+
+    if (_sideMenuController.currentPage != activeIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _sideMenuController.changePage(activeIndex);
+      });
+    }
+
     return Scaffold(
       body: Row(
         children: [
@@ -1266,14 +1370,14 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                   children: [
                     const SizedBox(height: 10),
                     Center(
-                      child: CircleAvatar(
+                        child: CircleAvatar(
                         radius: 44,
-                        backgroundColor: Colors.white,
-                        child: Padding(
+                          backgroundColor: Colors.white,
+                          child: Padding(
                           padding: const EdgeInsets.all(12.0),
-                          child: Image.asset(
-                            ImageConstant.logoWithText,
-                            fit: BoxFit.contain,
+                            child: Image.asset(
+                              ImageConstant.logoWithText,
+                              fit: BoxFit.contain,
                             height: 115,
                             width: 115,
                           ),
@@ -1288,31 +1392,31 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 SideMenuItem(
                   title: 'Dashboard',
                   icon: const Icon(CupertinoIcons.square_split_2x2_fill),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/dashboard'),
                 ),
                 SideMenuItem(
                   title: 'Teacher',
                   icon: const Icon(CupertinoIcons.person_alt_circle_fill),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/teachers'),
                 ),
                 SideMenuItem(
                   title: 'Student',
                   icon: const Icon(CupertinoIcons.person_3_fill),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/students'),
                 ),
                 SideMenuItem(
                   title: 'Events',
                   icon: const Icon(Icons.calendar_month_outlined),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/events'),
                 ),
                 SideMenuItem(
                   title: 'Class Rooms',
                   icon:  Icon(Icons.co_present),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/classrooms'),
                 ),   SideMenuItem(
                   title: 'Trash Bin',
                   icon:  Icon(Icons.delete,),
-                  onTap: (index, _) => _sideMenuController.changePage(index),
+                  onTap: (index, _) => context.go('/admin/trash'),
                 ),
               ],
               footer: Padding(
@@ -1345,7 +1449,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         color: Colors.black.withOpacity(0.06),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
-                      ),
+                    ),
                     ],
                   ),
                   child: Row(
@@ -1431,8 +1535,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                           // 🔔 Notification
                           GestureDetector(
                             onTap: () {
-                              _sideMenuController.changePage(6);
-                              _pageController.jumpToPage(6);
+                              context.go('/admin/notifications');
                             },
                             child: const Icon(
                               Icons.notifications_none,
@@ -1453,39 +1556,47 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                           const SizedBox(width: 20),
 
                           // Profile + Name
-                          Row(
-                            children: [
-                               CircleAvatar(
-                                radius: 20,
-                                backgroundColor: Colors.blue.withOpacity(0.5),
-                                backgroundImage: AssetImage(
-                                  ImageConstant.temporaryTeacherImage,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-
-                              const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                          GestureDetector(
+                            key: _profileKey,
+                            onTap: _showProfileTooltip,
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Row(
                                 children: [
-                                  Text(
-                                    "D.U.H.S.S THOOTHA",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: const Color(0xff1193D4).withOpacity(0.15),
+                                    backgroundImage: const AssetImage(
+                                      ImageConstant.temporaryTeacherImage,
                                     ),
                                   ),
-                                  Text(
-                                    "ADMINISTRATOR",
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 11,
-                                      letterSpacing: 0.6,
-                                    ),
+                                  const SizedBox(width: 10),
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _adminSchoolName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      Text(
+                                        _adminName.toUpperCase(),
+                                        style: TextStyle(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 11,
+                                          letterSpacing: 0.6,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -1494,19 +1605,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 ),
                 // 🔸 Main Pages
                 Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: const [
-                      DashboardScreen(),
-                      TeacherListScreen(),
-                      StudentListScreen(),
-                      EventsScreen(),
-                      ClassWiseTeacherViewScreen(),
-                      RecycleBinPage(),
-                      NotificationsPage(),
-                    ],
-                  ),
+                  child: widget.child,
                 ),
               ],
             ),
@@ -1515,4 +1614,319 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       ),
     );
   }
+}
+
+class AdminProfileTooltipCard extends StatefulWidget {
+  final String name;
+  final String schoolName;
+  final String gender;
+  final String mobile;
+  final String email;
+  final String password;
+  final Function(String name, String school, String gender, String mobile) onSave;
+  final VoidCallback onClose;
+
+  const AdminProfileTooltipCard({
+    super.key,
+    required this.name,
+    required this.schoolName,
+    required this.gender,
+    required this.mobile,
+    required this.email,
+    required this.password,
+    required this.onSave,
+    required this.onClose,
+  });
+
+  @override
+  State<AdminProfileTooltipCard> createState() => _AdminProfileTooltipCardState();
+}
+
+class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
+  bool _isEditing = false;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _schoolCtrl;
+  late final TextEditingController _mobileCtrl;
+  String? _selectedGender;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.name);
+    _schoolCtrl = TextEditingController(text: widget.schoolName);
+    _mobileCtrl = TextEditingController(text: widget.mobile);
+    _selectedGender = widget.gender;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _schoolCtrl.dispose();
+    _mobileCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _buildField({required String label, required Widget content}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade500,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          content,
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // Arrow pointing up
+        Padding(
+          padding: const EdgeInsets.only(right: 28.0),
+          child: CustomPaint(
+            size: const Size(18, 10),
+            painter: _ArrowPainter(),
+          ),
+        ),
+        Container(
+          width: 320,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+            border: Border.all(color: Colors.grey.shade100),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _isEditing ? 'Edit Profile' : 'Admin Profile',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (!_isEditing)
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, size: 20, color: Color(0xff1193D4)),
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = true;
+                        });
+                      },
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                    ),
+                ],
+              ),
+              const Divider(height: 24),
+
+              // School Name
+              _buildField(
+                label: 'SCHOOL NAME',
+                content: _isEditing
+                    ? TextField(
+                        controller: _schoolCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Enter school name',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      )
+                    : Text(
+                        widget.schoolName,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+              ),
+
+              // Name
+              _buildField(
+                label: 'NAME',
+                content: _isEditing
+                    ? TextField(
+                        controller: _nameCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Enter name',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      )
+                    : Text(
+                        widget.name,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+              ),
+
+              // Gender
+              _buildField(
+                label: 'GENDER',
+                content: _isEditing
+                    ? DropdownButtonFormField<String>(
+                        value: _selectedGender,
+                        items: ['Male', 'Female']
+                            .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 14))))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedGender = v),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      )
+                    : Text(
+                        widget.gender,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+              ),
+
+              // Mobile No
+              _buildField(
+                label: 'MOBILE NO',
+                content: _isEditing
+                    ? TextField(
+                        controller: _mobileCtrl,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          hintText: 'Enter mobile no',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      )
+                    : Text(
+                        widget.mobile,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                      ),
+              ),
+
+              // Email (Const)
+              _buildField(
+                label: 'EMAIL (READ-ONLY)',
+                content: Text(
+                  widget.email,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
+                ),
+              ),
+
+              // Password (Const)
+              _buildField(
+                label: 'PASSWORD (READ-ONLY)',
+                content: Text(
+                  widget.password,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Actions
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (_isEditing) ...[
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = false;
+                          _nameCtrl.text = widget.name;
+                          _schoolCtrl.text = widget.schoolName;
+                          _mobileCtrl.text = widget.mobile;
+                          _selectedGender = widget.gender;
+                        });
+                      },
+                      child: const Text('Cancel', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff1193D4),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        widget.onSave(
+                          _nameCtrl.text.trim(),
+                          _schoolCtrl.text.trim(),
+                          _selectedGender ?? 'Male',
+                          _mobileCtrl.text.trim(),
+                        );
+                        setState(() {
+                          _isEditing = false;
+                        });
+                      },
+                      child: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    ),
+                  ] else ...[
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: widget.onClose,
+                      child: const Text('Close', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(size.width / 2, 0)
+      ..lineTo(size.width, size.height)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

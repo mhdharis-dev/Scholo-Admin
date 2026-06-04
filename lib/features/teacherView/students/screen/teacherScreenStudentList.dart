@@ -75,6 +75,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       });
     }
   }
+
   Future<String> _uploadToCloudinary(File file) async {
     final response = await CloudinaryService.studentProfile.uploadFile(
       CloudinaryFile.fromFile(file.path, folder: 'student_images'),
@@ -192,7 +193,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       ),
     );
   }
-
 
   Widget _buildDateOfBirthField() {
     return Row(
@@ -398,12 +398,14 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
               onPressed: _isUploading
                   ? null
                   : () async {
-                if (_classNo == null || _division == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Teacher data not loaded")),
-                  );
-                  return;
-                }
+                      if (_classNo == null || _division == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Teacher data not loaded"),
+                          ),
+                        );
+                        return;
+                      }
                       setState(() => _isUploading = true);
                       try {
                         if (_selectedFile != null) {
@@ -433,7 +435,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                           ), // ✅ Auto-fetched from teacher
                           division: _division ?? 'Not',
                           teacherName: _selectedTeacherName ?? '',
-                          teacherId:widget.teacherId,
+                          teacherId: widget.teacherId,
                           gender: _selectedGender ?? '',
                           delete: false,
                           imageUrl: _uploadedImageUrl ?? '',
@@ -700,7 +702,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
           children: [
             const SizedBox(height: 15),
 
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -717,7 +718,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
                   /// 🔹 Left: Assigned Teacher
                   Row(
                     children: [
@@ -762,17 +762,23 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                   /// 🔹 Right: Date + Class Filter (UI only)
                   Row(
                     children: [
-
                       /// Date Button
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                            Icon(
+                              Icons.calendar_today,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               "October 24, 2023",
@@ -786,19 +792,23 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
 
                       /// Class Filter Button
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.filter_list, size: 14, color: Colors.grey),
-                            SizedBox(width: 6),
-                            Text(
-                              "All Classes",
-                              style: TextStyle(fontSize: 12),
+                            Icon(
+                              Icons.filter_list,
+                              size: 14,
+                              color: Colors.grey,
                             ),
+                            SizedBox(width: 6),
+                            Text("All Classes", style: TextStyle(fontSize: 12)),
                             SizedBox(width: 4),
                             Icon(Icons.keyboard_arrow_down, size: 16),
                           ],
@@ -814,7 +824,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
               "Students Details",
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-
 
             const SizedBox(height: 20),
 
@@ -896,9 +905,8 @@ Widget studentCard({
               backgroundColor: Colors.grey.shade200,
               backgroundImage: student.imageUrl.isNotEmpty
                   ? NetworkImage(student.imageUrl)
-                  : const AssetImage(
-                  ImageConstant.temporaryStudentImage)
-              as ImageProvider,
+                  : const AssetImage(ImageConstant.temporaryStudentImage)
+                        as ImageProvider,
             ),
 
             /// Roll Number Badge
@@ -906,8 +914,7 @@ Widget studentCard({
               top: -4,
               left: -4,
               child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xff4C6FFF),
                   borderRadius: BorderRadius.circular(10),
@@ -946,8 +953,7 @@ Widget studentCard({
                 children: [
                   /// Class Pill
                   pillWidget(
-                    text:
-                    "Class ${student.classNo}-${student.division}",
+                    text: "Class ${student.classNo}-${student.division}",
                     bg: const Color(0xffEEF3FF),
                     textColor: const Color(0xff4C6FFF),
                   ),
@@ -991,11 +997,7 @@ Widget studentCard({
             borderRadius: BorderRadius.circular(10),
           ),
           child: IconButton(
-            icon: const Icon(
-              Icons.edit,
-              size: 18,
-              color: Color(0xff4C6FFF),
-            ),
+            icon: const Icon(Icons.edit, size: 18, color: Color(0xff4C6FFF)),
             onPressed: onEdit,
           ),
         ),

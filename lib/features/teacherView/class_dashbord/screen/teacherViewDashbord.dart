@@ -3,6 +3,7 @@ import 'dart:developer';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
@@ -414,9 +415,9 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     TeacherModel mainTeacher, {
     OtherTeacherModel? editTeacher, // ✅ for edit mode
   }) async {
-    OtherTeacherModel? selectedSubstituteTeacher;
+    TeacherModel? selectedSubstituteTeacher;
 
-    bool isPermanent = true;
+    bool isPermanent = editTeacher?.isPermanent ?? true;
 
     final subjectController = TextEditingController(
       text: editTeacher?.subject ?? "",
@@ -427,16 +428,11 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     final substitutedByController = TextEditingController(
       text: editTeacher?.substitutedBy ?? "",
     );
-    String substitutedId ='';
-     String substituteMobileNo ='';
-     String substituteImageUrl ='';
-
+    String substitutedId = editTeacher?.substitutedId ?? '';
+    String substituteMobileNo = editTeacher?.substitutedMobileNo?.toString() ?? '';
+    String substituteImageUrl = editTeacher?.substitutedImageUrl ?? '';
 
     DateTime? substitutedDate = editTeacher?.substitutedDate;
-
-    final availableSubstituteTeachers = (mainTeacher.otherTeachers ?? [])
-        .where((t) => t.isPermanent == true)
-        .toList();
 
     // ✅ Fetch Teachers List
     final snapshot = await FirebaseFirestore.instance
@@ -447,6 +443,14 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     final allTeachers = snapshot.docs
         .map((e) => TeacherModel.fromMap(e.data()))
         .toList();
+
+    // Preselect substitute teacher if editing
+    if (editTeacher != null && editTeacher.substitutedId != null) {
+      final matches = allTeachers.where((t) => t.id == editTeacher.substitutedId);
+      if (matches.isNotEmpty) {
+        selectedSubstituteTeacher = matches.first;
+      }
+    }
 
     /// ✅ Already added teacher IDs
     final existingIds =
@@ -464,9 +468,10 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
     /// ✅ Preselect teacher when editing
     if (editTeacher != null) {
-      selectedTeacher = allTeachers.firstWhere(
-        (t) => t.id == editTeacher.teacherId,
-      );
+      final matches = allTeachers.where((t) => t.id == editTeacher.teacherId);
+      if (matches.isNotEmpty) {
+        selectedTeacher = matches.first;
+      }
     }
 
     showModalBottomSheet(
@@ -643,7 +648,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                         const SizedBox(height: 10),
 
                         /// Substituted By
-                        DropdownButtonFormField<OtherTeacherModel>(
+                        DropdownButtonFormField<TeacherModel>(
                           value: selectedSubstituteTeacher,
                           decoration: InputDecoration(
                             labelText: "Substituted By",
@@ -654,7 +659,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                               borderSide: BorderSide.none,
                             ),
                           ),
-                          items: availableSubstituteTeachers.map((teacher) {
+                          items: allTeachers.map((teacher) {
                             return DropdownMenuItem(
                               value: teacher,
                               child: Text(
@@ -665,11 +670,11 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                           onChanged: (value) {
                             setState(() {
                               selectedSubstituteTeacher = value;
-                              log(selectedSubstituteTeacher.toString());
-
-                              // ✅ Save only teacher name (same as your logic)
                               substitutedByController.text =
                                   value?.teacherName ?? "";
+                              substitutedId = value?.id ?? "";
+                              substituteMobileNo = value?.mobileNo ?? "";
+                              substituteImageUrl = value?.imageUrl ?? "";
                             });
                           },
                         ),
@@ -837,8 +842,8 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                     : substitutedDate,
                                 substitutedMobileNo: isPermanent
                                     ? null
-                                    : int.parse(
-                                        substituteMobileNo),
+                                    : int.tryParse(
+                                        substituteMobileNo) ?? 0,
                                 substitutedImageUrl: isPermanent
                                     ? null
                                     : substituteImageUrl,
@@ -1176,7 +1181,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xffF9FAFB),
+      backgroundColor: const Color(0xffF8FAFC),
       body: teacherAsync.when(
         data: (mainTeacher) {
           if (mainTeacher == null) {
@@ -1187,40 +1192,108 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
             child: ListView(
               children: [
-                // Header
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 35,
-                      backgroundImage: mainTeacher.imageUrl.isNotEmpty
-                          ? NetworkImage(mainTeacher.imageUrl)
-                          : const AssetImage(
-                                  ImageConstant.temporaryTeacherImage,
-                                )
-                                as ImageProvider,
+                // Header Banner Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xff1D9BF0), Color(0xff1A8CD8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(width: 20),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          mainTeacher.teacherName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xff1D9BF0).withOpacity(0.2),
+                        blurRadius: 15,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
                         ),
-                        Text(
-                          ' ${mainTeacher.classNo}/${mainTeacher.division}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade700,
-                          ),
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.arrow_back_ios_new, size: 14, color: Colors.white),
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/admin/classrooms');
+                            }
+                          },
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 20),
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 32,
+                          backgroundImage: mainTeacher.imageUrl.isNotEmpty
+                              ? NetworkImage(mainTeacher.imageUrl)
+                              : const AssetImage(
+                                      ImageConstant.temporaryTeacherImage,
+                                    )
+                                    as ImageProvider,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              mainTeacher.teacherName,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'Class ${mainTeacher.classNo} - ${mainTeacher.division}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 40),
@@ -1228,81 +1301,66 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                 // Quick actions row
                 const Text(
                   "Quick Actions",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff2C3E50),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  alignment: WrapAlignment.start,
                   children: [
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AttendancePage(teacherId: mainTeacher.id),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/attendance/${mainTeacher.id}',
                       ),
                       child: _actionCard(
-                        Icons.fact_check,
+                        Icons.fact_check_rounded,
                         "Manage Attendance",
-                        Colors.blue,
+                        true,
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TeacherScreenStudentList(
-                            teacherId: mainTeacher.id,
-                          ),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/teacher-dashboard/${mainTeacher.id}/student-list',
                       ),
                       child: _actionCard(
-                        Icons.people,
+                        Icons.people_alt_rounded,
                         "Student Report",
-                        Colors.grey.shade200,
+                        false,
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              TableAndOtherFilePageScreen(teacherId: mainTeacher.id, classNo: mainTeacher.classNo, division: mainTeacher.division,),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/teacher-dashboard/${mainTeacher.id}/timetable/${mainTeacher.classNo}/${mainTeacher.division}',
                       ),
                       child: _actionCard(
-                        Icons.calendar_month_outlined,
+                        Icons.calendar_month_rounded,
                         "Timetable & Other",
-                        Colors.grey.shade200,
+                        false,
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ExamFolderPageScreen(teacherId: mainTeacher.id),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/teacher-dashboard/${mainTeacher.id}/marks',
                       ),
                       child: _actionCard(
-                        Icons.note_alt,
+                        Icons.note_alt_rounded,
                         "Marks",
-                        Colors.grey.shade200,
+                        false,
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              YearWiseReportScreen(teacherId: mainTeacher.id),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/teacher-dashboard/${mainTeacher.id}/class-report',
                       ),
                       child: _actionCard(
-                        Icons.bar_chart,
+                        Icons.bar_chart_rounded,
                         "Class Reports",
-                        Colors.grey.shade200,
+                        false,
                       ),
                     ),
                   ],
@@ -1313,60 +1371,54 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                 // Overview area — uses attendanceAsync & totalStudentsAsync
                 const Text(
                   "Overview",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff2C3E50),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 25,
-                    horizontal: 20,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _overviewItem(
+                Row(
+                  children: [
+                    Expanded(
+                      child: _overviewMetricCard(
                         "Total Students",
                         totalStudentsAsync.when(
                           data: (v) => v.toString(),
                           loading: () => '...',
                           error: (_, __) => '0',
                         ),
-                        Colors.black,
+                        const Color(0xff1D9BF0),
+                        Icons.people_alt_rounded,
                       ),
-                      _divider(),
-                      // Present Today (uses attendanceAsync)
-                      _overviewItem(
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _overviewMetricCard(
                         "Present Today",
                         attendanceAsync.when(
                           data: (map) => map['present']?.toString() ?? '0',
                           loading: () => '...',
                           error: (_, __) => '0',
                         ),
-                        Colors.green,
+                        const Color(0xff2E7D32),
+                        Icons.check_circle_rounded,
                       ),
-                      _divider(),
-                      _overviewItem(
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _overviewMetricCard(
                         "Absent Today",
                         attendanceAsync.when(
                           data: (map) => map['absent']?.toString() ?? '0',
                           loading: () => '...',
                           error: (_, __) => '0',
                         ),
-                        Colors.red,
+                        const Color(0xffC62828),
+                        Icons.cancel_rounded,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 40),
@@ -1383,12 +1435,8 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              FeeListScreen(teacherId: mainTeacher.id),
-                        ),
+                      onTap: () => context.push(
+                        '/admin/classrooms/teacher-dashboard/${mainTeacher.id}/fees',
                       ),
                       child: Row(
                         children: [
@@ -1494,7 +1542,6 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                               separatorBuilder: (context, index) =>
                                   const SizedBox(width: 15),
                               itemBuilder: (context, index) {
-                                /// ✅ Add Teacher Button at End
                                 if (index == otherTeachers.length) {
                                   return GestureDetector(
                                     onTap: () {
@@ -1503,26 +1550,37 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                     child: Container(
                                       width: 220,
                                       decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: Colors.blue),
+                                        color: const Color(0xffF8FAFC),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: const Color(0xff1565C0).withOpacity(0.3),
+                                          style: BorderStyle.solid,
+                                          width: 1.5,
+                                        ),
                                       ),
-                                      child: const Center(
+                                      child: Center(
                                         child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
+                                          mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Icon(
-                                              Icons.add_circle,
-                                              size: 40,
-                                              color: Colors.blue,
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xff1565C0).withOpacity(0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.add,
+                                                color: Color(0xff1565C0),
+                                                size: 24,
+                                              ),
                                             ),
-                                            SizedBox(height: 8),
-                                            Text(
+                                            const SizedBox(height: 10),
+                                            const Text(
                                               "Add Teacher",
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                color: Colors.blue,
+                                                color: Color(0xff1565C0),
+                                                fontSize: 14,
                                               ),
                                             ),
                                           ],
@@ -1570,6 +1628,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
   }
 
   Widget otherTeacherCard(OtherTeacherModel teacher, TeacherModel mainTeacher) {
+    final isPermanent = teacher.isPermanent != false;
     return GestureDetector(
       onTap: () {
         /// ✅ Fetch full TeacherModel using teacherId
@@ -1615,46 +1674,42 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
         );
       },
       child: Container(
-        padding: const EdgeInsets.all(13),
-        width: 280,
+        padding: const EdgeInsets.all(16),
+        width: 300,
         decoration: BoxDecoration(
-          color: teacher.isPermanent == false
-              ? Colors.blue.shade50
-              : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
+          color: isPermanent ? Colors.white : const Color(0xffF4F8FA),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isPermanent ? Colors.grey.shade100 : const Color(0xff1565C0).withOpacity(0.2),
+            width: 1,
+          ),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 3),
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            if (teacher.isPermanent == false)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [Icon(Icons.change_circle, color: Colors.red)],
-              ),
-
-            /// ✅ Top Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  teacher.teacherName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    teacher.teacherName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff2C3E50),
+                    ),
                   ),
                 ),
-
-                /// ✅ Popup Menu
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     if (value == "delete") {
@@ -1693,56 +1748,70 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                 ),
               ],
             ),
-
-            const SizedBox(height: 10),
-
-            /// ✅ Subject
+            const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.book, size: 18, color: Colors.blueGrey),
+                const Icon(Icons.book, size: 16, color: Colors.blueGrey),
                 const SizedBox(width: 8),
-                Text(
-                  "Subject : ${teacher.subject}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                Expanded(
+                  child: Text(
+                    "Subject: ${teacher.subject}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 10),
-
-            /// ✅ Mobile
+            const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.phone, size: 18, color: Colors.green),
+                const Icon(Icons.phone, size: 16, color: Colors.green),
                 const SizedBox(width: 8),
                 Text(
-                  "Mobile : ${teacher.mobileNo}",
-                  style: const TextStyle(
+                  "Mobile: ${teacher.mobileNo}",
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: Colors.grey.shade700,
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 10),
-
-            /// ✅ Employee ID
+            const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.badge, size: 18, color: Colors.deepPurple),
+                const Icon(Icons.badge, size: 16, color: Colors.deepPurple),
                 const SizedBox(width: 8),
                 Text(
-                  "Employee ID : ${teacher.employeeId}",
-                  style: const TextStyle(
+                  "Employee ID: ${teacher.employeeId}",
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: Colors.grey.shade700,
+                    fontSize: 13,
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isPermanent ? const Color(0xffE8F5E9) : const Color(0xffFFF3E0),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isPermanent ? "Permanent" : "Substitute",
+                style: TextStyle(
+                  color: isPermanent ? const Color(0xff2E7D32) : const Color(0xffE65100),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
@@ -1750,27 +1819,60 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     );
   }
 
-  Widget _actionCard(IconData icon, String title, Color color) {
+  Widget _actionCard(IconData icon, String title, bool isActive) {
     return Container(
-      width: 200,
-      height: 130,
+      width: 190,
+      height: 120,
       decoration: BoxDecoration(
-        color: color,
+        gradient: isActive
+            ? const LinearGradient(
+                colors: [Color(0xff1D9BF0), Color(0xff1A8CD8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isActive ? null : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+        border: Border.all(
+          color: isActive ? Colors.white.withOpacity(0.15) : const Color(0xff1D9BF0).withOpacity(0.08),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isActive
+                ? const Color(0xff1D9BF0).withOpacity(0.25)
+                : Colors.black.withOpacity(0.015),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color == Colors.blue ? Colors.white : Colors.black),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(
-              color: color == Colors.blue ? Colors.white : Colors.black,
-              fontWeight: FontWeight.w500,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isActive ? Colors.white.withOpacity(0.2) : const Color(0xff1D9BF0).withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: isActive ? Colors.white : const Color(0xff1D9BF0),
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isActive ? Colors.white : const Color(0xff2C3E50),
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -1779,97 +1881,126 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
   }
 
   Widget _feesCard(int amount, String discription, int collected, String date) {
+    final totalStudents = ref.watch(totalStudentsProvider(widget.teacherId)).maybeWhen(
+          data: (v) => v,
+          orElse: () => 0,
+        );
+
+    final percent = totalStudents > 0 ? collected / totalStudents : 0.0;
+    final isFullyCollected = collected == totalStudents && totalStudents > 0;
+
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => FeeCollectionPage(
-            description: discription,
-            teacherId: widget.teacherId,
-          ),
-        ),
+      onTap: () => context.push(
+        '/admin/classrooms/teacher-dashboard/${widget.teacherId}/fee-collection?description=${Uri.encodeComponent(discription)}',
       ),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         width: 300,
-        height: 150,
+        height: 160,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade100, width: 1),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 3),
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  date,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  discription,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Row(
                   children: [
-                    const Text(
-                      'Amount',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                    const SizedBox(width: 6),
                     Text(
-                      '₹$amount',
-                      style: const TextStyle(
-                        color: Colors.green,
+                      date,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
                         fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
                     ),
                   ],
                 ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFullyCollected ? const Color(0xffE8F5E9) : const Color(0xffFFF3E0),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isFullyCollected ? "Completed" : "Pending",
+                    style: TextStyle(
+                      color: isFullyCollected ? const Color(0xff2E7D32) : const Color(0xffE65100),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
+            Text(
+              discription,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xff2C3E50),
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Total Students :${(ref.watch(totalStudentsProvider(widget.teacherId)).maybeWhen(data: (v) => v, orElse: () => 0))}',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Total Collected',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$collected / $totalStudents students',
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
-                  'Collected Student : $collected',
+                  '₹$amount',
                   style: const TextStyle(
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w600,
+                    color: Color(0xff2E7D32),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percent,
+                backgroundColor: Colors.grey.shade100,
+                color: isFullyCollected ? const Color(0xff2E7D32) : const Color(0xff1565C0),
+                minHeight: 6,
+              ),
             ),
           ],
         ),
@@ -1881,44 +2012,133 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     return GestureDetector(
       onTap: () => _showAddFeeBottomSheet(teacher),
       child: Container(
-        padding: const EdgeInsets.all(14),
         width: 300,
-        height: 150,
+        height: 160,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xffF8FAFC),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 3),
-            ),
-          ],
+          border: Border.all(
+            color: const Color(0xff1565C0).withOpacity(0.3),
+            style: BorderStyle.solid,
+            width: 1.5,
+          ),
         ),
-        child: const Center(
-          child: Icon(Icons.add, color: Colors.black, size: 30),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1565C0).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add,
+                  color: Color(0xff1565C0),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                "Create Fee Category",
+                style: TextStyle(
+                  color: Color(0xff1565C0),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _overviewItem(String title, dynamic value, Color color) {
-    return Column(
-      children: [
-        Text(title, style: const TextStyle(color: Colors.grey)),
-        const SizedBox(height: 8),
-        Text(
-          value is String ? value : value.toString(),
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: color,
+
+
+  Widget _overviewMetricCard(
+    String title,
+    String value,
+    Color accentColor,
+    IconData icon,
+  ) {
+    return Container(
+      height: 90,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade100, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-      ],
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 5,
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  bottomLeft: Radius.circular(20),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accentColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
-
-  Widget _divider() =>
-      Container(width: 1.5, height: 50, color: Colors.grey.shade300);
 }

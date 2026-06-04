@@ -1,7 +1,5 @@
 // lib/features/teacherView/class_dashbord/repository/teacherdashbord_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../models/fees_model.dart';
 import '../../../../models/otherTeacher_model.dart';
@@ -82,10 +80,12 @@ class TeacherDashbordRepository {
     }
     final teacher = TeacherModel.fromMap(teacherDoc.data()!);
     final classKey = teacher.classNo.toString();
-    final divisionKey = teacher.division.toString();
+    final divisionKey = teacher.division.toString().toUpperCase();
 
-    // 2) date id
-    final dateId = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    // 2) date id matching the database convention: " DD-MM-YYYY"
+    final now = DateTime.now();
+    final dateId =
+        " ${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
 
     final doc = await _db
         .collection(FirebaseConstant.attendance)
@@ -115,48 +115,21 @@ class TeacherDashbordRepository {
       return {'present': 0, 'absent': 0};
     }
 
-    // 4) Determine current session (morning/evening/outside)
-    final now = DateTime.now();
-    final int hour = now.hour;
-    final int minute = now.minute;
-
-    bool isMorningWindow =
-        (hour == 9 && minute <= 30) ||
-        (hour >= 9 && hour < 10 && minute >= 0 && minute <= 59 && hour == 9);
-    // keep strict: morning window 9:00-9:30
-    isMorningWindow = (hour == 9 && minute <= 30);
-
-    bool isEveningWindow = (hour == 14 && minute <= 30);
-
     int present = 0;
     int absent = 0;
 
     for (final e in entries) {
       if (e == null) continue;
-      final status = (e['status'] ?? '').toString();
-      // treat missing explicit status as Absent (you can change)
-      if (status.toLowerCase() == 'absent') {
-        absent++;
-        continue;
-      }
-
-      if (isMorningWindow) {
-        // present only if Morning Half or Morning & Evening
-        if (status == 'Morning Half' || status == 'Morning & Evening') {
-          present++;
-        } else {
-          absent++;
-        }
-      } else if (isEveningWindow) {
-        // present only if Evening Half or Morning & Evening
-        if (status == 'Evening Half' || status == 'Morning & Evening') {
-          present++;
-        } else {
-          absent++;
-        }
-      } else {
-        // outside both windows: count any non-"Absent" as present
+      final status = (e['status'] ?? '').toString().toLowerCase().trim();
+      
+      // count any non-absent and marked statuses containing present/half/morning/evening as present
+      if (status == 'present' ||
+          status.contains('half') ||
+          status.contains('morning') ||
+          status.contains('evening')) {
         present++;
+      } else {
+        absent++;
       }
     }
 

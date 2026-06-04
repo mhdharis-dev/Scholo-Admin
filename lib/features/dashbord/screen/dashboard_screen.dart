@@ -1,5 +1,6 @@
 import 'dart:developer';
 import 'dart:io';
+import 'package:go_router/go_router.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
@@ -293,12 +294,12 @@ final addTeacherProvider = Provider<Future<void> Function(TeacherModel)>((ref) {
 });
 
 final todayAttendanceProvider =
-StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
+    StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
   final firestore = FirebaseFirestore.instance;
 
   final now = DateTime.now();
   final dateKey =
-      "${now.day.toString().padLeft(2, '0')}-"
+      " ${now.day.toString().padLeft(2, '0')}-"
       "${now.month.toString().padLeft(2, '0')}-"
       "${now.year}";
 
@@ -310,14 +311,10 @@ StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
       .doc(dateKey)
       .snapshots()
       .map((doc) {
-
     log("📄 Document snapshot received - exists: ${doc.exists}");
 
-    // 🔹 IMPORTANT: Check if document exists FIRST
     if (!doc.exists) {
       log("⚠️ Attendance document NOT FOUND for today - returning empty attendance");
-
-      // Return attendance with all students absent
       return AttendanceSummary(
         totalStudents: totalStudents,
         presentStudents: 0,
@@ -325,92 +322,45 @@ StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
       );
     }
 
-    // 🔹 Document exists - process attendance data
     final data = doc.data();
-    log("📦 Raw attendance data type: ${data.runtimeType}");
     log("📦 Raw attendance data: $data");
 
     int present = 0;
 
-    // Check the structure of your data
     if (data is Map<String, dynamic>) {
-      log("✅ Data is Map<String, dynamic>");
-      log("📦 Data keys: ${data.keys.toList()}");
-
-      // NEW: Check if your data has a different structure
-      // Looking at your screenshot, you might have student data directly in the document
-      if (data.containsKey('classNo') || data.containsKey('studentName')) {
-        log("📌 Document contains student attendance data directly");
-
-        // Check if this student is present
-        final status = (data['status'] ?? '').toString().toLowerCase().trim();
-        final studentName = data['studentName'] ?? 'Unknown';
-
-        log("👤 Student: $studentName → status: $status");
-
-        if (status.contains('present') ||
-            status.contains('morning') ||
-            status.contains('evening')) {
-          present = 1;
-          log("✅ Student marked as present");
+      for (final classEntry in data.entries) {
+        if (classEntry.value is! Map<String, dynamic>) {
+          continue;
         }
-      } else {
-        log("📌 Document has class-based structure");
-        log("📦 Classes in document: ${data.keys.toList()}");
 
-        for (final classEntry in data.entries) {
-          log("🏫 Processing class => ${classEntry.key}");
+        final classMap = classEntry.value as Map<String, dynamic>;
 
-          if (classEntry.value is! Map<String, dynamic>) {
-            log("❌ Class ${classEntry.key} is not a Map - skipping");
+        for (final divisionEntry in classMap.entries) {
+          if (divisionEntry.value is! List) {
             continue;
           }
 
-          final classMap = classEntry.value as Map<String, dynamic>;
+          final studentList = divisionEntry.value as List;
 
-          for (final divisionEntry in classMap.entries) {
-            log("📘 Processing division => ${divisionEntry.key}");
-
-            if (divisionEntry.value is! Map<String, dynamic>) {
-              log("❌ Division ${divisionEntry.key} not a Map - skipping");
+          for (final studentEntry in studentList) {
+            if (studentEntry is! Map<String, dynamic>) {
               continue;
             }
 
-            final divisionMap = divisionEntry.value as Map<String, dynamic>;
+            final status = (studentEntry['status'] ?? '').toString().toLowerCase().trim();
+            final studentName = studentEntry['studentName'] ?? 'Unknown';
 
-            log("👥 Students in division: ${divisionMap.keys.toList()}");
+            log("👤 Student: $studentName → status: $status");
 
-            // Process each student
-            for (final studentEntry in divisionMap.entries) {
-              if (studentEntry.value is! Map<String, dynamic>) {
-                log("❌ Student entry ${studentEntry.key} invalid - skipping");
-                continue;
-              }
-
-              final student = studentEntry.value as Map<String, dynamic>;
-              final studentName = student['studentName'] ?? 'Unknown';
-              final status = (student['status'] ?? '').toString().toLowerCase().trim();
-
-              log("👤 $studentName → status = '$status'");
-
-              // Check for any present status
-              if (status == 'present' ||
-                  status.contains('half') ||
-                  status.contains('morning') ||
-                  status.contains('evening')) {
-                present++;
-                log("✅ COUNTED AS PRESENT");
-              } else if (status == 'absent') {
-                log("❌ COUNTED AS ABSENT");
-              } else {
-                log("⚠️ Unknown status: '$status'");
-              }
+            if (status == 'present' ||
+                status.contains('half') ||
+                status.contains('morning') ||
+                status.contains('evening')) {
+              present++;
             }
           }
         }
       }
-    } else {
-      log("❌ Data is not a Map<String, dynamic>");
     }
 
     final absent = totalStudents - present;
@@ -425,7 +375,6 @@ StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
     log("❌ ERROR in attendance stream: $error");
     log("❌ Stack trace: $stackTrace");
 
-    // Return empty attendance on error
     return AttendanceSummary(
       totalStudents: totalStudents,
       presentStudents: 0,
@@ -433,15 +382,18 @@ StreamProvider.family<AttendanceSummary, int>((ref, totalStudents) {
     );
   });
 });
+
 final unmarkedClassesProvider =
-FutureProvider<List<Map<String, dynamic>>>((ref) async {
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final firestore = FirebaseFirestore.instance;
 
   final now = DateTime.now();
   final dateKey =
-      "${now.day.toString().padLeft(2, '0')}-"
+      " ${now.day.toString().padLeft(2, '0')}-"
       "${now.month.toString().padLeft(2, '0')}-"
       "${now.year}";
+
+  log("🔍 unmarkedClassesProvider: Fetching teachers and attendance for dateKey => '$dateKey'");
 
   final teachersSnap = await firestore
       .collection(FirebaseConstant.teacher)
@@ -454,39 +406,68 @@ FutureProvider<List<Map<String, dynamic>>>((ref) async {
       .doc(dateKey)
       .get();
 
-  // If no attendance document exists today, ALL classes are unmarked
+  log("🔍 unmarkedClassesProvider: attendanceDoc exists today => ${attendanceDoc.exists}");
+
+  // If no attendance document exists today, ALL valid classes are unmarked
   if (!attendanceDoc.exists) {
-    log("📋 No attendance document today - all classes are unmarked");
-    return teachersSnap.docs.map((t) {
+    log("📋 No attendance document today - all valid classes are unmarked");
+    final unmarkedList = <Map<String, dynamic>>[];
+    for (final t in teachersSnap.docs) {
       final data = t.data();
-      return {
-        'label': 'Class ${data['classNo']}-${data['division']}',
+      final classNo = data['classNo']?.toString() ?? '0';
+      final division = data['division']?.toString().trim() ?? '';
+      
+      if (division.toLowerCase() == 'nil' || division.isEmpty || classNo == '0') {
+        continue;
+      }
+      
+      unmarkedList.add({
+        'label': 'Class $classNo-$division',
         'teacherId': t.id,
-      };
-    }).toList();
+      });
+    }
+    return unmarkedList;
   }
 
   // Otherwise, check which classes are unmarked
   final attendanceData = attendanceDoc.data()!;
+  log("🔍 unmarkedClassesProvider: raw attendance keys => ${attendanceData.keys.toList()}");
+  
   List<Map<String, dynamic>> unmarked = [];
 
   for (final t in teachersSnap.docs) {
     final data = t.data();
 
-    final classNo = data['classNo'].toString();
-    final division = data['division'];
+    final classNo = data['classNo']?.toString() ?? '0';
+    final divisionRaw = data['division']?.toString().trim() ?? '';
 
+    if (divisionRaw.toLowerCase() == 'nil' || divisionRaw.isEmpty || classNo == '0') {
+      continue;
+    }
+
+    final division = divisionRaw.toUpperCase();
     final classMap = attendanceData[classNo];
-    final isMarked = classMap != null && classMap[division] != null;
+    
+    // Check if there is list of students recorded under classMap[division] and it's not empty
+    bool isMarked = false;
+    if (classMap is Map<String, dynamic>) {
+      final divData = classMap[division];
+      if (divData != null) {
+        isMarked = true;
+      }
+    }
+
+    log("🔍 unmarkedClassesProvider: Class $classNo-$division => isMarked: $isMarked");
 
     if (!isMarked) {
       unmarked.add({
-        'label': 'Class $classNo-$division',
+        'label': 'Class $classNo-$divisionRaw',
         'teacherId': t.id,
       });
     }
   }
 
+  log("🔍 unmarkedClassesProvider: Final unmarked count => ${unmarked.length}");
   return unmarked;
 });
 final cleanExpiredSubstitutionsProvider =
@@ -1744,12 +1725,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           },
           decoration: InputDecoration(
             labelText: label,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             suffixIcon: (isEmail || isPassword)
                 ? (controller.text.isEmpty
                       ? null
                       : Icon(
-                          isValid ? Icons.check_circle : Icons.cancel,
+                          isValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
                           color: isValid ? Colors.green : Colors.red,
                         ))
                 : null,
@@ -1768,12 +1767,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return DropdownButtonFormField<String>(
       value: value,
       items: items
-          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+          .map((e) => DropdownMenuItem(
+                value: e,
+                child: Text(e, style: const TextStyle(fontSize: 14)),
+              ))
           .toList(),
       onChanged: onChanged,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
       decoration: InputDecoration(
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
@@ -1783,12 +1800,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       children: [
         Container(
           width: 70,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+            color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          child: const Center(child: Text('+91')),
+          child: const Center(
+            child: Text(
+              '+91',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF475569),
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -1801,9 +1827,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ],
             decoration: InputDecoration(
               labelText: 'Mobile No',
+              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -1873,203 +1911,226 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Center(
-              child: Text(
-                'Add Teacher',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Center(
+        child: Container(
+          width: 600,
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 40,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
               ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// IMAGE
-            Center(
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: _selectedFile != null
-                        ? FileImage(_selectedFile!)
-                        : const AssetImage(ImageConstant.temporaryTeacherImage)
-                              as ImageProvider,
-                  ),
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade400),
-                      ),
-                      child: const Icon(Icons.edit, size: 16),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            _buildTextFieldWithValidation(_teacherIdController, "Teacher ID"),
-            const SizedBox(height: 12),
-            _buildTextFieldWithValidation(_nameController, "Name"),
-            const SizedBox(height: 12),
-            _buildTextFieldWithValidation(_subjectController, "Subject"),
-
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDropdown(
-                    "Class",
-                    _selectedClass,
-                    List.generate(13, (i) => '$i'),
-                    (v) => setState(() => _selectedClass = v),
+                ),
+                const SizedBox(height: 18),
+                const Center(
+                  child: Text(
+                    'Add New Teacher',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildDropdown("Division", _selectedDiv, [
-                    'A',
-                    'B',
-                    'C',
-                    'D',
-                    'E',
-                    'F',
-                    'G',
-                    'H',
-                    'I',
-                    'J',
-                    'K',
-                    'L',
-                    'M',
-                    'N',
-                    'Not',
-                  ], (v) => setState(() => _selectedDiv = v)),
+                const SizedBox(height: 24),
+
+                /// IMAGE
+                Center(
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 54,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: _selectedFile != null
+                              ? FileImage(_selectedFile!)
+                              : const AssetImage(ImageConstant.temporaryTeacherImage)
+                                  as ImageProvider,
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xff1193D4),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildTextFieldWithValidation(_teacherIdController, "Teacher ID"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_nameController, "Name"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_subjectController, "Subject"),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDropdown(
+                        "Class",
+                        _selectedClass,
+                        List.generate(13, (i) => '$i'),
+                        (v) => setState(() => _selectedClass = v),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildDropdown(
+                        "Division",
+                        _selectedDiv,
+                        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'Nil'],
+                        (v) => setState(() => _selectedDiv = v),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setState(() => _selectedGender = v)),
+                const SizedBox(height: 14),
+                _buildPhoneField(),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_emailController, "Email", isEmail: true),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_passwordController, "Password", isPassword: true),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_addressController, "Address"),
+                const SizedBox(height: 16),
+                const Text(
+                  "Date of Birth",
+                  style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                _buildDateOfBirthField(),
+                const SizedBox(height: 28),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff1193D4),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _isUploading
+                        ? null
+                        : () async {
+                            if (_teacherIdController.text.isEmpty ||
+                                _nameController.text.isEmpty ||
+                                _mobileController.text.isEmpty ||
+                                _subjectController.text.isEmpty ||
+                                _selectedClass == null ||
+                                _selectedDiv == null ||
+                                _selectedGender == null ||
+                                !_isEmailValid(_emailController.text) ||
+                                !_isPasswordValid(_passwordController.text)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Fill all fields correctly"),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setState(() => _isUploading = true);
+
+                            try {
+                              if (_selectedFile != null) {
+                                _uploadedImageUrl = await ref.read(
+                                  teacherImageUploadProvider,
+                                )(_selectedFile!);
+                              }
+                              final dob = DateTime(
+                                int.parse(_yearController.text),
+                                int.parse(_monthController.text),
+                                int.parse(_dayController.text),
+                              );
+
+                              final teacher = TeacherModel(
+                                id: '',
+                                employeeId: _teacherIdController.text,
+                                mobileNo: _mobileController.text,
+                                teacherName: _nameController.text,
+                                classNo: int.parse(_selectedClass!),
+                                division: _selectedDiv!,
+                                subject: _subjectController.text,
+                                email: _emailController.text,
+                                password: _passwordController.text,
+                                address: _addressController.text,
+                                gender: _selectedGender!,
+                                imageUrl: _uploadedImageUrl ?? '',
+                                delete: false,
+                                createdDate: DateTime.now(),
+                                dateOfBirth: dob,
+                              );
+
+                              await addTeacher(teacher);
+
+                              Navigator.pop(context);
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                            } finally {
+                              setState(() => _isUploading = false);
+                            }
+                          },
+                    child: _isUploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Add Teacher"),
+                  ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 12),
-
-            _buildDropdown("Gender", _selectedGender, [
-              'Male',
-              'Female',
-            ], (v) => setState(() => _selectedGender = v)),
-
-            const SizedBox(height: 12),
-            _buildPhoneField(),
-            const SizedBox(height: 12),
-            _buildTextFieldWithValidation(
-              _emailController,
-              "Email",
-              isEmail: true,
-            ),
-            const SizedBox(height: 12),
-            _buildTextFieldWithValidation(
-              _passwordController,
-              "Password",
-              isPassword: true,
-            ),
-            const SizedBox(height: 12),
-            _buildTextFieldWithValidation(_addressController, "Address"),
-
-            const SizedBox(height: 12),
-            const Text(
-              "Date of Birth",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _buildDateOfBirthField(),
-
-            const SizedBox(height: 20),
-
-            /// SAVE
-            ElevatedButton(
-              onPressed: _isUploading
-                  ? null
-                  : () async {
-                      if (_teacherIdController.text.isEmpty ||
-                          _nameController.text.isEmpty ||
-                          _mobileController.text.isEmpty ||
-                          _subjectController.text.isEmpty ||
-                          _selectedClass == null ||
-                          _selectedDiv == null ||
-                          _selectedGender == null ||
-                          !_isEmailValid(_emailController.text) ||
-                          !_isPasswordValid(_passwordController.text)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Fill all fields correctly"),
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() => _isUploading = true);
-
-                      try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await ref.read(
-                            teacherImageUploadProvider,
-                          )(_selectedFile!);
-                        }
-                        final dob = DateTime(
-                          int.parse(_yearController.text),
-                          int.parse(_monthController.text),
-                          int.parse(_dayController.text),
-                        );
-
-                        final teacher = TeacherModel(
-                          id: '',
-                          employeeId: _teacherIdController.text,
-                          mobileNo: _mobileController.text,
-                          teacherName: _nameController.text,
-                          classNo: int.parse(_selectedClass!),
-                          division: _selectedDiv!,
-                          subject: _subjectController.text,
-                          email: _emailController.text,
-                          password: _passwordController.text,
-                          address: _addressController.text,
-                          gender: _selectedGender!,
-                          imageUrl: _uploadedImageUrl ?? '',
-                          delete: false,
-                          createdDate: DateTime.now(),
-                          dateOfBirth: dob,
-                        );
-
-                        await addTeacher(teacher);
-
-                        Navigator.pop(context);
-                      } catch (e) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-                      } finally {
-                        setState(() => _isUploading = false);
-                      }
-                    },
-              child: _isUploading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Add Teacher"),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2084,41 +2145,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return response.secureUrl;
   }
 
-  Widget _buildValidatedField(
-    TextEditingController controller,
-    String label, {
-    bool isEmail = false,
-    bool isPassword = false,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    bool isValid = true;
-    return StatefulBuilder(
-      builder: (context, setStateField) {
-        return TextField(
-          controller: controller,
-          inputFormatters: inputFormatters,
-          onChanged: (v) {
-            setStateField(() {
-              if (isEmail) isValid = _isEmailValid(v);
-              if (isPassword) isValid = _isPasswordValid(v);
-            });
-          },
-          decoration: InputDecoration(
-            labelText: label,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            suffixIcon: (isEmail || isPassword)
-                ? (controller.text.isEmpty
-                      ? null
-                      : Icon(
-                          isValid ? Icons.check_circle : Icons.cancel,
-                          color: isValid ? Colors.green : Colors.red,
-                        ))
-                : null,
-          ),
-        );
-      },
-    );
-  }
+
 
   Widget _buildTeacherDropdown() {
     final teachersAsync = ref.watch(teachersDropdownProvider);
@@ -2126,14 +2153,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return teachersAsync.when(
       loading: () => const CircularProgressIndicator(),
-      error: (e, _) => Text("Failed to load teachers"),
+      error: (e, _) => const Text("Failed to load teachers"),
       data: (teacherList) {
         return DropdownButtonFormField2<String>(
           value: _selectedTeacherName,
           isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Teacher Name',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          dropdownStyleData: DropdownStyleData(
+            maxHeight: 300,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: Colors.white,
+            ),
           ),
           dropdownSearchData: DropdownSearchData(
             searchController: searchController,
@@ -2143,6 +2191,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: TextFormField(
                 controller: searchController,
                 decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   hintText: 'Search teacher...',
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
@@ -2161,7 +2211,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(t['name']!),
+                      Text(t['name']!, style: const TextStyle(fontSize: 14)),
                       Text(
                         "Class ${t['classNo']} - ${t['division']}",
                         style: const TextStyle(
@@ -2214,166 +2264,218 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Center(
-              child: Text(
-                'Add Student',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Center(
+        child: Container(
+          width: 600,
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 40,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
               ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// PROFILE IMAGE
-            Center(
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: _selectedFile != null
-                        ? FileImage(_selectedFile!)
-                        : const AssetImage(ImageConstant.temporaryStudentImage)
-                              as ImageProvider,
-                  ),
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade400),
-                      ),
-                      child: const Icon(Icons.edit, size: 16),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+                const SizedBox(height: 18),
+                const Center(
+                  child: Text(
+                    'Add New Student',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 12),
-
-            _buildValidatedField(_admissionController, "Admission No"),
-            const SizedBox(height: 12),
-            _buildValidatedField(_nameController, "Name"),
-            const SizedBox(height: 12),
-            _buildValidatedField(_rollController, "Roll No"),
-            const SizedBox(height: 12),
-            _buildPhoneField(),
-            const SizedBox(height: 12),
-
-            _buildDropdown("Gender", _selectedGender, [
-              'Male',
-              'Female',
-              'Other',
-            ], (v) => setState(() => _selectedGender = v)),
-
-            const SizedBox(height: 12),
-            _buildTeacherDropdown(),
-            const SizedBox(height: 12),
-
-            _buildDateOfBirthField(),
-            const SizedBox(height: 12),
-            _buildValidatedField(_parentController, "Parent Name"),
-            const SizedBox(height: 12),
-            _buildValidatedField(_addressController, "Address"),
-            const SizedBox(height: 12),
-            _buildValidatedField(_emailController, "Email", isEmail: true),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _passwordController,
-              "Password",
-              isPassword: true,
-            ),
-
-            const SizedBox(height: 20),
-
-            /// SAVE BUTTON
-            ElevatedButton(
-              onPressed: _isUploading
-                  ? null
-                  : () async {
-                      if (_selectedTeacherId == null ||
-                          _classNo == null ||
-                          _division == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Select a valid teacher"),
+                /// PROFILE IMAGE
+                Center(
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 54,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: _selectedFile != null
+                              ? FileImage(_selectedFile!)
+                              : const AssetImage(ImageConstant.temporaryStudentImage)
+                                  as ImageProvider,
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xff1193D4),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
                           ),
-                        );
-                        return;
-                      }
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildTextFieldWithValidation(_admissionController, "Admission No", inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ]),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_nameController, "Name"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_rollController, "Roll No", inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(5),
+                ]),
+                const SizedBox(height: 14),
+                _buildPhoneField(),
+                const SizedBox(height: 14),
+                _buildDropdown("Gender", _selectedGender, ['Male', 'Female', 'Other'], (v) => setState(() => _selectedGender = v)),
+                const SizedBox(height: 14),
+                _buildTeacherDropdown(),
+                const SizedBox(height: 14),
+                const Text(
+                  "Date of Birth",
+                  style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                _buildDateOfBirthField(),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_parentController, "Parent Name"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_addressController, "Address"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_emailController, "Email", isEmail: true),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_passwordController, "Password", isPassword: true),
+                const SizedBox(height: 28),
 
-                      setState(() => _isUploading = true);
+                /// SAVE BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff1193D4),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _isUploading
+                        ? null
+                        : () async {
+                            if (_selectedTeacherId == null ||
+                                _classNo == null ||
+                                _division == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Select a valid teacher"),
+                                ),
+                              );
+                              return;
+                            }
 
-                      try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await _uploadToCloudinary(
-                            _selectedFile!,
-                          );
-                        }
+                            setState(() => _isUploading = true);
 
-                        final dob =
-                            DateTime.tryParse(
-                              "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                            ) ??
-                            DateTime(2000, 1, 1);
+                            try {
+                              if (_selectedFile != null) {
+                                _uploadedImageUrl = await _uploadToCloudinary(
+                                  _selectedFile!,
+                                );
+                              }
 
-                        final student = StudentsModel(
-                          studentId: '',
-                          admissionNo: int.parse(_admissionController.text),
-                          rollNo: int.parse(_rollController.text),
-                          studentName: _nameController.text,
-                          mobileNo: _mobileController.text,
-                          email: _emailController.text,
-                          password: _passwordController.text,
-                          address: _addressController.text,
-                          parentName: _parentController.text,
-                          classNo: int.parse(_classNo!),
-                          division: _division!,
-                          teacherName: _selectedTeacherName!,
-                          teacherId: _selectedTeacherId!,
-                          gender: _selectedGender ?? '',
-                          delete: false,
-                          imageUrl: _uploadedImageUrl ?? '',
-                          dateOfBirth: dob,
-                          createdDate: DateTime.now(),
-                        );
+                              final dob =
+                                  DateTime.tryParse(
+                                    "${_yearController.text}-${_monthController.text}-${_dayController.text}",
+                                  ) ??
+                                  DateTime(2000, 1, 1);
 
-                        final ref = FirebaseFirestore.instance.collection(
-                          FirebaseConstant.student,
-                        );
+                              final student = StudentsModel(
+                                studentId: '',
+                                admissionNo: int.parse(_admissionController.text),
+                                rollNo: int.parse(_rollController.text),
+                                studentName: _nameController.text,
+                                mobileNo: _mobileController.text,
+                                email: _emailController.text,
+                                password: _passwordController.text,
+                                address: _addressController.text,
+                                parentName: _parentController.text,
+                                classNo: int.parse(_classNo!),
+                                division: _division!,
+                                teacherName: _selectedTeacherName!,
+                                teacherId: _selectedTeacherId!,
+                                gender: _selectedGender ?? '',
+                                delete: false,
+                                imageUrl: _uploadedImageUrl ?? '',
+                                dateOfBirth: dob,
+                                createdDate: DateTime.now(),
+                              );
 
-                        final doc = await ref.add(student.toMap());
-                        await doc.update({'studentId': doc.id});
+                              final ref = FirebaseFirestore.instance.collection(
+                                FirebaseConstant.student,
+                              );
 
-                        Navigator.pop(context);
-                      } catch (e) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-                      } finally {
-                        setState(() => _isUploading = false);
-                      }
-                    },
-              child: _isUploading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Add Student"),
+                              final doc = await ref.add(student.toMap());
+                              await doc.update({'studentId': doc.id});
+
+                              Navigator.pop(context);
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                            } finally {
+                              setState(() => _isUploading = false);
+                            }
+                          },
+                    child: _isUploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("Add Student"),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2390,10 +2492,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final studentsAsync = ref.watch(studentsProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: const Color(0xFFF8FAFC),
 
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
             // TOP CARDS
@@ -2404,19 +2506,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     "Total Students",
                     total.toString(),
                     Icons.people,
-                    Colors.blue,
+                    const Color(0xff1193D4),
                   ),
                   loading: () => _summaryCard(
                     "Total Students",
                     "Loading...",
                     Icons.people,
-                    Colors.blue,
+                    const Color(0xff1193D4),
                   ),
                   error: (e, _) => _summaryCard(
                     "Total Students",
                     "Error",
                     Icons.people,
-                    Colors.red,
+                    const Color(0xFFEF4444),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -2425,19 +2527,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     "Fees Collected",
                     "₹${amount.toStringAsFixed(0)}",
                     Icons.attach_money,
-                    Colors.green,
+                    const Color(0xFF10B981),
                   ),
                   loading: () => _summaryCard(
                     "Fees Collected",
                     "Loading...",
                     Icons.attach_money,
-                    Colors.green,
+                    const Color(0xFF10B981),
                   ),
                   error: (e, _) => _summaryCard(
                     "Fees Collected",
                     "Error",
                     Icons.attach_money,
-                    Colors.red,
+                    const Color(0xFFEF4444),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -2446,19 +2548,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     "Pending Fees",
                     "₹${amount.toStringAsFixed(0)}",
                     Icons.pending_actions,
-                    Colors.orange,
+                    const Color(0xFFF59E0B),
                   ),
                   loading: () => _summaryCard(
                     "Pending Fees",
                     "Loading...",
                     Icons.pending_actions,
-                    Colors.orange,
+                    const Color(0xFFF59E0B),
                   ),
                   error: (e, _) => _summaryCard(
                     "Pending Fees",
                     "Error",
                     Icons.pending_actions,
-                    Colors.red,
+                    const Color(0xFFEF4444),
                   ),
                 ),
               ],
@@ -2475,7 +2577,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(flex: 2, child: _quickActionsWithCalendar()),
-                const SizedBox(width: 20),
+                const SizedBox(width: 24),
                 Expanded(child: _upcomingEvents()),
               ],
             ),
@@ -2492,11 +2594,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const Center(child: CircularProgressIndicator()),
                     error: (e, _) {
                       log(e.toString());
-                      return Text("Failed to load teachers");
+                      return const Text("Failed to load teachers");
                     },
                   ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 24),
                 Expanded(
                   child: studentsAsync.when(
                     data: (students) => _studentListFromModel(students),
@@ -2504,7 +2606,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const Center(child: CircularProgressIndicator()),
                     error: (e, _) {
                       log(e.toString());
-                      return Text("Failed to load students");
+                      return const Text("Failed to load students");
                     },
                   ),
                 ),
@@ -2528,39 +2630,69 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     IconData icon,
     Color iconColor,
   ) {
+    final gradient = LinearGradient(
+      colors: [Colors.white, const Color(0xFFF8FAFC)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
     return Expanded(
       child: Container(
-        height: 110,
-        padding: const EdgeInsets.all(18),
-        decoration: _cardDecoration(),
+        height: 120,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(.12),
-                borderRadius: BorderRadius.circular(12),
+                color: iconColor.withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: iconColor.withOpacity(0.15), width: 1),
               ),
-              child: Icon(icon, size: 26, color: iconColor),
+              child: Icon(icon, size: 28, color: iconColor),
             ),
-            const SizedBox(width: 12),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade500,
+                      letterSpacing: 0.2,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -2573,7 +2705,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final totalStudentsAsync = ref.watch(totalStudentsProvider);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: _cardDecoration(),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2603,8 +2735,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         const Text(
                           "Today's Attendance Overview",
-                          style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
                         const SizedBox(height: 24),
 
@@ -2614,53 +2749,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             lineWidth: 12,
                             percent: attendance.percent.clamp(0.0, 1.0),
                             animation: true,
-                            animationDuration: 2200,
-                            circularStrokeCap: CircularStrokeCap.butt,
-                            backgroundColor: Colors.red,
-                            progressColor: Colors.blue,
-                            startAngle: 290,
+                            animationDuration: 2000,
+                            circularStrokeCap: CircularStrokeCap.round,
+                            backgroundColor: const Color(0xFFFECDD3), // Soft rose/red
+                            progressColor: const Color(0xff1193D4), // Premium blue
+                            startAngle: 180,
                             center: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   "${(attendance.percent * 100).round()}%",
                                   style: const TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
                                   ),
                                 ),
-                                const Text(
+                                const SizedBox(height: 2),
+                                Text(
                                   "Present",
-                                  style: TextStyle(color: Colors.black54),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade500,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
 
                         const Text(
                           "Students Present",
-                          style: TextStyle(color: Colors.black54),
+                          style: TextStyle(color: Colors.black54, fontSize: 13),
                         ),
                         const SizedBox(height: 6),
 
                         Text(
                           "${attendance.presentStudents} / ${attendance.totalStudents}",
                           style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
                           ),
                         ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
 
                         const Row(
                           children: [
-                            _LegendDot(color: Colors.blue, label: "Present"),
-                            SizedBox(width: 16),
-                            _LegendDot(color: Colors.red, label: "Absent"),
+                            _LegendDot(color: Color(0xff1193D4), label: "Present"),
+                            SizedBox(width: 20),
+                            _LegendDot(color: Color(0xFFEF4444), label: "Absent"),
                           ],
                         ),
                       ],
@@ -2671,22 +2813,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
 
-          const SizedBox(width: 11),
-
           const SizedBox(width: 16),
 
           SizedBox(
-            height: 300, // match left content height
+            height: 320, // match left content height
             child: VerticalDivider(
               thickness: 1.2,
               width: 1,
-              color: Colors.grey.shade300,
+              color: Colors.grey.shade200,
             ),
           ),
 
-          const SizedBox(width: 16),
-
-          const SizedBox(width: 11),
+          const SizedBox(width: 24),
 
           // RIGHT – UNMARKED CLASSES
           Expanded(
@@ -2694,68 +2832,105 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Expanded(
-                      child: Text(
-                        "UNMARKED CLASSES",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black54,
-                        ),
+                    const Text(
+                      "UNMARKED CLASSES",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF475569),
+                        letterSpacing: 0.5,
                       ),
                     ),
                     TextButton(
                       onPressed: () {
                         _showUnmarkedClassesSheet(context);
                       },
-                      child: const Text("View All"),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xff1193D4),
+                      ),
+                      child: const Text(
+                        "View All",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 unmarkedAsync.when(
-                  loading: () => const CircularProgressIndicator(),
+                  loading: () => const Center(child: CircularProgressIndicator()),
                   error: (e, _) {
                     log(e.toString());
                     return Text("Error: $e");
                   },
                   data: (unmarked) {
+                    if (unmarked.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 32),
+                        child: Center(
+                          child: Text(
+                            "All classes marked",
+                            style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      );
+                    }
                     return Column(
                       children: unmarked
                           .take(4)
                           .map(
                             (c) => Container(
-                              margin: const EdgeInsets.only(bottom: 10),
+                              margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
+                                horizontal: 16,
+                                vertical: 12,
                               ),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: Colors.grey.withOpacity(.2),
+                                  color: const Color(0xFFE2E8F0),
+                                  width: 1,
                                 ),
                               ),
                               child: Row(
                                 children: [
-                                  Expanded(child: Text(c['label'])),
+                                  Expanded(
+                                    child: Text(
+                                      c['label'],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1E293B),
+                                      ),
+                                    ),
+                                  ),
                                   TextButton(
                                     style: TextButton.styleFrom(
-                                      backgroundColor: Colors.blue,
+                                      backgroundColor: const Color(0xff1193D4),
                                       foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
                                     ),
                                     onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => AttendancePage(
-                                            teacherId: c['teacherId'],
-                                          ),
-                                        ),
+                                      context.push(
+                                        '/admin/classrooms/attendance/${c['teacherId']}',
                                       );
                                     },
-                                    child: const Text("Mark"),
+                                    child: const Text(
+                                      "Mark",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -2792,18 +2967,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   width: 520,
                   height: MediaQuery.of(context).size.height * 0.8,
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        const Text(
-                          "Unmarked Classes",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Unmarked Classes",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
-                        Divider(color: Colors.grey.shade300),
+                        Divider(color: Colors.grey.shade200),
                         const SizedBox(height: 12),
 
                         asyncUnmarked.when(
@@ -2826,19 +3011,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               child: ListView.separated(
                                 itemCount: list.length,
                                 separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
+                                    const SizedBox(height: 12),
                                 itemBuilder: (_, i) {
                                   final item = list[i];
 
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
+                                      horizontal: 16,
                                       vertical: 12,
                                     ),
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
-                                        color: Colors.grey.withOpacity(.2),
+                                        color: const Color(0xFFE2E8F0),
                                       ),
                                     ),
                                     child: Row(
@@ -2847,34 +3033,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                           child: Text(
                                             item['label'],
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF1E293B),
                                             ),
                                           ),
                                         ),
                                         TextButton(
                                           style: TextButton.styleFrom(
-                                            backgroundColor: Colors.blue,
+                                            backgroundColor: const Color(0xff1193D4),
                                             foregroundColor: Colors.white,
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
-                                                  BorderRadius.circular(10),
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 8,
                                             ),
                                           ),
                                           onPressed: () {
                                             Navigator.pop(context);
 
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => AttendancePage(
-                                                  teacherId: item['teacherId'],
-                                                ),
-                                              ),
+                                            context.push(
+                                              '/admin/classrooms/attendance/${item['teacherId']}',
                                             );
                                           },
                                           child: const Text(
                                             "Mark",
-                                            style: TextStyle(fontSize: 12),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -2902,53 +3092,74 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // ---------------------------------------------------------------------------
   Widget _quickActionsWithCalendar() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             "Quick Actions & Schedule",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F172A),
+            ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
 
           Row(
             children: [
-              // Calendar panel - smaller like screenshot
+              // Calendar panel
               Container(
                 width: 320,
                 decoration: BoxDecoration(
-                  color: Color(0xfff8fafc),
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: TableCalendar(
                   firstDay: DateTime.utc(2020),
                   lastDay: DateTime.utc(2030),
                   focusedDay: focusedDay,
-
                   availableGestures: AvailableGestures.all,
-                  headerStyle: const HeaderStyle(
+                  headerStyle: HeaderStyle(
                     formatButtonVisible: false,
                     titleCentered: true,
-                    headerPadding: EdgeInsets.only(top: 10, bottom: 20),
-                    titleTextStyle: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                    headerPadding: const EdgeInsets.only(top: 12, bottom: 12),
+                    titleTextStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
                     ),
+                    leftChevronIcon: Icon(Icons.chevron_left_rounded, color: Colors.grey.shade600),
+                    rightChevronIcon: Icon(Icons.chevron_right_rounded, color: Colors.grey.shade600),
                   ),
-
                   calendarStyle: CalendarStyle(
                     outsideDaysVisible: false,
-                    todayDecoration: BoxDecoration(
-                      color: Colors.blue,
+                    defaultTextStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF334155),
+                    ),
+                    weekendTextStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFFEF4444),
+                    ),
+                    todayDecoration: const BoxDecoration(
+                      color: Color(0xff1193D4),
                       shape: BoxShape.circle,
+                    ),
+                    todayTextStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(width: 28),
+              const SizedBox(width: 32),
 
               Expanded(
                 flex: 3,
@@ -2957,7 +3168,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: ListView.separated(
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: 4,
-                    separatorBuilder: (_, __) => const SizedBox(height: 14),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final icons = [
                         Icons.person_add_outlined,
@@ -2996,80 +3207,111 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _actionBox(IconData icon, String label, VoidCallback? onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        height: 76,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: const Color(0xFFF8FAFF),
-          border: Border.all(color: Colors.grey.withOpacity(.15)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.blue, size: 22),
-            const SizedBox(height: 6),
-            Text(label, style: const TextStyle(fontSize: 12)),
-          ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: const Color(0xFFF8FAFC),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: const Color(0xff1193D4), size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: Colors.grey.shade400,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // UPCOMING EVENTS constant
+  // UPCOMING EVENTS
   // ---------------------------------------------------------------------------
   Widget _upcomingEvents() {
     final eventsAsync = ref.watch(upcomingEventsProvider);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
-                child: Text(
-                  "Upcoming Events",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              const Text(
+                "Upcoming Events",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => EventsScreen()),
-                  );
+                  context.go('/admin/events');
                 },
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xff1193D4),
+                ),
                 child: const Text(
                   "View Calendar",
-                  style: TextStyle(color: Colors.blue),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
 
           eventsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) {
               log(e.toString());
-              return Text(
+              return const Text(
                 "Failed to load events",
                 style: TextStyle(color: Colors.red),
               );
             },
             data: (events) {
               if (events.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    "No upcoming events",
-                    style: TextStyle(color: Colors.black54),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Center(
+                    child: Text(
+                      "No upcoming events",
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    ),
                   ),
                 );
               }
@@ -3080,7 +3322,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   final color = _parseColor(event.color);
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: _eventTile(
                       DateFormat('MMM').format(date).toUpperCase(),
                       DateFormat('dd').format(date),
@@ -3112,38 +3354,78 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     String title,
     String subtitle,
   ) {
-    return Row(
-      children: [
-        Container(
-          width: 50,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              Text(m, style: TextStyle(color: color, fontSize: 10)),
-              Text(
-                d,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.15), width: 1),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  m,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 1),
+                Text(
+                  d,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(subtitle, style: const TextStyle(color: Colors.black54)),
-          ],
-        ),
-      ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3164,10 +3446,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           )
           .toList(),
       onViewAll: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => TeacherListScreen()),
-        );
+        context.go('/admin/teachers');
       },
     );
   }
@@ -3189,10 +3468,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           )
           .toList(),
       onViewAll: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => StudentListScreen()),
-        );
+        context.go('/admin/students');
       },
     );
   }
@@ -3204,7 +3480,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     VoidCallback? onViewAll,
   }) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3217,27 +3493,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 title,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
               ),
-              TextButton(
-                onPressed: onViewAll,
-                child: const Text(
-                  "View All",
-                  style: TextStyle(color: Colors.blue),
+              if (onViewAll != null)
+                TextButton(
+                  onPressed: onViewAll,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xff1193D4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
+                  child: const Text(
+                    "View All",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                 ),
-              ),
             ],
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           // TABLE HEADER
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF5F7FB),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
               children: [
@@ -3245,9 +3528,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 3,
                   child: Text(
                     heads[0],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black54,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
@@ -3255,9 +3540,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   flex: 3,
                   child: Text(
                     heads[1],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black54,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
@@ -3266,9 +3553,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Text(
                     heads[2],
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black54,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
@@ -3276,20 +3565,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
-          // TABLE ROWS
-          ...rows.map(
-            (row) => Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.withOpacity(.15)),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  "No items found",
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                ),
               ),
-              child: row,
+            )
+          else
+            // TABLE ROWS
+            ...rows.map(
+              (row) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                ),
+                child: row,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -3300,10 +3601,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       children: [
         Expanded(
           flex: 3,
-          child: Text(c1, style: const TextStyle(fontWeight: FontWeight.w500)),
+          child: Text(
+            c1,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: Color(0xFF1E293B),
+            ),
+          ),
         ),
-        Expanded(flex: 3, child: Text(c2)),
-        Expanded(flex: 2, child: Text(c3, textAlign: TextAlign.right)),
+        Expanded(
+          flex: 3,
+          child: Text(
+            c2,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              color: Color(0xFF475569),
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text(
+            c3,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: Color(0xFF475569),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -3315,53 +3644,68 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final teachersAsync = ref.watch(activeTeachersProvider);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: _cardDecoration(),
       child: Column(
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
-                child: Text(
-                  "Active Teachers",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              const Text(
+                "Active Teachers",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
                 ),
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ClassWiseTeacherViewScreen(),
-                    ),
-                  );
+                  context.go('/admin/classrooms');
                 },
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xff1193D4),
+                ),
                 child: const Text(
                   "View Directory",
-                  style: TextStyle(color: Colors.blue),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           teachersAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) {
               log(e.toString());
-              return Text("Failed to load teachers");
+              return const Text("Failed to load teachers");
             },
             data: (teachers) {
-              return Row(
-                children: teachers
-                    .map(
-                      (t) => _teacherAvatar(
-                        teacherId: t.id,
-                        name: t.teacherName,
-                        imageUrl: t.imageUrl,
-                      ),
-                    )
-                    .toList(),
+              if (teachers.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      "No active teachers found",
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    ),
+                  ),
+                );
+              }
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: teachers
+                      .map(
+                        (t) => _teacherAvatar(
+                          teacherId: t.id,
+                          name: t.teacherName,
+                          imageUrl: t.imageUrl,
+                        ),
+                      )
+                      .toList(),
+                ),
               );
             },
           ),
@@ -3376,32 +3720,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String imageUrl,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(right: 14),
+      padding: const EdgeInsets.only(right: 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      TeacherDashbordScreen(teacherId: teacherId),
-                ),
+              context.push(
+                '/admin/classrooms/teacher-dashboard/$teacherId',
               );
             },
+            borderRadius: BorderRadius.circular(40),
             child: Container(
-              padding: const EdgeInsets.all(2), // 🔹 border thickness
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.grey.shade300, // 🔹 border color
-                  width: 1.5,
+                gradient: LinearGradient(
+                  colors: [const Color(0xff1193D4).withOpacity(0.4), const Color(0xff1193D4).withOpacity(0.1)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
               child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.blue.shade100,
+                radius: 36,
+                backgroundColor: const Color(0xFFF1F5F9),
                 backgroundImage: imageUrl.isNotEmpty
                     ? NetworkImage(imageUrl)
                     : null,
@@ -3409,9 +3751,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ? Text(
                         _initials(name),
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xff1193D4),
                         ),
                       )
                     : null,
@@ -3421,7 +3763,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
           const SizedBox(height: 8),
 
-          // 👇 Teacher name
           SizedBox(
             width: 86,
             child: Text(
@@ -3429,7 +3770,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
             ),
           ),
         ],
@@ -3439,8 +3784,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   String _initials(String name) {
     final parts = name.trim().split(" ");
-    if (parts.length == 1) return parts.first[0];
-    return parts[0][0] + parts[1][0];
+    if (parts.length == 1) return parts.first.isNotEmpty ? parts.first[0] : '';
+    return (parts[0].isNotEmpty ? parts[0][0] : '') + (parts[1].isNotEmpty ? parts[1][0] : '');
   }
 
   // ---------------------------------------------------------------------------
@@ -3449,12 +3794,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.grey.shade100, width: 1.5),
       boxShadow: [
         BoxShadow(
-          blurRadius: 8,
-          offset: const Offset(0, 3),
-          color: Colors.black.withOpacity(.04),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+          color: Colors.black.withOpacity(.03),
         ),
       ],
     );
@@ -3476,8 +3822,15 @@ class _LegendDot extends StatelessWidget {
           height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF475569),
+          ),
+        ),
       ],
     );
   }

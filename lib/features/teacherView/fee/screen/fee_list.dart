@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../core/constant/image_constant.dart';
@@ -284,6 +285,23 @@ class _FeeListScreenState extends ConsumerState<FeeListScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                        onPressed: () => context.pop(),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        "Manage Fees",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
                   const TabBar(labelColor: Colors.blue, unselectedLabelColor: Colors.grey, tabs: [Tab(text: "Pending Fees"), Tab(text: "Completed Fees")]),
                   Expanded(
                     child: Padding(

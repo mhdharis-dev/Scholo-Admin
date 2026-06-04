@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
 
 import '../../../../core/constant/image_constant.dart';
@@ -626,13 +627,8 @@ class _ClassWiseTeacherViewScreenState
                 ),
               ),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TeacherDashbordScreen(
-                      teacherId: teacher.id,
-                    ),
-                  ),
+                context.push(
+                  '/admin/classrooms/teacher-dashboard/${teacher.id}',
                 );
               },
               child: const Text(

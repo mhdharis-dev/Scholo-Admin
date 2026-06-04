@@ -1,20 +1,9 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/app_environment.dart';
-import 'features/sidemenu/side_menu_bar.dart';
-import 'auth/screen/splash_Screen.dart';
+import 'routes/app_router.dart';
 import 'otherplatform/platformError_page.dart';
-
-/// 🔐 Provider to manage login state (SharedPreferences)
-final authStateProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-  final role = prefs.getString('role');
-  return {'isLoggedIn': isLoggedIn, 'role': role};
-});
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
@@ -25,10 +14,9 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
     final config = ref.watch(appConfigProvider);
 
-    return MaterialApp(
+    return MaterialApp.router(
       title: config.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -81,41 +69,29 @@ class MyApp extends ConsumerWidget {
         ),
         useMaterial3: true,
       ),
+      routerConfig: router,
       builder: (context, child) {
-        if (config.isProduction) return child!;
-        
-        return Banner(
-          message: "TESTING",
-          location: BannerLocation.topEnd,
-          color: Colors.red,
-          child: child!,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Convert logical pixels to inches (approx. 160 dp = 1 inch)
+            final widthInInches = constraints.maxWidth / 160;
+
+            if (widthInInches < 6.4) {
+              return const SomethingWentWrongPage();
+            }
+
+            final content = config.isProduction
+                ? child!
+                : Banner(
+                    message: "TESTING",
+                    location: BannerLocation.topEnd,
+                    color: Colors.red,
+                    child: child!,
+                  );
+            return content;
+          },
         );
       },
-      home: LayoutBuilder(
-        builder: (context, constraints) {
-          // Convert logical pixels to inches (approx. 160 dp = 1 inch)
-          final widthInInches = constraints.maxWidth / 160;
-
-          if (widthInInches < 6.4) {
-            return const SomethingWentWrongPage();
-          }
-
-          return authState.when(
-            loading: () => const SplashScreen(),
-            error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
-            data: (auth) {
-              final isLoggedIn = auth['isLoggedIn'] as bool;
-              final role = auth['role'];
-
-              if (isLoggedIn && role == 'admin') {
-                return const AdminPanel();
-              } else {
-                return const SplashScreen();
-              }
-            },
-          );
-        },
-      ),
     );
   }
 }

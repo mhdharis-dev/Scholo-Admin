@@ -1,9 +1,7 @@
 import 'package:go_router/go_router.dart';
-import 'package:scholo_admin/features/teacherView/attendance/screen/attendance_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
-import '../core/layout/admin_shell.dart';
+import '../features/sidemenu/side_menu_bar.dart';
 import '../features/dashbord/screen/dashboard_screen.dart';
 import '../auth/screen/loginPage.dart';
 import '../auth/screen/splash_Screen.dart';
@@ -12,6 +10,17 @@ import '../features/students/screen/students_list.dart';
 import '../features/events/screen/events_screen.dart';
 import '../features/teacherView/class_dashbord/screen/classWiseTeacherView_screen.dart';
 import '../features/trashbin/screen/trashBin_screen.dart';
+import '../features/notifications/screen/notifications _Page.dart';
+
+// Import newly routed detail and sub-pages
+import '../features/teacherView/class_dashbord/screen/teacherViewDashbord.dart';
+import '../features/teacherView/attendance/screen/attendance_page.dart';
+import '../features/teacherView/students/screen/teacherScreenStudentList.dart';
+import '../features/teacherView/timetable_otherFiles/screen/tableAndOtherFilesPage_Screen.dart';
+import '../features/teacherView/mark/screen/folderPage_screen.dart';
+import '../features/teacherView/report/screen/year_wise_report.dart';
+import '../features/teacherView/fee/screen/fee_list.dart';
+import '../features/teacherView/fee/screen/fee_collection.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
@@ -26,9 +35,9 @@ final router = GoRouter(
 
     if (!loggedIn && !isAuthRoute) return '/login';
 
-    if (loggedIn && isAuthRoute) return '/admin/dashboard';
+    if (loggedIn && state.matchedLocation == '/login') return '/admin/dashboard';
 
-    if (role != 'admin') return '/login';
+    if (loggedIn && role != 'admin' && !isAuthRoute) return '/login';
 
     return null;
   },
@@ -47,7 +56,7 @@ final router = GoRouter(
     /// 🔥 MAIN ADMIN SHELL
     ShellRoute(
       builder: (context, state, child) {
-        return AdminPanelLayout(child: child); // ⬅️ YOUR UI HERE
+        return AdminPanel(child: child); // ⬅️ YOUR UI HERE
       },
       routes: [
         GoRoute(
@@ -70,20 +79,68 @@ final router = GoRouter(
           path: '/admin/classrooms',
           builder: (_, __) => const ClassWiseTeacherViewScreen(),
           routes: [
-            /// 🔥 NESTED (Teacher View deep navigation)
-            // GoRoute(
-            //   path: 'overview',
-            //   builder: (_, __) => const TeacherOverviewScreen(),
-            // ),
-            // GoRoute(
-            //   path: 'attendance',
-            //   builder: (_, __) => const AttendancePage(teacherId: teacherId),
-            // ),
+            GoRoute(
+              path: 'attendance/:teacherId',
+              builder: (context, state) => AttendancePage(
+                teacherId: state.pathParameters['teacherId']!,
+              ),
+            ),
+            GoRoute(
+              path: 'teacher-dashboard/:teacherId',
+              builder: (context, state) => TeacherDashbordScreen(
+                teacherId: state.pathParameters['teacherId']!,
+              ),
+              routes: [
+                GoRoute(
+                  path: 'student-list',
+                  builder: (context, state) => TeacherScreenStudentList(
+                    teacherId: state.pathParameters['teacherId']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'timetable/:classNo/:division',
+                  builder: (context, state) => TableAndOtherFilePageScreen(
+                    teacherId: state.pathParameters['teacherId']!,
+                    classNo: int.parse(state.pathParameters['classNo']!),
+                    division: state.pathParameters['division']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'marks',
+                  builder: (context, state) => ExamFolderPageScreen(
+                    teacherId: state.pathParameters['teacherId']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'class-report',
+                  builder: (context, state) => YearWiseReportScreen(
+                    teacherId: state.pathParameters['teacherId']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'fees',
+                  builder: (context, state) => FeeListScreen(
+                    teacherId: state.pathParameters['teacherId']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'fee-collection',
+                  builder: (context, state) => FeeCollectionPage(
+                    teacherId: state.pathParameters['teacherId']!,
+                    description: state.uri.queryParameters['description'] ?? '',
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         GoRoute(
           path: '/admin/trash',
           builder: (_, __) => const RecycleBinPage(),
+        ),
+        GoRoute(
+          path: '/admin/notifications',
+          builder: (_, __) => const NotificationsPage(),
         ),
       ],
     ),

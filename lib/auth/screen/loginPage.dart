@@ -1,8 +1,7 @@
-// lib/features/auth/screen/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scholo_admin/core/constant/image_constant.dart';
-import 'package:scholo_admin/features/sidemenu/side_menu_bar.dart';
 import '../controller/login_controller.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -28,10 +27,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final role =
     await ref.read(loginControllerProvider.notifier).restoreSession();
     if (role == 'admin' && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminPanel()),
-      );
+      context.go('/admin/dashboard');
     }
   }
 
@@ -50,10 +46,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final success = await controller.login(email, password);
 
     if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminPanel()),
-      );
+      context.go('/admin/dashboard');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid email or password')),

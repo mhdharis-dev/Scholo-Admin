@@ -40,6 +40,28 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   TeacherModel? editingTeacher;
 
   @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_updateTeacherCredentials);
+    _teacherIdController.addListener(_updateTeacherCredentials);
+  }
+
+  void _updateTeacherCredentials() {
+    if (editingTeacher == null) {
+      final name = _nameController.text.trim();
+      final id = _teacherIdController.text.trim();
+      if (name.isNotEmpty && id.isNotEmpty) {
+        final firstName = name.split(' ').first.toLowerCase();
+        _emailController.text = "$firstName$id@scholo.com";
+        _passwordController.text = "$firstName@$id";
+      } else {
+        _emailController.clear();
+        _passwordController.clear();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _teacherIdController.dispose();
@@ -81,11 +103,13 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   Widget _buildTextFieldWithValidation(TextEditingController controller, String label,
       {bool isEmail = false,
         bool isPassword = false,
+        bool readOnly = false,
         List<TextInputFormatter>? inputFormatters}) {
     bool isValid = true;
     return StatefulBuilder(builder: (context, setStateField) {
       return TextField(
         controller: controller,
+        readOnly: readOnly,
         inputFormatters: inputFormatters,
         onChanged: (v) {
           setStateField(() {
@@ -421,13 +445,14 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                   _emailController,
                   "Email",
                   isEmail: true,
+                  readOnly: true,
                 ),
                 const SizedBox(height: 14),
                 _buildTextFieldWithValidation(
                   _passwordController,
                   "Password",
                   isPassword: true,
-                  inputFormatters: [LengthLimitingTextInputFormatter(8)]
+                  readOnly: true,
                 ),
                 const SizedBox(height: 14),
                 _buildTextFieldWithValidation(_addressController, "Address", inputFormatters: [

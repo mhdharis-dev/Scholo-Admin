@@ -55,6 +55,39 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
   void initState() {
     super.initState();
     _fetchTeachers();
+    _nameController.addListener(_updateStudentCredentials);
+    _admissionController.addListener(_updateStudentCredentials);
+  }
+
+  void _updateStudentCredentials() {
+    if (editingStudent == null) {
+      final name = _nameController.text.trim();
+      final id = _admissionController.text.trim();
+      if (name.isNotEmpty && id.isNotEmpty) {
+        final firstName = name.split(' ').first.toLowerCase();
+        _emailController.text = "$firstName$id@scholo.com";
+        _passwordController.text = "$firstName@$id";
+      } else {
+        _emailController.clear();
+        _passwordController.clear();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _rollController.dispose();
+    _admissionController.dispose();
+    _parentController.dispose();
+    _mobileController.dispose();
+    _addressController.dispose();
+    _dayController.dispose();
+    _monthController.dispose();
+    _yearController.dispose();
+    super.dispose();
   }
 
   /// 🔹 Fetch Teachers List
@@ -108,6 +141,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     String label, {
     bool isEmail = false,
     bool isPassword = false,
+    bool readOnly = false,
     List<TextInputFormatter>? inputFormatters,
   }) {
     bool isValid = true;
@@ -116,6 +150,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       builder: (context, setStateField) {
         return TextField(
           controller: controller,
+          readOnly: readOnly,
           inputFormatters: inputFormatters,
           onChanged: (v) {
             setStateField(() {
@@ -125,12 +160,28 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
           },
           decoration: InputDecoration(
             labelText: label,
+            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+            ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             suffixIcon: (isEmail || isPassword)
                 ? (controller.text.isEmpty
                       ? null
                       : Icon(
-                          isValid ? Icons.check_circle : Icons.cancel,
+                          isValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
                           color: isValid ? Colors.green : Colors.red,
                         ))
                 : null,
@@ -146,12 +197,18 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       children: [
         Container(
           width: 70,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+            color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          child: const Center(child: Text('+91')),
+          child: const Center(
+            child: Text(
+              '+91',
+              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+            ),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -164,9 +221,21 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
             ],
             decoration: InputDecoration(
               labelText: 'Mobile No',
+              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -184,12 +253,27 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     return DropdownButtonFormField<String>(
       value: value,
       items: items.map((e) {
-        return DropdownMenuItem(value: e, child: Text(e));
+        return DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)));
       }).toList(),
       onChanged: onChanged,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
       decoration: InputDecoration(
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
@@ -233,7 +317,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     );
   }
 
-  /// 🔹 Open Add/Edit Modal
   void _openStudentDialog([StudentsModel? student]) {
     if (student != null) {
       editingStudent = student;
@@ -251,6 +334,9 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       _selectedTeacherName = student.teacherName;
       _selectedTeacherId = student.teacherId;
       _uploadedImageUrl = student.imageUrl;
+      _dayController.text = student.dateOfBirth.day.toString();
+      _monthController.text = student.dateOfBirth.month.toString();
+      _yearController.text = student.dateOfBirth.year.toString();
     } else {
       editingStudent = null;
       _nameController.clear();
@@ -261,163 +347,176 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       _mobileController.clear();
       _parentController.clear();
       _addressController.clear();
+      _dayController.clear();
+      _monthController.clear();
+      _yearController.clear();
       _selectedGender = null;
-      _selectedTeacherName = null;
-      _selectedTeacherId = null;
       _uploadedImageUrl = null;
       _selectedFile = null;
-      _classNo = null;
-      _division = null;
+      // Note: _selectedTeacherName, _selectedTeacherId, _classNo, _division are pre-set for this teacher
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Center(
-              child: Text(
-                editingStudent == null ? 'Add Student' : 'Edit Student',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Center(
+        child: Container(
+          width: 600,
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 40,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 15),
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Profile
-            Center(
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: _selectedFile != null
-                        ? FileImage(_selectedFile!)
-                        : (_uploadedImageUrl != null
-                              ? NetworkImage(_uploadedImageUrl!)
-                              : const AssetImage(
-                                      ImageConstant.temporaryStudentImage,
-                                    )
-                                    as ImageProvider),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
-                        child: const Icon(Icons.edit, size: 16),
-                      ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _admissionController,
-              "Admission No",
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(10),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _nameController,
-              "Name",
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _rollController,
-              "Roll No",
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(2),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildPhoneField(),
-            const SizedBox(height: 12),
-            _buildDropdown("Gender", _selectedGender, [
-              'Male',
-              'Female',
-            ], (v) => setState(() => _selectedGender = v)),
-            const SizedBox(height: 12),
-            _buildDateOfBirthField(),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _parentController,
-              "Parent Name",
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _addressController,
-              "Address",
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildValidatedField(_emailController, "Email", isEmail: true),
-            const SizedBox(height: 12),
-            _buildValidatedField(
-              _passwordController,
-              "Password",
-              isPassword: true,
-              inputFormatters: [LengthLimitingTextInputFormatter(8)],
-            ),
-            const SizedBox(height: 20),
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: Text(
+                    editingStudent == null ? 'Add New Student' : 'Edit Student Profile',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-            ElevatedButton(
-              onPressed: _isUploading
-                  ? null
-                  : () async {
+                // Profile Image
+                Center(
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 54,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: _selectedFile != null
+                              ? FileImage(_selectedFile!)
+                              : (_uploadedImageUrl != null
+                                    ? NetworkImage(_uploadedImageUrl!)
+                                    : const AssetImage(ImageConstant.temporaryStudentImage)
+                                  as ImageProvider),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xff1193D4),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10)
+                ]),
+                const SizedBox(height: 14),
+                _buildValidatedField(_nameController, "Name", inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                ]),
+                const SizedBox(height: 14),
+                _buildValidatedField(_rollController, "Roll No", inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(2),
+                ]),
+                const SizedBox(height: 14),
+                _buildPhoneField(),
+                const SizedBox(height: 14),
+                _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setState(() => _selectedGender = v)),
+                const SizedBox(height: 14),
+                _buildDateOfBirthField(),
+                const SizedBox(height: 14),
+                _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                ]),
+                const SizedBox(height: 14),
+                _buildValidatedField(_addressController, "Address", inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                ]),
+                const SizedBox(height: 14),
+                _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
+                const SizedBox(height: 14),
+                _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
+                const SizedBox(height: 28),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff1193D4),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _isUploading
+                        ? null
+                        : () async {
                       if (_classNo == null || _division == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Teacher data not loaded"),
-                          ),
+                          const SnackBar(content: Text("Teacher data not loaded")),
                         );
                         return;
                       }
                       setState(() => _isUploading = true);
                       try {
                         if (_selectedFile != null) {
-                          _uploadedImageUrl = await _uploadToCloudinary(
-                            _selectedFile!,
-                          );
+                          _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
                         }
 
-                        final dob =
-                            DateTime.tryParse(
-                              "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                            ) ??
+                        final dob = DateTime.tryParse(
+                          "${_yearController.text}-${_monthController.text}-${_dayController.text}",
+                        ) ??
                             DateTime(2000, 1, 1);
 
                         final newStudent = StudentsModel(
@@ -430,56 +529,53 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                           password: _passwordController.text,
                           address: _addressController.text,
                           parentName: _parentController.text,
-                          classNo: int.parse(
-                            _classNo ?? '0',
-                          ), // ✅ Auto-fetched from teacher
+                          classNo: int.parse(_classNo ?? '0'),
                           division: _division ?? 'Not',
                           teacherName: _selectedTeacherName ?? '',
                           teacherId: widget.teacherId,
                           gender: _selectedGender ?? '',
                           delete: false,
                           imageUrl: _uploadedImageUrl ?? '',
-                          dateOfBirth:
-                              DateTime.tryParse(
-                                "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                              ) ??
-                              DateTime(2000, 1, 1),
-                          createdDate:
-                              editingStudent?.createdDate ?? DateTime.now(),
+                          dateOfBirth: dob,
+                          createdDate: editingStudent?.createdDate ?? DateTime.now(),
                         );
 
-                        final ref = FirebaseFirestore.instance.collection(
-                          FirebaseConstant.student,
-                        );
+                        final ref = FirebaseFirestore.instance.collection(FirebaseConstant.student);
                         if (editingStudent != null) {
-                          await ref
-                              .doc(editingStudent!.studentId)
-                              .update(newStudent.toMap());
+                          await ref.doc(editingStudent!.studentId).update(newStudent.toMap());
                         } else {
                           final doc = await ref.add(newStudent.toMap());
                           await doc.update({'studentId': doc.id});
                         }
 
-                        Navigator.pop(context);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                       } catch (e) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text("Error: $e")));
+                        }
                       } finally {
                         setState(() => _isUploading = false);
                       }
                     },
-              child: _isUploading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text(editingStudent != null ? "Update" : "Add"),
+                    child: _isUploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                      editingStudent != null ? "Update Student" : "Add Student",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  /// ✅ Student Details Popup Modal
   void showStudentDetailsModal(BuildContext context, StudentsModel student) {
     showDialog(
       context: context,
@@ -489,16 +585,16 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
           child: Material(
             color: Colors.transparent,
             child: Container(
-              width: 650,
+              width: 580,
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 25,
-                    offset: const Offset(0, 10),
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
                   ),
                 ],
               ),
@@ -507,15 +603,16 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // 🔹 Header
+                    // Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Student Details",
+                          "Student Profile",
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
                           ),
                         ),
                         IconButton(
@@ -524,38 +621,45 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 20),
 
-                    // 🔹 Profile Picture + Name
+                    // Profile Picture + Name
                     Center(
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 45,
-                            backgroundColor: Colors.grey[200],
-                            backgroundImage: student.imageUrl.isNotEmpty
-                                ? NetworkImage(student.imageUrl)
-                                : const AssetImage(
-                                        ImageConstant.temporaryStudentImage,
-                                      )
-                                      as ImageProvider,
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xff1193D4).withOpacity(0.2), width: 4),
+                            ),
+                            child: CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Colors.grey[200],
+                              backgroundImage: student.imageUrl.isNotEmpty
+                                  ? NetworkImage(student.imageUrl)
+                                  : const AssetImage(ImageConstant.temporaryStudentImage)
+                              as ImageProvider,
+                            ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
                             student.studentName,
                             style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
                             ),
                           ),
+                          const SizedBox(height: 6),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 "Admission No: ${student.admissionNo}",
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey,
+                                  color: Colors.grey.shade500,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -563,15 +667,15 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                                 onTap: () {
                                   Navigator.pop(context);
                                   Future.delayed(Duration.zero, () {
-                                    showStudentDetailsModal(context, student);
+                                    _openStudentDialog(student);
                                   });
                                 },
                                 child: SvgPicture.asset(
                                   ImageConstant.editIcon,
                                   fit: BoxFit.contain,
-                                  color: Colors.black,
-                                  height: 20,
-                                  width: 20,
+                                  color: const Color(0xff1193D4),
+                                  height: 18,
+                                  width: 18,
                                 ),
                               ),
                             ],
@@ -579,15 +683,15 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
 
-                    // 🔹 Info Container
+                    // Info Container
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade100),
                       ),
                       child: Column(
                         children: [
@@ -610,35 +714,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                         ],
                       ),
                     ),
-
-                    // 🔹 Footer Buttons
-                    // Row(
-                    //   mainAxisAlignment: MainAxisAlignment.end,
-                    //   children: [
-                    //     TextButton(
-                    //       onPressed: () => Navigator.pop(context),
-                    //       child: const Text("Close"),
-                    //     ),
-                    //     const SizedBox(width: 10),
-                    //     ElevatedButton.icon(
-                    //       style: ElevatedButton.styleFrom(
-                    //         backgroundColor: const Color(0xff1193D4),
-                    //         shape: RoundedRectangleBorder(
-                    //           borderRadius: BorderRadius.circular(10),
-                    //         ),
-                    //       ),
-                    //       icon: const Icon(Icons.edit, color: Colors.white),
-                    //       label: const Text("Edit",
-                    //           style: TextStyle(color: Colors.white)),
-                    //       onPressed: () {
-                    //         Navigator.pop(context);
-                    //         Future.delayed(Duration.zero, () {
-                    //           _openStudentDialog(student); // reuse your existing edit modal
-                    //         });
-                    //       },
-                    //     ),
-                    //   ],
-                    // ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -649,27 +725,37 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     );
   }
 
+  /// Reusable Info Row Widget
   Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+        ),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 140,
+            width: 150,
             child: Text(
               label,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value.isNotEmpty ? value : "-",
-              style: const TextStyle(fontSize: 15),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
             ),
           ),
         ],

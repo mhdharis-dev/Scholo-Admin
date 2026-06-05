@@ -513,6 +513,35 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTime focusedDay = DateTime.now();
 
+  @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_updateGeneratedCredentials);
+    _teacherIdController.addListener(_updateGeneratedCredentials);
+    _admissionController.addListener(_updateGeneratedCredentials);
+  }
+
+  void _updateGeneratedCredentials() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _emailController.clear();
+      _passwordController.clear();
+      return;
+    }
+
+    final firstName = name.split(' ').first.toLowerCase();
+
+    if (_admissionController.text.isNotEmpty) {
+      final id = _admissionController.text.trim();
+      _emailController.text = "$firstName$id@scholo.com";
+      _passwordController.text = "$firstName@$id";
+    } else if (_teacherIdController.text.isNotEmpty) {
+      final id = _teacherIdController.text.trim();
+      _emailController.text = "$firstName$id@scholo.com";
+      _passwordController.text = "$firstName@$id";
+    }
+  }
+
   File? _selectedFile;
   String? _uploadedImageUrl;
   bool _isUploading = false;
@@ -1709,6 +1738,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     String label, {
     bool isEmail = false,
     bool isPassword = false,
+    bool readOnly = false,
     List<TextInputFormatter>? inputFormatters,
   }) {
     bool isValid = true;
@@ -1716,6 +1746,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       builder: (context, setStateField) {
         return TextField(
           controller: controller,
+          readOnly: readOnly,
           inputFormatters: inputFormatters,
           onChanged: (v) {
             setStateField(() {
@@ -2036,9 +2067,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SizedBox(height: 14),
                 _buildPhoneField(),
                 const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_emailController, "Email", isEmail: true),
+                _buildTextFieldWithValidation(_emailController, "Email",
+                    isEmail: true, readOnly: true),
                 const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_passwordController, "Password", isPassword: true),
+                _buildTextFieldWithValidation(_passwordController, "Password",
+                    isPassword: true, readOnly: true),
                 const SizedBox(height: 14),
                 _buildTextFieldWithValidation(_addressController, "Address"),
                 const SizedBox(height: 16),
@@ -2386,9 +2419,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SizedBox(height: 14),
                 _buildTextFieldWithValidation(_addressController, "Address"),
                 const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_emailController, "Email", isEmail: true),
+                _buildTextFieldWithValidation(_emailController, "Email",
+                    isEmail: true, readOnly: true),
                 const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_passwordController, "Password", isPassword: true),
+                _buildTextFieldWithValidation(_passwordController, "Password",
+                    isPassword: true, readOnly: true),
                 const SizedBox(height: 28),
 
                 /// SAVE BUTTON

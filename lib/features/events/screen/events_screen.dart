@@ -1093,11 +1093,23 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             itemBuilder: (context) => const [
               PopupMenuItem(
                 value: 'edit',
-                child: Text("Edit"),
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, size: 18, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Edit'),
+                  ],
+                ),
               ),
               PopupMenuItem(
                 value: 'delete',
-                child: Text("Delete"),
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, size: 18, color: Colors.redAccent),
+                    SizedBox(width: 8),
+                    Text('Delete'),
+                  ],
+                ),
               ),
             ],
             icon: const Icon(Icons.more_vert, size: 20),
@@ -1150,39 +1162,74 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
   // DELETE CONFIRMATION
   void _confirmDeleteEvent(EventModel event) {
+
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Delete Event"),
-          content: Text(
-              'Are you sure you want to delete "${event.title}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await ref
-                      .read(eventControllerProvider.notifier)
-                      .deleteEvent(event.title);
-                  Navigator.pop(context);
-                  _showSnack("Event deleted", success: true);
-                } catch (e) {
-                  Navigator.pop(context);
-                  _showSnack("Error deleting: $e");
-                }
-              },
-              child: const Text(
-                "Delete",
-                style: TextStyle(color: Colors.red),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 380,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.redAccent.shade200, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                "Confirm Delete",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
-            ),
-          ],
-        );
-      },
+              const SizedBox(height: 12),
+              const Text(
+                "Are you sure you want to delete this event ? This action cannot be undone.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF64748B), height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF475569))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        try {
+                          await ref
+                              .read(eventControllerProvider.notifier)
+                              .deleteEvent(event.title);
+                          Navigator.pop(context);
+                          _showSnack("Event deleted", success: true);
+                        } catch (e) {
+                          Navigator.pop(context);
+                          _showSnack("Error deleting: $e");
+                        }
+                      },
+                      child: const Text("Delete"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -48,7 +48,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   String _adminGender = "Male";
   String _adminMobile = "9876543210";
   final String _adminEmail = "admin@scholo.com";
-  final String _adminPassword = "••••••••";
+  final String _adminPassword = "Admin@123";
 
   final GlobalKey _profileKey = GlobalKey();
   OverlayEntry? _overlayEntry;
@@ -60,6 +60,34 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     _fetchTeachers();
 
     _searchDataFuture = _fetchSearchItems(); // ✅ cache search data once
+
+    _nameController.addListener(_updateGeneratedCredentials);
+    _admissionController.addListener(_updateGeneratedCredentials);
+    _teacherIdController.addListener(_updateGeneratedCredentials);
+  }
+
+  void _updateGeneratedCredentials() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _emailController.clear();
+      _passwordController.clear();
+      return;
+    }
+
+    final firstName = name.split(' ').first.toLowerCase();
+
+    // Check if we are in Student Add mode
+    if (editingStudent == null && _admissionController.text.isNotEmpty) {
+      final id = _admissionController.text.trim();
+      _emailController.text = "$firstName$id@scholo.com";
+      _passwordController.text = "$firstName@$id";
+    }
+    // Check if we are in Teacher Add mode
+    else if (editingTeacher == null && _teacherIdController.text.isNotEmpty) {
+      final id = _teacherIdController.text.trim();
+      _emailController.text = "$firstName$id@scholo.com";
+      _passwordController.text = "$firstName@$id";
+    }
   }
 
   @override
@@ -95,7 +123,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     }
 
     final RenderBox renderBox =
-        _profileKey.currentContext!.findRenderObject() as RenderBox;
+    _profileKey.currentContext!.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
@@ -591,6 +619,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       String label, {
         bool isEmail = false,
         bool isPassword = false,
+        bool readOnly = false,
         List<TextInputFormatter>? inputFormatters,
       }) {
     bool isValid = true;
@@ -598,6 +627,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       builder: (context, setStateField) {
         return TextField(
           controller: controller,
+          readOnly: readOnly,
           inputFormatters: inputFormatters,
           onChanged: (v) {
             setStateField(() {
@@ -771,18 +801,11 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
             const SizedBox(height: 12),
             _buildPhoneField(),
             const SizedBox(height: 12),
-            _buildTextFieldWithValidation(
-              _emailController,
-              "Email",
-              isEmail: true,
-            ),
+            _buildTextFieldWithValidation(_emailController, "Email",
+                isEmail: true, readOnly: true),
             const SizedBox(height: 12),
-            _buildTextFieldWithValidation(
-                _passwordController,
-                "Password",
-                isPassword: true,
-                inputFormatters: [LengthLimitingTextInputFormatter(8)]
-            ),
+            _buildTextFieldWithValidation(_passwordController, "Password",
+                isPassword: true, readOnly: true),
             const SizedBox(height: 12),
             _buildTextFieldWithValidation(_addressController, "Address",inputFormatters: [ FilteringTextInputFormatter.allow(
               RegExp(r"[a-zA-Z\s]"),)]),
@@ -1001,10 +1024,10 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
             _buildValidatedField(_addressController, "Address",inputFormatters: [ FilteringTextInputFormatter.allow(
               RegExp(r"[a-zA-Z\s]"),),]),
             const SizedBox(height: 12),
-            _buildValidatedField(_emailController, "Email", isEmail: true),
+            _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
             const SizedBox(height: 12),
             _buildValidatedField(_passwordController, "Password",
-                isPassword: true,inputFormatters: [LengthLimitingTextInputFormatter(8)]),
+                isPassword: true, readOnly: true),
             const SizedBox(height: 20),
 
             ElevatedButton(
@@ -1152,11 +1175,13 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   Widget _buildValidatedField(TextEditingController controller, String label,
       {bool isEmail = false,
         bool isPassword = false,
+        bool readOnly = false,
         List<TextInputFormatter>? inputFormatters}) {
     bool isValid = true;
     return StatefulBuilder(builder: (context, setStateField) {
       return TextField(
         controller: controller,
+        readOnly: readOnly,
         inputFormatters: inputFormatters,
         onChanged: (v) {
           setStateField(() {
@@ -1370,14 +1395,14 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                   children: [
                     const SizedBox(height: 10),
                     Center(
-                        child: CircleAvatar(
+                      child: CircleAvatar(
                         radius: 44,
-                          backgroundColor: Colors.white,
-                          child: Padding(
+                        backgroundColor: Colors.white,
+                        child: Padding(
                           padding: const EdgeInsets.all(12.0),
-                            child: Image.asset(
-                              ImageConstant.logoWithText,
-                              fit: BoxFit.contain,
+                          child: Image.asset(
+                            ImageConstant.logoWithText,
+                            fit: BoxFit.contain,
                             height: 115,
                             width: 115,
                           ),
@@ -1449,7 +1474,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         color: Colors.black.withOpacity(0.06),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
-                    ),
+                      ),
                     ],
                   ),
                   child: Row(
@@ -1644,6 +1669,7 @@ class AdminProfileTooltipCard extends StatefulWidget {
 
 class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
   bool _isEditing = false;
+  bool _showPassword = false;
   late final TextEditingController _nameCtrl;
   late final TextEditingController _schoolCtrl;
   late final TextEditingController _mobileCtrl;
@@ -1668,23 +1694,46 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
 
   Widget _buildField({required String label, required Widget content}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade500,
-              letterSpacing: 0.5,
+          if (!_isEditing) ...[
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade500,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
+            const SizedBox(height: 4),
+          ],
           content,
         ],
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     );
   }
 
@@ -1752,18 +1801,13 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
                 label: 'SCHOOL NAME',
                 content: _isEditing
                     ? TextField(
-                        controller: _schoolCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Enter school name',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      )
+                  controller: _schoolCtrl,
+                  decoration: _inputDecoration('School Name'),
+                )
                     : Text(
-                        widget.schoolName,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
+                  widget.schoolName,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                ),
               ),
 
               // Name
@@ -1771,35 +1815,37 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
                 label: 'NAME',
                 content: _isEditing
                     ? TextField(
-                        controller: _nameCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Enter name',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      )
+                  controller: _nameCtrl,
+                  decoration: _inputDecoration('Name'),
+                )
                     : Text(
-                        widget.name,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
+                  widget.name,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                ),
               ),
 
               // Gender
               _buildField(
                 label: 'GENDER',
                 content: _isEditing
-                    ? DropdownButtonFormField<String>(
-                        value: _selectedGender,
-                        items: ['Male', 'Female']
-                            .map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 14))))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedGender = v),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
+                    ? Row(
+                        children: [
+                          Radio<String>(
+                            value: 'Male',
+                            groupValue: _selectedGender,
+                            activeColor: const Color(0xff1193D4),
+                            onChanged: (v) => setState(() => _selectedGender = v),
+                          ),
+                          const Text('Male', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 20),
+                          Radio<String>(
+                            value: 'Female',
+                            groupValue: _selectedGender,
+                            activeColor: const Color(0xff1193D4),
+                            onChanged: (v) => setState(() => _selectedGender = v),
+                          ),
+                          const Text('Female', style: TextStyle(fontSize: 14)),
+                        ],
                       )
                     : Text(
                         widget.gender,
@@ -1815,12 +1861,7 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
                         controller: _mobileCtrl,
                         keyboardType: TextInputType.phone,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: InputDecoration(
-                          hintText: 'Enter mobile no',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
+                        decoration: _inputDecoration('Mobile No'),
                       )
                     : Text(
                         widget.mobile,
@@ -1831,19 +1872,57 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
               // Email (Const)
               _buildField(
                 label: 'EMAIL (READ-ONLY)',
-                content: Text(
-                  widget.email,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-                ),
+                content: _isEditing
+                    ? TextField(
+                        controller: TextEditingController(text: widget.email),
+                        readOnly: true,
+                        decoration: _inputDecoration('Email (Read-only)'),
+                      )
+                    : Text(
+                        widget.email,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
+                      ),
               ),
 
               // Password (Const)
               _buildField(
                 label: 'PASSWORD (READ-ONLY)',
-                content: Text(
-                  widget.password,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-                ),
+                content: _isEditing
+                    ? TextField(
+                        controller: TextEditingController(text: widget.password),
+                        readOnly: true,
+                        obscureText: !_showPassword,
+                        decoration: _inputDecoration('Password (Read-only)').copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword ? Icons.visibility : Icons.visibility_off,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                          ),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _showPassword ? widget.password : '•••••••••',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              _showPassword ? Icons.visibility : Icons.visibility_off,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(() => _showPassword = !_showPassword),
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ],
+                      ),
               ),
 
               const SizedBox(height: 20),

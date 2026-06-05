@@ -53,6 +53,23 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   void initState() {
     super.initState();
     _fetchTeachers();
+    _nameController.addListener(_updateStudentCredentials);
+    _admissionController.addListener(_updateStudentCredentials);
+  }
+
+  void _updateStudentCredentials() {
+    if (editingStudent == null) {
+      final name = _nameController.text.trim();
+      final id = _admissionController.text.trim();
+      if (name.isNotEmpty && id.isNotEmpty) {
+        final firstName = name.split(' ').first.toLowerCase();
+        _emailController.text = "$firstName$id@scholo.com";
+        _passwordController.text = "$firstName@$id";
+      } else {
+        _emailController.clear();
+        _passwordController.clear();
+      }
+    }
   }
 
   @override
@@ -120,11 +137,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   Widget _buildValidatedField(TextEditingController controller, String label,
       {bool isEmail = false,
         bool isPassword = false,
+        bool readOnly = false,
         List<TextInputFormatter>? inputFormatters}) {
     bool isValid = true;
     return StatefulBuilder(builder: (context, setStateField) {
       return TextField(
         controller: controller,
+        readOnly: readOnly,
         inputFormatters: inputFormatters,
         onChanged: (v) {
           setStateField(() {
@@ -518,11 +537,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
                 ]),
                 const SizedBox(height: 14),
-                _buildValidatedField(_emailController, "Email", isEmail: true),
+                _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
                 const SizedBox(height: 14),
-                _buildValidatedField(_passwordController, "Password", isPassword: true, inputFormatters: [
-                  LengthLimitingTextInputFormatter(8)
-                ]),
+                _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
                 const SizedBox(height: 28),
 
                 SizedBox(

@@ -1,4 +1,3 @@
-import 'dart:developer';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +16,7 @@ class MonthWiseReportRepository {
   // 🔹 Teacher
   Future<TeacherModel> fetchTeacher(String teacherId) async {
     final snap = await _firestore
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .get();
 
@@ -35,12 +34,12 @@ class MonthWiseReportRepository {
     final year = int.parse(parts[0]);
     final month = int.parse(parts[1]);
 
-    final snap = await _firestore.collection(FirebaseConstant.attendance).get();
+    final snap = await _firestore.schoolCollection(FirebaseConstant.attendance).get();
 
     final List<Map<String, dynamic>> result = [];
 
     for (final doc in snap.docs) {
-      final raw = doc.data() as Map<String, dynamic>;
+      final raw = doc.data();
 
       // 📌 Extract date from doc ID
       final idParts = doc.id.split('-'); // [dd,mm,yyyy]

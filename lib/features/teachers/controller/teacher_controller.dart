@@ -25,11 +25,12 @@ class TeacherController extends StateNotifier<AsyncValue<List<TeacherModel>>> {
     });
   }
 
-  Future<void> addTeacher(TeacherModel teacher) async {
+  Future<String?> addTeacher(TeacherModel teacher) async {
     try {
-      await _repository.addTeacher(teacher);
+      return await _repository.addTeacher(teacher);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      return null;
     }
   }
 

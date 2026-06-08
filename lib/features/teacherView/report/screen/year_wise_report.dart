@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -726,6 +727,23 @@ class _YearWiseReportScreenState
                 // TOP ROW: title (left) + year dropdown + year PRINT/DOWNLOAD/SHARE (right)
                 Row(
                   children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     const Text(
                       "Report Details",
                       style: TextStyle(
@@ -911,7 +929,7 @@ class ReportCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.06),
+              color: Colors.black.withValues(alpha: .06),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

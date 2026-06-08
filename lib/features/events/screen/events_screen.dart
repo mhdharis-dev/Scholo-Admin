@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/event_model.dart';
+import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import '../controller/event_controller.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
@@ -27,16 +28,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   ];
 
   // All classes (1 - 12)
-  final List<String> allClasses = const [
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "11",
-    "12",
-  ];
+  List<String> allClasses = [];
+
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
 
   // ---------------- INPUT BOX HELPER ----------------
   Widget _inputBox({required Widget child, double height = 50}) {
@@ -118,7 +116,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.20),
+                    color: Colors.black.withValues(alpha: 0.20),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -453,7 +451,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                 ),
                               ),
                             )
-                                .toList(),
+                                ,
                           ],
                         ),
 
@@ -521,7 +519,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                 );
 
                                 final colorString =
-                                    "0x${selectedColor!.value.toRadixString(16)}";
+                                    "0x${selectedColor!.toARGB32().toRadixString(16)}";
 
                                 final event = EventModel(
                                   title: titleController.text.trim(),
@@ -650,7 +648,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   ),
                   title: Text(e.title),
                   subtitle: Text(
-                    "${DateFormat('dd MMM, hh:mm a').format(e.startDateTime)}",
+                    DateFormat('dd MMM, hh:mm a').format(e.startDateTime),
                   ),
 
                   /// 👉 CLICK TO EDIT
@@ -672,6 +670,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   // ------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final classesAsync = ref.watch(classesStreamProvider);
+    final classesList = classesAsync.value ?? [];
+    final activeClasses = classesList.where((c) => !c.delete).toList();
+    allClasses = activeClasses.map((c) => c.classNo).toSet().toList();
+    allClasses.sort((a, b) => _classNoToInt(a).compareTo(_classNoToInt(b)));
+
     return Scaffold(
       backgroundColor: const Color(0xfff7f9fc),
       body: Padding(
@@ -828,7 +832,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     String tooltipMessage = "";
 
     if (hasEvent) {
-      tooltipMessage = eventsForDay!
+      tooltipMessage = eventsForDay
           .map((e) =>
       "Event Tittle    : ${e.title}\nStarting date : ${DateFormat('dd MMM, hh:mm a').format(e.startDateTime)}\nEnding Date  : ${DateFormat('dd MMM, hh:mm a').format(e.endDateTime)} ")
           .join("\n\n\n");
@@ -843,7 +847,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       child: InkWell(
         onTap: () {
           if (hasEvent) {
-            _showEventsListDialog(eventsForDay!);
+            _showEventsListDialog(eventsForDay);
           }else{
             _showAddEventConfirm(date);
           }
@@ -1015,7 +1019,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   // ------------------------------------------------------------
   Widget _eventTile(EventModel event, DateTime currentMonth) {
     final baseColor = _parseColor(event.color);
-    final bgColor = baseColor.withOpacity(0.15);
+    final bgColor = baseColor.withValues(alpha: 0.15);
 
     final monthText =
     DateFormat('MMM').format(currentMonth).toUpperCase();
@@ -1258,7 +1262,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       borderRadius: BorderRadius.circular(18),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 15,
           offset: const Offset(0, 5),
         ),
@@ -1276,7 +1280,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     return BoxDecoration(
       color: isToday
-          ? const Color(0xff2970FF).withOpacity(0.1) // 🔵 TODAY
+          ? const Color(0xff2970FF).withValues(alpha: 0.1) // 🔵 TODAY
           : Colors.white,
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: Colors.grey.shade200),

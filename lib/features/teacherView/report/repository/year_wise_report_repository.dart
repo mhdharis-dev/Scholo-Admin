@@ -13,7 +13,7 @@ class YearWiseReportRepository {
   /// Fetch teacher details by ID
   Future<TeacherModel?> fetchTeacherById(String teacherId) async {
     final doc = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .get();
 
@@ -36,7 +36,7 @@ class YearWiseReportRepository {
       String teacherId,
       ) async {
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.attendance)
+        .schoolCollection(FirebaseConstant.attendance)
         .get();
 
     final Map<String, List<Map<String, dynamic>>> grouped = {};
@@ -46,7 +46,7 @@ class YearWiseReportRepository {
       final String? monthKey = _monthKeyFromDocId(docId); // "2025-11"
       if (monthKey == null) continue;
 
-      final raw = doc.data() as Map<String, dynamic>;
+      final raw = doc.data();
       final Map<String, dynamic> filtered = {};
 
       // Filter nested structure by teacherId

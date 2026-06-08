@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -155,7 +154,7 @@ String getClassName(dynamic classes) {
 
 final recycleStudentsProvider = StreamProvider<List<RecycleStudent>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.student)
+      .schoolCollection(FirebaseConstant.student)
       .where('delete', isEqualTo: true)
       .snapshots()
       .map((snapshot) {
@@ -178,7 +177,7 @@ final recycleStudentsProvider = StreamProvider<List<RecycleStudent>>((ref) {
 
 final recycleTeachersProvider = StreamProvider<List<RecycleTeacher>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .where('delete', isEqualTo: true)
       .snapshots()
       .map((snapshot) {
@@ -204,7 +203,7 @@ final recycleTeachersProvider = StreamProvider<List<RecycleTeacher>>((ref) {
 
 final recycleEventsProvider = StreamProvider<List<RecycleEvent>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.events)
+      .schoolCollection(FirebaseConstant.events)
       .where('delete', isEqualTo: true)
       .snapshots()
       .map((snap) {
@@ -227,7 +226,7 @@ final recycleEventsProvider = StreamProvider<List<RecycleEvent>>((ref) {
 
 final recycleOtherFilesProvider = StreamProvider<List<RecycleOtherFiles>>((ref,) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.otherFile)
+      .schoolCollection(FirebaseConstant.otherFile)
       .where('delete', isEqualTo: true)
       .snapshots()
       .map((snap) {
@@ -252,7 +251,7 @@ final recycleOtherFilesProvider = StreamProvider<List<RecycleOtherFiles>>((ref,)
 
 final recycleFeesProvider = StreamProvider<List<RecycleFee>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.fees)
+      .schoolCollection(FirebaseConstant.fees)
       .snapshots()
       .map((snap) {
         final List<RecycleFee> list = [];
@@ -378,7 +377,7 @@ final recycleFeesProvider = StreamProvider<List<RecycleFee>>((ref) {
 
 final recycleMarksProvider = StreamProvider<List<RecycleMark>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.studentsMark)
+      .schoolCollection(FirebaseConstant.studentsMark)
       .snapshots()
       .map((snap) {
     final List<RecycleMark> list = [];
@@ -553,7 +552,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(40),
-          child: Container(
+          child: SizedBox(
             width: double.infinity,
             height: 500,
             child: Column(
@@ -944,7 +943,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         child:  Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
-    color: color.withOpacity(.1),
+    color: color.withValues(alpha: .1),
     borderRadius: BorderRadius.circular(6),
     ),
     child: Text(text, style: TextStyle(color: color)),
@@ -954,7 +953,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
 
   Future<void> restoreItem(String collection, String docId) async {
     await FirebaseFirestore.instance
-        .collection(collection)
+        .schoolCollection(collection)
         .doc(docId)
         .update({
       'delete': false,
@@ -980,7 +979,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance
-                  .collection(collection)
+                  .schoolCollection(collection)
                   .doc(docId)
                   .update({
                 'delete': false,
@@ -1015,7 +1014,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               await FirebaseFirestore.instance
-                  .collection(collection)
+                  .schoolCollection(collection)
                   .doc(docId)
                   .delete();
 
@@ -1055,7 +1054,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
 
               for (String col in collections) {
                 final snapshot = await firestore
-                    .collection(col)
+                    .schoolCollection(col)
                     .where('delete', isEqualTo: true)
                     .get();
 
@@ -1135,13 +1134,11 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                                   radius: 16,
                                   backgroundColor: Colors.grey.shade300,
                                   backgroundImage:
-                                      (student.imageUrl != null &&
-                                          student.imageUrl.isNotEmpty)
+                                      (student.imageUrl.isNotEmpty)
                                       ? NetworkImage(student.imageUrl)
                                       : null,
                                   child:
-                                      (student.imageUrl == null ||
-                                          student.imageUrl.isEmpty)
+                                      (student.imageUrl.isEmpty)
                                       ? Text(student.name[0])
                                       : null,
                                 ),
@@ -1296,13 +1293,11 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                                   radius: 16,
                                   backgroundColor: Colors.grey.shade300,
                                   backgroundImage:
-                                      (teacher.imageUrl != null &&
-                                          teacher.imageUrl.isNotEmpty)
+                                      (teacher.imageUrl.isNotEmpty)
                                       ? NetworkImage(teacher.imageUrl)
                                       : null,
                                   child:
-                                      (teacher.imageUrl == null ||
-                                          teacher.imageUrl.isEmpty)
+                                      (teacher.imageUrl.isEmpty)
                                       ? Text(teacher.name[0])
                                       : null,
                                 ),

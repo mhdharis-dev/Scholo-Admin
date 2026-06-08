@@ -6,26 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:printing/printing.dart';
-import 'package:scholo_admin/features/teacherView/mark/screen/folderPage_screen.dart';
-import 'package:scholo_admin/features/teacherView/report/screen/year_wise_report.dart';
-import 'package:scholo_admin/features/teacherView/students/screen/teacherScreenStudentList.dart';
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/otherTeacher_model.dart';
 import '../../../../models/teacher_model.dart';
 import '../../../../models/fees_model.dart';
-import '../../../../models/otherFiles_model.dart';
-import '../../timetable_otherFiles/screen/tableAndOtherFilesPage_Screen.dart';
 import '../controller/teacherdashbord_controller.dart';
-import '../../attendance/screen/attendance_page.dart';
-import '../../fee/screen/fee_list.dart';
-import '../../fee/screen/fee_collection.dart';
-import 'package:http/http.dart' as http;
-import 'package:universal_html/html.dart' as html;
-import 'dart:typed_data';
-import 'package:pdf/widgets.dart' as pw;
 
 class TeacherDashbordScreen extends ConsumerStatefulWidget {
   final String teacherId;
@@ -57,7 +43,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
     // Fetch students under teacher
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where("delete", isEqualTo: false)
         .where("teacherId", isEqualTo: teacher.id)
         .get();
@@ -117,7 +103,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                         controller: descriptionController,
                         onSelectSuggestion: (selected) async {
                           final snap = await FirebaseFirestore.instance
-                              .collection(FirebaseConstant.fees)
+                              .schoolCollection(FirebaseConstant.fees)
                               .doc(selected)
                               .get();
 
@@ -436,7 +422,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
     // ✅ Fetch Teachers List
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where("delete", isEqualTo: false)
         .get();
 
@@ -601,7 +587,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                       /// ✅ Teacher Dropdown
                       DropdownButtonFormField<TeacherModel>(
-                        value: selectedTeacher,
+                        initialValue: selectedTeacher,
                         decoration: InputDecoration(
                           labelText: "Select Teacher",
                           filled: true,
@@ -649,7 +635,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                         /// Substituted By
                         DropdownButtonFormField<TeacherModel>(
-                          value: selectedSubstituteTeacher,
+                          initialValue: selectedSubstituteTeacher,
                           decoration: InputDecoration(
                             labelText: "Substituted By",
                             filled: true,
@@ -812,7 +798,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                             try {
                               final docRef = FirebaseFirestore.instance
-                                  .collection(FirebaseConstant.teacher)
+                                  .schoolCollection(FirebaseConstant.teacher)
                                   .doc(widget.teacherId);
 
                               final snap = await docRef.get();
@@ -994,7 +980,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
   ) async {
     try {
       final docRef = FirebaseFirestore.instance
-          .collection(FirebaseConstant.teacher)
+          .schoolCollection(FirebaseConstant.teacher)
           .doc(mainTeacher.id);
 
       // existing list
@@ -1036,7 +1022,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -1205,7 +1191,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xff1D9BF0).withOpacity(0.2),
+                        color: const Color(0xff1D9BF0).withValues(alpha: 0.2),
                         blurRadius: 15,
                         offset: const Offset(0, 6),
                       ),
@@ -1217,7 +1203,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -1239,7 +1225,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                           border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -1277,7 +1263,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
@@ -1500,7 +1486,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                 const SizedBox(width: 20),
                               ],
                             );
-                          }).toList(),
+                          }),
                           _addCard(mainTeacher),
                           const SizedBox(width: 20),
                         ],
@@ -1553,7 +1539,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                         color: const Color(0xffF8FAFC),
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: const Color(0xff1565C0).withOpacity(0.3),
+                                          color: const Color(0xff1565C0).withValues(alpha: 0.3),
                                           style: BorderStyle.solid,
                                           width: 1.5,
                                         ),
@@ -1565,7 +1551,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                             Container(
                                               padding: const EdgeInsets.all(10),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xff1565C0).withOpacity(0.1),
+                                                color: const Color(0xff1565C0).withValues(alpha: 0.1),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: const Icon(
@@ -1680,12 +1666,12 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
           color: isPermanent ? Colors.white : const Color(0xffF4F8FA),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isPermanent ? Colors.grey.shade100 : const Color(0xff1565C0).withOpacity(0.2),
+            color: isPermanent ? Colors.grey.shade100 : const Color(0xff1565C0).withValues(alpha: 0.2),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -1834,14 +1820,14 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
         color: isActive ? null : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isActive ? Colors.white.withOpacity(0.15) : const Color(0xff1D9BF0).withOpacity(0.08),
+          color: isActive ? Colors.white.withValues(alpha: 0.15) : const Color(0xff1D9BF0).withValues(alpha: 0.08),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
             color: isActive
-                ? const Color(0xff1D9BF0).withOpacity(0.25)
-                : Colors.black.withOpacity(0.015),
+                ? const Color(0xff1D9BF0).withValues(alpha: 0.25)
+                : Colors.black.withValues(alpha: 0.015),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1853,7 +1839,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isActive ? Colors.white.withOpacity(0.2) : const Color(0xff1D9BF0).withOpacity(0.08),
+              color: isActive ? Colors.white.withValues(alpha: 0.2) : const Color(0xff1D9BF0).withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -1903,7 +1889,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
           border: Border.all(color: Colors.grey.shade100, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -2018,7 +2004,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
           color: const Color(0xffF8FAFC),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xff1565C0).withOpacity(0.3),
+            color: const Color(0xff1565C0).withValues(alpha: 0.3),
             style: BorderStyle.solid,
             width: 1.5,
           ),
@@ -2030,7 +2016,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xff1565C0).withOpacity(0.1),
+                  color: const Color(0xff1565C0).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -2071,7 +2057,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
         border: Border.all(color: Colors.grey.shade100, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: Colors.black.withValues(alpha: 0.015),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2101,7 +2087,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.08),
+                    color: accentColor.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: accentColor, size: 20),

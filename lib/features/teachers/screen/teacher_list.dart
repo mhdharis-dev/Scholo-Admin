@@ -1,13 +1,17 @@
 import 'dart:io';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:scholo_admin/core/constant/image_constant.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:scholo_admin/core/constant/firebase_constant.dart';
 import '../../../../models/teacher_model.dart';
+import '../../../../models/class_model.dart';
+import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import '../controller/teacher_controller.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
 
 class TeacherListScreen extends ConsumerStatefulWidget {
   const TeacherListScreen({super.key});
@@ -59,6 +63,110 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
         _passwordController.clear();
       }
     }
+  }
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
+
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
+  }
+
+  int _compareClassNos(String a, String b) {
+    return _classNoToInt(a).compareTo(_classNoToInt(b));
+  }
+
+  Widget _buildClassAndDivisionDropdowns(List<ClassModel> classes, StateSetter setSheetState) {
+    final activeClasses = classes.where((c) => !c.delete).toList();
+    final uniqueClassNumbers = activeClasses.map((c) => c.classNo).toSet().toList();
+    uniqueClassNumbers.sort((a, b) => _compareClassNos(a, b));
+
+    final availableDivisions = (_selectedClass == null || _selectedClass == '0')
+        ? <String>[]
+        : activeClasses
+            .where((c) => c.classNo == _selectedClass)
+            .map((c) => c.division)
+            .toSet()
+            .toList()
+          ..sort();
+
+    return Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: (_selectedClass != null && (uniqueClassNumbers.contains(_selectedClass) || _selectedClass == '0'))
+                ? _selectedClass
+                : null,
+            hint: const Text("Select Class"),
+            items: [
+              const DropdownMenuItem<String>(value: '0', child: Text("Not Assigned")),
+              ...uniqueClassNumbers.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))),
+            ],
+            onChanged: (v) {
+              setSheetState(() {
+                _selectedClass = v;
+                _selectedDiv = 'Nil'; // reset division
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Class',
+              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            value: (_selectedDiv != null && (availableDivisions.contains(_selectedDiv) || _selectedDiv == 'Nil'))
+                ? _selectedDiv
+                : null,
+            hint: const Text("Select Division"),
+            items: [
+              const DropdownMenuItem<String>(value: 'Nil', child: Text("Nil")),
+              ...availableDivisions.map((d) => DropdownMenuItem<String>(value: d, child: Text(d))),
+            ],
+            onChanged: (v) {
+              setSheetState(() {
+                _selectedDiv = v;
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Division',
+              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -159,7 +267,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
     ValueChanged<String?> onChanged,
   ) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items
           .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
           .toList(),
@@ -188,53 +296,9 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
 
   /// Phone field
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Center(
-            child: Text(
-              '+91',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -289,8 +353,8 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       _mobileController.clear();
       _subjectController.clear();
       _addressController.clear();
-      _selectedClass = null;
-      _selectedDiv = null;
+      _selectedClass = '0';
+      _selectedDiv = 'Nil';
       _selectedGender = null;
       _dayController.clear();
       _monthController.clear();
@@ -303,271 +367,305 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Center(
-        child: Container(
-          width: 600,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 40,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(28),
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: Text(
-                    editingTeacher == null ? 'Add New Teacher' : 'Edit Teacher Profile',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final List<ClassModel> classes = ref.read(classesStreamProvider).value ?? <ClassModel>[];
 
-                /// Profile Image
-                Center(
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
+          return Center(
+            child: Container(
+              width: 600,
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 40,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 54,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: _selectedFile != null
-                              ? FileImage(_selectedFile!)
-                              : (_uploadedImageUrl != null
-                                    ? NetworkImage(_uploadedImageUrl!)
-                                    : const AssetImage(
-                                            ImageConstant.temporaryTeacherImage,
-                                          )
-                                          as ImageProvider),
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: _pickImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xff1193D4),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Text(
+                        editingTeacher == null ? 'Add New Teacher' : 'Edit Teacher Profile',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    /// Profile Image
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                            child: CircleAvatar(
+                              radius: 54,
+                              backgroundColor: Colors.grey[200],
+                              backgroundImage: _selectedFile != null
+                                  ? FileImage(_selectedFile!)
+                                  : (_uploadedImageUrl != null
+                                        ? NetworkImage(_uploadedImageUrl!)
+                                        : const AssetImage(
+                                                ImageConstant.temporaryTeacherImage,
+                                              )
+                                              as ImageProvider),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () async {
+                                await _pickImage();
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xff1193D4),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildTextFieldWithValidation(_teacherIdController, "Employee ID"),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_nameController, "Name", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_subjectController, "Subject", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildClassAndDivisionDropdowns(classes, setSheetState),
+                    const SizedBox(height: 14),
+                    _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) {
+                      setSheetState(() => _selectedGender = v);
+                    }),
+                    const SizedBox(height: 14),
+                    _buildPhoneField(),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(
+                      _emailController,
+                      "Email",
+                      isEmail: true,
+                      readOnly: true,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(
+                      _passwordController,
+                      "Password",
+                      isPassword: true,
+                      readOnly: true,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_addressController, "Address", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Date of Birth",
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDateOfBirthField(),
+                    const SizedBox(height: 28),
+                    
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1193D4),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildTextFieldWithValidation(_teacherIdController, "Employee ID"),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_nameController, "Name", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_subjectController, "Subject", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDropdown(
-                        "Class",
-                        _selectedClass,
-                        ['5', '6', '7', '8', '9', '10', '11', '12', '0'],
-                        (v) {
-                          setState(() => _selectedClass = v);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildDropdown(
-                        "Division",
-                        _selectedDiv,
-                        ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'Nil'],
-                        (v) {
-                          setState(() => _selectedDiv = v);
-                        },
+                        onPressed: _isUploading
+                            ? null
+                            : () async {
+                                // Validate required fields
+                                if (_teacherIdController.text.isEmpty ||
+                                    _nameController.text.isEmpty ||
+                                    _mobileController.text.isEmpty ||
+                                    _selectedClass == null ||
+                                    _selectedDiv == null ||
+                                    _subjectController.text.isEmpty ||
+                                    !_isEmailValid(_emailController.text) ||
+                                    !_isPasswordValid(_passwordController.text) ||
+                                    _selectedGender == null ||
+                                    _addressController.text.isEmpty ||
+                                    _dayController.text.isEmpty ||
+                                    _monthController.text.isEmpty ||
+                                    _yearController.text.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Fill all fields correctly"),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setSheetState(() => _isUploading = true);
+                                setState(() => _isUploading = true);
+                                try {
+                                  if (_selectedFile != null) {
+                                    _uploadedImageUrl = await repo.uploadImage(
+                                      _selectedFile!,
+                                    );
+                                  }
+
+                                  final dob = DateTime(
+                                    int.parse(_yearController.text),
+                                    int.parse(_monthController.text),
+                                    int.parse(_dayController.text),
+                                  );
+
+                                  final teacher = TeacherModel(
+                                    id: editingTeacher?.id ?? '',
+                                    employeeId: _teacherIdController.text,
+                                    mobileNo: _mobileController.text,
+                                    teacherName: _nameController.text,
+                                    classNo: _classNoToInt(_selectedClass!),
+                                    division: _selectedDiv!,
+                                    subject: _subjectController.text,
+                                    email: _emailController.text,
+                                    password: _passwordController.text,
+                                    address: _addressController.text,
+                                    gender: _selectedGender!,
+                                    imageUrl: _uploadedImageUrl ?? '',
+                                    delete: false,
+                                    createdDate:
+                                        editingTeacher?.createdDate ?? DateTime.now(),
+                                    dateOfBirth: dob,
+                                  );
+
+                                  final oldClassNo = editingTeacher != null && editingTeacher!.classNo != 0
+                                      ? _classNoToString(editingTeacher!.classNo)
+                                      : null;
+                                  final oldDivision = editingTeacher != null && editingTeacher!.division != "Nil"
+                                      ? editingTeacher!.division
+                                      : null;
+
+                                  String? savedTeacherId;
+                                  if (editingTeacher != null) {
+                                    savedTeacherId = editingTeacher!.id;
+                                    await repo.updateTeacher(teacher);
+                                  } else {
+                                    savedTeacherId = await repo.addTeacher(teacher);
+                                  }
+
+                                  if (savedTeacherId != null && savedTeacherId.isNotEmpty) {
+                                    final classRepo = ref.read(classWiseTeacherRepoProvider);
+
+                                    // If target class already has a teacher assigned, unassign them first
+                                    if (_selectedClass != '0' && _selectedDiv != 'Nil') {
+                                      final targetClassDoc = classes.firstWhere(
+                                        (c) => c.classNo == _selectedClass && c.division == _selectedDiv && !c.delete,
+                                        orElse: () => ClassModel(
+                                          classNo: _selectedClass!,
+                                          division: _selectedDiv!,
+                                          className: '',
+                                          delete: false,
+                                          createdDate: DateTime.now(),
+                                        ),
+                                      );
+
+                                      if (targetClassDoc.teacherId.isNotEmpty && targetClassDoc.teacherId != savedTeacherId) {
+                                        await FirebaseFirestore.instance
+                                            .schoolCollection(FirebaseConstant.teacher)
+                                            .doc(targetClassDoc.teacherId)
+                                            .update({
+                                          'classNo': 0,
+                                          'division': 'Nil',
+                                        });
+                                      }
+                                    }
+
+                                    // Sync teacher to target class
+                                    await classRepo.syncTeacherToClass(
+                                      oldClassNo: oldClassNo,
+                                      oldDivision: oldDivision,
+                                      newClassNo: _selectedClass == '0' ? '' : _selectedClass,
+                                      newDivision: _selectedDiv == 'Nil' ? '' : _selectedDiv,
+                                      teacherId: savedTeacherId,
+                                      teacherName: teacher.teacherName,
+                                    );
+                                  }
+
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                  }
+                                } finally {
+                                  setSheetState(() => _isUploading = false);
+                                  setState(() => _isUploading = false);
+                                }
+                              },
+                        child: _isUploading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                                editingTeacher != null ? 'Update Teacher' : 'Add Teacher',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) {
-                  setState(() => _selectedGender = v);
-                }),
-                const SizedBox(height: 14),
-                _buildPhoneField(),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(
-                  _emailController,
-                  "Email",
-                  isEmail: true,
-                  readOnly: true,
-                ),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(
-                  _passwordController,
-                  "Password",
-                  isPassword: true,
-                  readOnly: true,
-                ),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_addressController, "Address", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 16),
-                const Text(
-                  "Date of Birth",
-                  style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                _buildDateOfBirthField(),
-                const SizedBox(height: 28),
-                
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xff1193D4),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _isUploading
-                        ? null
-                        : () async {
-                            // Validate required fields
-                            if (_teacherIdController.text.isEmpty ||
-                                _nameController.text.isEmpty ||
-                                _mobileController.text.isEmpty ||
-                                _selectedClass == null ||
-                                _selectedDiv == null ||
-                                _subjectController.text.isEmpty ||
-                                !_isEmailValid(_emailController.text) ||
-                                !_isPasswordValid(_passwordController.text) ||
-                                _selectedGender == null ||
-                                _addressController.text.isEmpty ||
-                                _dayController.text.isEmpty ||
-                                _monthController.text.isEmpty ||
-                                _yearController.text.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Fill all fields correctly"),
-                                ),
-                              );
-                              return;
-                            }
-
-                            setState(() => _isUploading = true);
-                            try {
-                              if (_selectedFile != null) {
-                                _uploadedImageUrl = await repo.uploadImage(
-                                  _selectedFile!,
-                                );
-                              }
-
-                              final dob = DateTime(
-                                int.parse(_yearController.text),
-                                int.parse(_monthController.text),
-                                int.parse(_dayController.text),
-                              );
-
-                              final teacher = TeacherModel(
-                                id: editingTeacher?.id ?? '',
-                                employeeId: _teacherIdController.text,
-                                mobileNo: _mobileController.text,
-                                teacherName: _nameController.text,
-                                classNo: int.parse(_selectedClass!),
-                                division: _selectedDiv!,
-                                subject: _subjectController.text,
-                                email: _emailController.text,
-                                password: _passwordController.text,
-                                address: _addressController.text,
-                                gender: _selectedGender!,
-                                imageUrl: _uploadedImageUrl ?? '',
-                                delete: false,
-                                createdDate:
-                                    editingTeacher?.createdDate ?? DateTime.now(),
-                                dateOfBirth: dob,
-                              );
-
-                              if (editingTeacher != null) {
-                                await repo.updateTeacher(teacher);
-                              } else {
-                                await repo.addTeacher(teacher);
-                              }
-
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(
-                                  context,
-                                ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                              }
-                            } finally {
-                              setState(() => _isUploading = false);
-                            }
-                          },
-                    child: _isUploading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                            editingTeacher != null ? 'Update Teacher' : 'Add Teacher',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -588,7 +686,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
                   ),
@@ -626,7 +724,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                           Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xff1193D4).withOpacity(0.2), width: 4),
+                              border: Border.all(color: const Color(0xff1193D4).withValues(alpha: 0.2), width: 4),
                             ),
                             child: CircleAvatar(
                               radius: 50,
@@ -993,6 +1091,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(classesStreamProvider);
     final teachersAsync = ref.watch(teacherControllerProvider);
 
     return Scaffold(
@@ -1151,7 +1250,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                       border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),

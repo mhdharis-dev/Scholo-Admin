@@ -28,10 +28,10 @@ class SubjectMarkModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'subject': this.subject,
-      'maxMarks': this.maxMarks,
-      'obtained': this.obtained,
-      'grade': this.grade,
+      'subject': subject,
+      'maxMarks': maxMarks,
+      'obtained': obtained,
+      'grade': grade,
     };
   }
 

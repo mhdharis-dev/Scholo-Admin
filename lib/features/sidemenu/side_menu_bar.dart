@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:go_router/go_router.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -11,23 +10,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
-import 'package:scholo_admin/features/dashbord/screen/dashboard_screen.dart';
-import 'package:scholo_admin/features/events/screen/events_screen.dart';
-import 'package:scholo_admin/features/trashbin/screen/trashBin_screen.dart';
+import 'package:scholo_admin/features/teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:searchfield/searchfield.dart';
+import '../../core/config/session_manager.dart';
 
-import '../../auth/screen/loginPage.dart';
 import '../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../core/constant/image_constant.dart';
 import '../../models/students_model.dart';
 import '../../models/teacher_model.dart';
-import '../notifications/screen/notifications _Page.dart';
-import '../students/screen/students_list.dart';
-import '../teacherView/class_dashbord/screen/classWiseTeacherView_screen.dart';
 import '../teachers/controller/teacher_controller.dart';
-import '../teachers/screen/teacher_list.dart';
+import '../../models/class_model.dart';
+import '../../models/school_model.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
+import '../../auth/controller/login_controller.dart';
 
 class AdminPanel extends ConsumerStatefulWidget {
   final Widget child;
@@ -42,21 +39,12 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   late Future<List<Map<String, String>>> _searchDataFuture;
 
-  // Admin Profile Info
-  String _adminName = "Administrator";
-  String _adminSchoolName = "D.U.H.S.S THOOTHA";
-  String _adminGender = "Male";
-  String _adminMobile = "9876543210";
-  final String _adminEmail = "admin@scholo.com";
-  final String _adminPassword = "Admin@123";
-
   final GlobalKey _profileKey = GlobalKey();
   OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
-    _loadAdminData();
     _fetchTeachers();
 
     _searchDataFuture = _fetchSearchItems(); // ✅ cache search data once
@@ -96,25 +84,6 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     super.dispose();
   }
 
-  Future<void> _loadAdminData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _adminName = prefs.getString('admin_name') ?? "Administrator";
-      _adminSchoolName = prefs.getString('admin_school_name') ?? "D.U.H.S.S THOOTHA";
-      _adminGender = prefs.getString('admin_gender') ?? "Male";
-      _adminMobile = prefs.getString('admin_mobile') ?? "9876543210";
-    });
-  }
-
-  Future<void> _saveAdminData(String name, String school, String gender, String mobile) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('admin_name', name);
-    await prefs.setString('admin_school_name', school);
-    await prefs.setString('admin_gender', gender);
-    await prefs.setString('admin_mobile', mobile);
-    _loadAdminData();
-  }
-
   void _showProfileTooltip() {
     if (_overlayEntry != null) {
       _overlayEntry!.remove();
@@ -142,15 +111,6 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
             child: Material(
               color: Colors.transparent,
               child: AdminProfileTooltipCard(
-                name: _adminName,
-                schoolName: _adminSchoolName,
-                gender: _adminGender,
-                mobile: _adminMobile,
-                email: _adminEmail,
-                password: _adminPassword,
-                onSave: (name, school, gender, mobile) {
-                  _saveAdminData(name, school, gender, mobile);
-                },
                 onClose: _hideProfileTooltip,
               ),
             ),
@@ -170,12 +130,12 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   /// 🔹 Fetch Students & Teachers (with display info)
   Future<List<Map<String, String>>> _fetchSearchItems() async {
     final teachersSnap = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .get();
 
     final studentsSnap = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -210,7 +170,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   Future<void> _handleSearchSelection(String name, BuildContext context) async {
     // Search in teachers
     final teacherQuery = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('teacherName', isEqualTo: name)
         .get();
 
@@ -224,7 +184,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
     // Search in students
     final studentQuery = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('studentName', isEqualTo: name)
         .get();
 
@@ -260,6 +220,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
               onPressed: () async {
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
+                SessionManager.schoolId = null;
                 if (context.mounted) {
                   Navigator.of(context).pop();
                   context.go('/login');
@@ -288,7 +249,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -449,7 +410,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -901,6 +862,13 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     );
   }
 
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
+  }
+
   //-----------------student-------------------
 
   void _openStudentDialog([StudentsModel? student])
@@ -916,7 +884,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _parentController.text = student.parentName;
       _addressController.text = student.address;
       _selectedGender = student.gender;
-      _classNo = student.classNo.toString();
+      _classNo = _classNoToString(student.classNo);
       _division = student.division;
       _selectedTeacherName = student.teacherName;
       _selectedTeacherId = student.teacherId;
@@ -945,158 +913,190 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Center(
-              child: Text(
-                editingStudent == null ? 'Add Student' : 'Edit Student',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final List<ClassModel> classes = ref.read(classesStreamProvider).value ?? <ClassModel>[];
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 16,
+              right: 16,
+              top: 16,
             ),
-            const SizedBox(height: 20),
-
-            // Profile
-            Center(
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: _selectedFile != null
-                        ? FileImage(_selectedFile!)
-                        : (_uploadedImageUrl != null
-                        ? NetworkImage(_uploadedImageUrl!)
-                        : const AssetImage(ImageConstant.temporaryStudentImage)
-                    as ImageProvider),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Center(
+                  child: Text(
+                    editingStudent == null ? 'Add Student' : 'Edit Student',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
-                        child: const Icon(Icons.edit, size: 16),
+                ),
+                const SizedBox(height: 20),
+
+                // Profile
+                Center(
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.grey[300],
+                        backgroundImage: _selectedFile != null
+                            ? FileImage(_selectedFile!)
+                            : (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty
+                            ? NetworkImage(_uploadedImageUrl!)
+                            : const AssetImage(ImageConstant.temporaryStudentImage)
+                        as ImageProvider),
                       ),
-                    ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () async {
+                            await _pickImage();
+                            setSheetState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.grey.shade400),
+                            ),
+                            child: const Icon(Icons.edit, size: 16),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+                _buildValidatedField(_admissionController, "Admission No",inputFormatters: [FilteringTextInputFormatter.digitsOnly,LengthLimitingTextInputFormatter(10)]),
+                const SizedBox(height: 12),
+                _buildValidatedField(_nameController, "Name",inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r"[a-zA-Z\s]"),),
+                ]),
+                const SizedBox(height: 12),
+                _buildValidatedField(_rollController, "Roll No",inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(2),]),
+                const SizedBox(height: 12),
+                _buildPhoneField(),
+                const SizedBox(height: 12),
+                _buildDropdown("Gender", _selectedGender,
+                    ['Male', 'Female',], (v) => setSheetState(() => _selectedGender = v)),
+                const SizedBox(height: 12),
+                _buildClassAndDivisionDropdowns(classes, setSheetState),
+                const SizedBox(height: 12),
+                _buildDateOfBirthField(),
+                const SizedBox(height: 12),
+                _buildValidatedField(_parentController, "Parent Name",inputFormatters: [ FilteringTextInputFormatter.allow(
+                  RegExp(r"[a-zA-Z\s]"),),]),
+                const SizedBox(height: 12),
+                _buildValidatedField(_addressController, "Address",inputFormatters: [ FilteringTextInputFormatter.allow(
+                  RegExp(r"[a-zA-Z\s]"),),]),
+                const SizedBox(height: 12),
+                _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
+                const SizedBox(height: 12),
+                _buildValidatedField(_passwordController, "Password",
+                    isPassword: true, readOnly: true),
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  onPressed: _isUploading
+                      ? null
+                      : () async {
+                    if (_classNo == null || _division == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Select Class and Division")));
+                      return;
+                    }
+
+                    setSheetState(() => _isUploading = true);
+                    setState(() => _isUploading = true);
+                    try {
+                      if (_selectedFile != null) {
+                        _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
+                      }
+
+                      final dob = DateTime.tryParse(
+                        "${_yearController.text}-${_monthController.text}-${_dayController.text}",
+                      ) ??
+                          DateTime(2000, 1, 1);
+
+                      final newStudent = StudentsModel(
+                        studentId: editingStudent?.studentId ?? '',
+                        admissionNo: int.parse(_admissionController.text),
+                        rollNo: int.parse(_rollController.text),
+                        studentName: _nameController.text,
+                        mobileNo: _mobileController.text,
+                        email: _emailController.text,
+                        password: _passwordController.text,
+                        address: _addressController.text,
+                        parentName: _parentController.text,
+                        classNo: _classNoToInt(_classNo!),
+                        division: _division ?? 'Not',
+                        teacherName: _selectedTeacherName ?? '',
+                        teacherId: _selectedTeacherId ?? '',
+                        gender: _selectedGender ?? '',
+                        delete: false,
+                        imageUrl: _uploadedImageUrl ?? '',
+                        dateOfBirth: dob,
+                        createdDate: editingStudent?.createdDate ?? DateTime.now(),
+                      );
+
+                      final studentCollectionRef = FirebaseFirestore.instance
+                          .schoolCollection(FirebaseConstant.student);
+                      final classRepo = ref.read(classWiseTeacherRepoProvider);
+                      String studentId = '';
+                      if (editingStudent != null) {
+                        studentId = editingStudent!.studentId;
+                        await studentCollectionRef.doc(studentId).update(newStudent.toMap());
+
+                        await classRepo.syncStudentToClass(
+                          oldClassNo: _classNoToString(editingStudent!.classNo),
+                          oldDivision: editingStudent!.division,
+                          newClassNo: _classNoToString(newStudent.classNo),
+                          newDivision: newStudent.division,
+                          studentId: studentId,
+                          studentName: newStudent.studentName,
+                          imageUrl: newStudent.imageUrl,
+                          rollNo: newStudent.rollNo,
+                        );
+                      } else {
+                        final doc = await studentCollectionRef.add(newStudent.toMap());
+                        studentId = doc.id;
+                        await doc.update({'studentId': studentId});
+
+                        await classRepo.syncStudentToClass(
+                          newClassNo: _classNoToString(newStudent.classNo),
+                          newDivision: newStudent.division,
+                          studentId: studentId,
+                          studentName: newStudent.studentName,
+                          imageUrl: newStudent.imageUrl,
+                          rollNo: newStudent.rollNo,
+                        );
+                      }
+
+                      Navigator.pop(context);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text("Error: $e")));
+                    } finally {
+                      setSheetState(() => _isUploading = false);
+                      setState(() => _isUploading = false);
+                    }
+                  },
+                  child: _isUploading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(editingStudent != null ? "Update" : "Add"),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            _buildValidatedField(_admissionController, "Admission No",inputFormatters: [FilteringTextInputFormatter.digitsOnly,LengthLimitingTextInputFormatter(10)]),
-            const SizedBox(height: 12),
-            _buildValidatedField(_nameController, "Name",inputFormatters: [
-              FilteringTextInputFormatter.allow(
-                RegExp(r"[a-zA-Z\s]"),),
-            ]),
-            const SizedBox(height: 12),
-            _buildValidatedField(_rollController, "Roll No",inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),]),
-            const SizedBox(height: 12),
-            _buildPhoneField(),
-            const SizedBox(height: 12),
-            _buildDropdown("Gender", _selectedGender,
-                ['Male', 'Female',], (v) => setState(() => _selectedGender = v)),
-            const SizedBox(height: 12),
-            _buildTeacherDropdown(),
-            const SizedBox(height: 12),
-            _buildDateOfBirthField(),
-            const SizedBox(height: 12),
-            _buildValidatedField(_parentController, "Parent Name",inputFormatters: [ FilteringTextInputFormatter.allow(
-              RegExp(r"[a-zA-Z\s]"),),]),
-            const SizedBox(height: 12),
-            _buildValidatedField(_addressController, "Address",inputFormatters: [ FilteringTextInputFormatter.allow(
-              RegExp(r"[a-zA-Z\s]"),),]),
-            const SizedBox(height: 12),
-            _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
-            const SizedBox(height: 12),
-            _buildValidatedField(_passwordController, "Password",
-                isPassword: true, readOnly: true),
-            const SizedBox(height: 20),
-
-            ElevatedButton(
-              onPressed: _isUploading
-                  ? null
-                  : () async {
-                if (_selectedTeacherId == null || _classNo == null || _division == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Select a valid teacher")));
-                  return;
-                }
-
-                setState(() => _isUploading = true);
-                try {
-                  if (_selectedFile != null) {
-                    _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
-                  }
-
-                  final dob = DateTime.tryParse(
-                    "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                  ) ??
-                      DateTime(2000, 1, 1);
-
-                  final newStudent = StudentsModel(
-                    studentId: editingStudent?.studentId ?? '',
-                    admissionNo: int.parse(_admissionController.text),
-                    rollNo: int.parse(_rollController.text),
-                    studentName: _nameController.text,
-                    mobileNo: _mobileController.text,
-                    email: _emailController.text,
-                    password: _passwordController.text,
-                    address: _addressController.text,
-                    parentName: _parentController.text,
-                    classNo: int.parse(_classNo ?? '0'), // ✅ Auto-fetched from teacher
-                    division: _division ?? 'Not',
-                    teacherName: _selectedTeacherName ?? '',
-                    teacherId: _selectedTeacherId ?? '',
-                    gender: _selectedGender ?? '',
-                    delete: false,
-                    imageUrl: _uploadedImageUrl ?? '',
-                    dateOfBirth: DateTime.tryParse(
-                        "${_yearController.text}-${_monthController.text}-${_dayController.text}") ??
-                        DateTime(2000, 1, 1),
-                    createdDate: editingStudent?.createdDate ?? DateTime.now(),
-                  );
-
-                  final ref = FirebaseFirestore.instance
-                      .collection(FirebaseConstant.student);
-                  if (editingStudent != null) {
-                    await ref.doc(editingStudent!.studentId).update(newStudent.toMap());
-                  } else {
-                    final doc = await ref.add(newStudent.toMap());
-                    await doc.update({'studentId': doc.id});
-                  }
-
-                  Navigator.pop(context);
-                } catch (e) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text("Error: $e")));
-                } finally {
-                  setState(() => _isUploading = false);
-                }
-              },
-              child: _isUploading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text(editingStudent != null ? "Update" : "Add"),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1130,7 +1130,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   /// 🔹 Fetch Teachers (with class and division)
   Future<void> _fetchTeachers() async {
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -1207,33 +1207,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   /// 🔹 Phone Number Field
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Center(child: Text('+91')),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -1263,7 +1239,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   Widget _buildDropdown(String hint, String? value, List<String> items,
       ValueChanged<String?> onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
       onChanged: onChanged,
       decoration: InputDecoration(
@@ -1273,72 +1249,123 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     );
   }
 
-  /// 🔹 Teacher Dropdown with Search + Auto Class & Division
-  Widget _buildTeacherDropdown() {
-    final searchController = TextEditingController();
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
 
-    return DropdownButtonFormField2<String>(
-      value: _selectedTeacherName,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Teacher Name',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      dropdownStyleData: DropdownStyleData(
-        maxHeight: 300,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: Colors.white,
-        ),
-      ),
-      dropdownSearchData: DropdownSearchData(
-        searchController: searchController,
-        searchInnerWidgetHeight: 60,
-        searchInnerWidget: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextFormField(
-            controller: searchController,
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              hintText: 'Search teacher...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        searchMatchFn: (item, searchValue) =>
-            item.value!.toLowerCase().contains(searchValue.toLowerCase()),
-      ),
-      items: _teacherList
-          .map((t) => DropdownMenuItem<String>(
-        value: t['name'] as String,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildClassAndDivisionDropdowns(List<ClassModel> classes, StateSetter setSheetState) {
+    final activeClasses = classes.where((c) => !c.delete).toList();
+    final uniqueClassNumbers = activeClasses.map((c) => c.classNo).toSet().toList();
+    uniqueClassNumbers.sort((a, b) => _classNoToInt(a).compareTo(_classNoToInt(b)));
+
+    final availableDivisions = _classNo == null
+        ? <String>[]
+        : activeClasses
+            .where((c) => c.classNo == _classNo)
+            .map((c) => c.division)
+            .toSet()
+            .toList()
+          ..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text(t['name'] as String),
-            Text(
-              "Class ${t['classNo']} - ${t['division']}",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _classNo,
+                hint: const Text("Select Class"),
+                items: uniqueClassNumbers.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _classNo = v;
+                    _division = null; // reset division
+                    _selectedTeacherId = null;
+                    _selectedTeacherName = null;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Class',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _division,
+                hint: const Text("Select Division"),
+                items: availableDivisions.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _division = v;
+                    if (_classNo != null && _division != null) {
+                      final selectedClassModel = activeClasses.firstWhere(
+                        (c) => c.classNo == _classNo && c.division == _division,
+                        orElse: () => ClassModel(classNo: _classNo!, division: _division!, className: '', delete: false, createdDate: DateTime.now()),
+                      );
+                      _selectedTeacherId = selectedClassModel.teacherId;
+                      _selectedTeacherName = selectedClassModel.teacherName;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Division',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
             ),
           ],
         ),
-      ))
-          .toList(),
-      onChanged: (v) {
-        setState(() {
-          final selected = _teacherList.firstWhere((t) => t['name'] == v);
-          _selectedTeacherName = selected['name'];
-          _selectedTeacherId = selected['id'];
-          _classNo = selected['classNo'];
-          _division = selected['division'];
-        });
-      },
+        if (_selectedTeacherName != null && _selectedTeacherName!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              "Assigned Teacher: $_selectedTeacherName",
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xff1193D4),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(classesStreamProvider);
+    final school = ref.watch(schoolStreamProvider).asData?.value;
     final theme = Theme.of(context);
 
     final String location = GoRouterState.of(context).matchedLocation;
@@ -1471,7 +1498,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha: 0.06),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -1590,10 +1617,10 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                                 children: [
                                   CircleAvatar(
                                     radius: 20,
-                                    backgroundColor: const Color(0xff1193D4).withOpacity(0.15),
-                                    backgroundImage: const AssetImage(
-                                      ImageConstant.temporaryTeacherImage,
-                                    ),
+                                    backgroundColor: const Color(0xff1193D4).withValues(alpha: 0.15),
+                                    backgroundImage: (school != null && school.imageUrl.isNotEmpty)
+                                        ? NetworkImage(school.imageUrl) as ImageProvider
+                                        : const AssetImage(ImageConstant.temporaryTeacherImage),
                                   ),
                                   const SizedBox(width: 10),
                                   Column(
@@ -1601,7 +1628,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        _adminSchoolName,
+                                        school?.schoolName ?? "Scholo Admin",
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14,
@@ -1609,7 +1636,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                                         ),
                                       ),
                                       Text(
-                                        _adminName.toUpperCase(),
+                                        (school?.principalName ?? "Administrator").toUpperCase(),
                                         style: TextStyle(
                                           color: Colors.grey.shade500,
                                           fontSize: 11,
@@ -1641,55 +1668,50 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   }
 }
 
-class AdminProfileTooltipCard extends StatefulWidget {
-  final String name;
-  final String schoolName;
-  final String gender;
-  final String mobile;
-  final String email;
-  final String password;
-  final Function(String name, String school, String gender, String mobile) onSave;
+class AdminProfileTooltipCard extends ConsumerStatefulWidget {
   final VoidCallback onClose;
 
   const AdminProfileTooltipCard({
     super.key,
-    required this.name,
-    required this.schoolName,
-    required this.gender,
-    required this.mobile,
-    required this.email,
-    required this.password,
-    required this.onSave,
     required this.onClose,
   });
 
   @override
-  State<AdminProfileTooltipCard> createState() => _AdminProfileTooltipCardState();
+  ConsumerState<AdminProfileTooltipCard> createState() => _AdminProfileTooltipCardState();
 }
 
-class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
+class _AdminProfileTooltipCardState extends ConsumerState<AdminProfileTooltipCard> {
   bool _isEditing = false;
   bool _showPassword = false;
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _schoolCtrl;
-  late final TextEditingController _mobileCtrl;
+  bool _isSaving = false;
+
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _schoolCtrl = TextEditingController();
+  final TextEditingController _mobileCtrl = TextEditingController();
+  final TextEditingController _addressCtrl = TextEditingController();
+  final TextEditingController _officialEmailCtrl = TextEditingController();
   String? _selectedGender;
 
-  @override
-  void initState() {
-    super.initState();
-    _nameCtrl = TextEditingController(text: widget.name);
-    _schoolCtrl = TextEditingController(text: widget.schoolName);
-    _mobileCtrl = TextEditingController(text: widget.mobile);
-    _selectedGender = widget.gender;
-  }
+  SchoolModel? _lastInitializedSchool;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _schoolCtrl.dispose();
     _mobileCtrl.dispose();
+    _addressCtrl.dispose();
+    _officialEmailCtrl.dispose();
     super.dispose();
+  }
+
+  void _initializeControllers(SchoolModel school) {
+    _nameCtrl.text = school.principalName;
+    _schoolCtrl.text = school.schoolName;
+    _mobileCtrl.text = school.phoneNumber;
+    _selectedGender = school.gender;
+    _addressCtrl.text = school.schoolAddress;
+    _officialEmailCtrl.text = school.officialEmail;
+    _lastInitializedSchool = school;
   }
 
   Widget _buildField({required String label, required Widget content}) {
@@ -1712,6 +1734,25 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
           ],
           content,
         ],
+      ),
+    );
+  }
+
+  Widget _buildBadge({required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -1739,6 +1780,13 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
 
   @override
   Widget build(BuildContext context) {
+    final schoolAsync = ref.watch(schoolStreamProvider);
+    final school = schoolAsync.asData?.value;
+
+    if (school != null && _lastInitializedSchool == null) {
+      _initializeControllers(school);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -1752,237 +1800,420 @@ class _AdminProfileTooltipCardState extends State<AdminProfileTooltipCard> {
         ),
         Container(
           width: 320,
+          constraints: const BoxConstraints(maxHeight: 500),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.12),
+                color: Colors.black.withValues(alpha: 0.12),
                 blurRadius: 24,
                 offset: const Offset(0, 10),
               ),
             ],
             border: Border.all(color: Colors.grey.shade100),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _isEditing ? 'Edit Profile' : 'Admin Profile',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
+          child: schoolAsync.when(
+            loading: () => const SizedBox(
+              height: 200,
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xff1193D4)),
+                ),
+              ),
+            ),
+            error: (err, stack) => SizedBox(
+              height: 200,
+              child: Center(
+                child: Text(
+                  'Error loading data',
+                  style: TextStyle(color: Colors.red.shade600, fontSize: 13),
+                ),
+              ),
+            ),
+            data: (school) {
+              if (school == null) {
+                return const SizedBox(
+                  height: 200,
+                  child: Center(
+                    child: Text(
+                      'No admin profile found',
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                   ),
-                  if (!_isEditing)
-                    IconButton(
-                      icon: const Icon(Icons.edit_rounded, size: 20, color: Color(0xff1193D4)),
-                      onPressed: () {
-                        setState(() {
-                          _isEditing = true;
-                        });
-                      },
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                    ),
-                ],
-              ),
-              const Divider(height: 24),
+                );
+              }
 
-              // School Name
-              _buildField(
-                label: 'SCHOOL NAME',
-                content: _isEditing
-                    ? TextField(
-                  controller: _schoolCtrl,
-                  decoration: _inputDecoration('School Name'),
-                )
-                    : Text(
-                  widget.schoolName,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                ),
-              ),
-
-              // Name
-              _buildField(
-                label: 'NAME',
-                content: _isEditing
-                    ? TextField(
-                  controller: _nameCtrl,
-                  decoration: _inputDecoration('Name'),
-                )
-                    : Text(
-                  widget.name,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                ),
-              ),
-
-              // Gender
-              _buildField(
-                label: 'GENDER',
-                content: _isEditing
-                    ? Row(
-                        children: [
-                          Radio<String>(
-                            value: 'Male',
-                            groupValue: _selectedGender,
-                            activeColor: const Color(0xff1193D4),
-                            onChanged: (v) => setState(() => _selectedGender = v),
-                          ),
-                          const Text('Male', style: TextStyle(fontSize: 14)),
-                          const SizedBox(width: 20),
-                          Radio<String>(
-                            value: 'Female',
-                            groupValue: _selectedGender,
-                            activeColor: const Color(0xff1193D4),
-                            onChanged: (v) => setState(() => _selectedGender = v),
-                          ),
-                          const Text('Female', style: TextStyle(fontSize: 14)),
-                        ],
-                      )
-                    : Text(
-                        widget.gender,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-              ),
-
-              // Mobile No
-              _buildField(
-                label: 'MOBILE NO',
-                content: _isEditing
-                    ? TextField(
-                        controller: _mobileCtrl,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: _inputDecoration('Mobile No'),
-                      )
-                    : Text(
-                        widget.mobile,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                      ),
-              ),
-
-              // Email (Const)
-              _buildField(
-                label: 'EMAIL (READ-ONLY)',
-                content: _isEditing
-                    ? TextField(
-                        controller: TextEditingController(text: widget.email),
-                        readOnly: true,
-                        decoration: _inputDecoration('Email (Read-only)'),
-                      )
-                    : Text(
-                        widget.email,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-                      ),
-              ),
-
-              // Password (Const)
-              _buildField(
-                label: 'PASSWORD (READ-ONLY)',
-                content: _isEditing
-                    ? TextField(
-                        controller: TextEditingController(text: widget.password),
-                        readOnly: true,
-                        obscureText: !_showPassword,
-                        decoration: _inputDecoration('Password (Read-only)').copyWith(
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _showPassword ? Icons.visibility : Icons.visibility_off,
-                              size: 18,
-                              color: Colors.grey,
-                            ),
-                            onPressed: () => setState(() => _showPassword = !_showPassword),
-                          ),
-                        ),
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _showPassword ? widget.password : '•••••••••',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _showPassword ? Icons.visibility : Icons.visibility_off,
-                              size: 18,
-                              color: Colors.grey,
-                            ),
-                            onPressed: () => setState(() => _showPassword = !_showPassword),
-                            constraints: const BoxConstraints(),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ],
-                      ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_isEditing) ...[
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _isEditing ? 'Edit Profile' : 'Admin Profile',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _isEditing = false;
-                          _nameCtrl.text = widget.name;
-                          _schoolCtrl.text = widget.schoolName;
-                          _mobileCtrl.text = widget.mobile;
-                          _selectedGender = widget.gender;
-                        });
-                      },
-                      child: const Text('Cancel', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xff1193D4),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      if (!_isEditing)
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded, size: 20, color: Color(0xff1193D4)),
+                          onPressed: () {
+                            setState(() {
+                              _isEditing = true;
+                              _initializeControllers(school);
+                            });
+                          },
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+
+                  // Fields Area (Scrollable to prevent overflow)
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // School Logo Avatar & Code
+                          Center(
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 36,
+                                  backgroundColor: const Color(0xff1193D4).withValues(alpha: 0.15),
+                                  backgroundImage: school.imageUrl.isNotEmpty
+                                      ? NetworkImage(school.imageUrl) as ImageProvider
+                                      : const AssetImage(ImageConstant.temporaryTeacherImage),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  school.schoolCode,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.grey.shade500,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
+                          ),
+
+                          // Badges: Status, Environment, Plan
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildBadge(
+                                label: school.status.toUpperCase(),
+                                color: school.status.toLowerCase() == 'active' ? Colors.green : Colors.red,
+                              ),
+                              _buildBadge(
+                                label: school.environment.toUpperCase(),
+                                color: school.environment.toLowerCase() == 'prod' ? Colors.orange : Colors.blue,
+                              ),
+                              _buildBadge(
+                                label: school.subscriptionPlan.toUpperCase(),
+                                color: const Color(0xff1193D4),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // School Name
+                          _buildField(
+                            label: 'SCHOOL NAME',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: _schoolCtrl,
+                                    decoration: _inputDecoration('School Name'),
+                                  )
+                                : Text(
+                                    school.schoolName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // Principal Name
+                          _buildField(
+                            label: 'PRINCIPAL NAME',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: _nameCtrl,
+                                    decoration: _inputDecoration('Principal Name'),
+                                  )
+                                : Text(
+                                    school.principalName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // Gender
+                          _buildField(
+                            label: 'GENDER',
+                            content: _isEditing
+                                ? Row(
+                                    children: [
+                                      Radio<String>(
+                                        value: 'Male',
+                                        groupValue: _selectedGender,
+                                        activeColor: const Color(0xff1193D4),
+                                        onChanged: (v) => setState(() => _selectedGender = v),
+                                      ),
+                                      const Text('Male', style: TextStyle(fontSize: 14)),
+                                      const SizedBox(width: 20),
+                                      Radio<String>(
+                                        value: 'Female',
+                                        groupValue: _selectedGender,
+                                        activeColor: const Color(0xff1193D4),
+                                        onChanged: (v) => setState(() => _selectedGender = v),
+                                      ),
+                                      const Text('Female', style: TextStyle(fontSize: 14)),
+                                    ],
+                                  )
+                                : Text(
+                                    school.gender.isNotEmpty ? school.gender : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // Phone Number
+                          _buildField(
+                            label: 'PHONE NUMBER',
+                            content: _isEditing
+                                ? CountryPhoneField(
+                                    controller: _mobileCtrl,
+                                    labelText: 'Phone Number',
+                                  )
+                                : Text(
+                                    school.phoneNumber.isNotEmpty ? school.phoneNumber : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // Official Email
+                          _buildField(
+                            label: 'OFFICIAL EMAIL',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: _officialEmailCtrl,
+                                    decoration: _inputDecoration('Official Email'),
+                                  )
+                                : Text(
+                                    school.officialEmail.isNotEmpty ? school.officialEmail : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // School Address
+                          _buildField(
+                            label: 'SCHOOL ADDRESS',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: _addressCtrl,
+                                    maxLines: 2,
+                                    decoration: _inputDecoration('School Address'),
+                                  )
+                                : Text(
+                                    school.schoolAddress.isNotEmpty ? school.schoolAddress : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                          ),
+
+                          // Admin Login Email (Read-Only)
+                          _buildField(
+                            label: 'ADMIN LOGIN EMAIL (READ-ONLY)',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: TextEditingController(text: school.email),
+                                    readOnly: true,
+                                    decoration: _inputDecoration('Login Email (Read-only)'),
+                                  )
+                                : Text(
+                                    school.email,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                          ),
+
+                          // Admin Login Password (Read-Only)
+                          _buildField(
+                            label: 'ADMIN LOGIN PASSWORD (READ-ONLY)',
+                            content: _isEditing
+                                ? TextField(
+                                    controller: TextEditingController(text: school.password),
+                                    readOnly: true,
+                                    obscureText: !_showPassword,
+                                    decoration: _inputDecoration('Login Password (Read-only)').copyWith(
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          _showPassword ? Icons.visibility : Icons.visibility_off,
+                                          size: 18,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () => setState(() => _showPassword = !_showPassword),
+                                      ),
+                                    ),
+                                  )
+                                : Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _showPassword ? school.password : '•••••••••',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(
+                                          _showPassword ? Icons.visibility : Icons.visibility_off,
+                                          size: 18,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () => setState(() => _showPassword = !_showPassword),
+                                        constraints: const BoxConstraints(),
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ],
                       ),
-                      onPressed: () {
-                        widget.onSave(
-                          _nameCtrl.text.trim(),
-                          _schoolCtrl.text.trim(),
-                          _selectedGender ?? 'Male',
-                          _mobileCtrl.text.trim(),
-                        );
-                        setState(() {
-                          _isEditing = false;
-                        });
-                      },
-                      child: const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
-                  ] else ...[
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: widget.onClose,
-                      child: const Text('Close', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                    ),
-                  ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Actions
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_isEditing) ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isSaving
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _isEditing = false;
+                                    _initializeControllers(school);
+                                  });
+                                },
+                          child: const Text('Cancel', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xff1193D4),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  setState(() {
+                                    _isSaving = true;
+                                  });
+                                  try {
+                                    final updatedSchool = school.copyWith(
+                                      schoolName: _schoolCtrl.text.trim(),
+                                      principalName: _nameCtrl.text.trim(),
+                                      gender: _selectedGender ?? '',
+                                      phoneNumber: _mobileCtrl.text.trim(),
+                                      officialEmail: _officialEmailCtrl.text.trim(),
+                                      schoolAddress: _addressCtrl.text.trim(),
+                                    );
+
+                                    await ref.read(updateSchoolProvider)(updatedSchool);
+                                    setState(() {
+                                      _isEditing = false;
+                                      _isSaving = false;
+                                      _lastInitializedSchool = null; // force reload of new data
+                                    });
+                                  } catch (e) {
+                                    setState(() {
+                                      _isSaving = false;
+                                    });
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to update profile: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Text('Save', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        ),
+                      ] else ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: widget.onClose,
+                          child: const Text('Close', style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
       ],

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 class AttendanceModel {
   final int classNo;
@@ -11,6 +12,7 @@ class AttendanceModel {
   final String status;
   final String presentDetail;
   final String teacherId;
+  final String schoolId;
 
   final DateTime date;
 
@@ -26,6 +28,7 @@ class AttendanceModel {
     required this.presentDetail,
     required this.teacherId,
     required this.date,
+    this.schoolId = '',
   });
 
   AttendanceModel copyWith({
@@ -39,6 +42,7 @@ class AttendanceModel {
     String? presentDetail,
     String? teacherId,
     DateTime? date,
+    String? schoolId,
   }) {
     return AttendanceModel(
       classNo: classNo ?? this.classNo,
@@ -51,21 +55,23 @@ class AttendanceModel {
       presentDetail: presentDetail ?? this.presentDetail,
       teacherId: teacherId ?? this.teacherId,
       date: date ?? this.date,
+      schoolId: schoolId ?? this.schoolId,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'classNo': this.classNo,
-      'rollNo': this.rollNo,
-      'studentId': this.studentId,
-      'division': this.division,
-      'studentName': this.studentName,
-      'teacherName': this.teacherName,
-      'status': this.status,
-      'presentDetail': this.presentDetail,
-      'teacherId': this.teacherId,
-      'date': this.date,
+      'classNo': classNo,
+      'rollNo': rollNo,
+      'studentId': studentId,
+      'division': division,
+      'studentName': studentName,
+      'teacherName': teacherName,
+      'status': status,
+      'presentDetail': presentDetail,
+      'teacherId': teacherId,
+      'date': date,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
     };
   }
 
@@ -81,6 +87,7 @@ class AttendanceModel {
       presentDetail: map['presentDetail'] as String,
       teacherId: map['teacherId'] as String,
       date: (map['date'] as Timestamp).toDate(),
+      schoolId: map['schoolId'] ?? '',
     );
   }
 

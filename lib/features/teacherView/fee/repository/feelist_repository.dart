@@ -9,14 +9,14 @@ class FeeListRepository {
 
   /// Get teacher as TeacherModel
   Future<TeacherModel?> getTeacher(String teacherId) async {
-    final doc = await _db.collection(FirebaseConstant.teacher).doc(teacherId).get();
+    final doc = await _db.schoolCollection(FirebaseConstant.teacher).doc(teacherId).get();
     if (!doc.exists) return null;
     return TeacherModel.fromMap(doc.data()!);
   }
 
   /// Stream pending fees as List<FeeModel>
   Stream<List<FeeModel>> getPendingFees(String teacherId) {
-    return _db.collection(FirebaseConstant.fees).snapshots().map((snap) {
+    return _db.schoolCollection(FirebaseConstant.fees).snapshots().map((snap) {
       final List<FeeModel> list = [];
 
       for (final doc in snap.docs) {
@@ -60,7 +60,7 @@ class FeeListRepository {
 
   /// Stream completed fees as List<FeeModel>
   Stream<List<FeeModel>> getCompletedFees(String teacherId) {
-    return _db.collection(FirebaseConstant.fees).snapshots().map((snap) {
+    return _db.schoolCollection(FirebaseConstant.fees).snapshots().map((snap) {
       final List<FeeModel> list = [];
 
       for (final doc in snap.docs) {
@@ -120,14 +120,14 @@ class FeeListRepository {
       "students": fee.students,
     };
 
-    await _db.collection(FirebaseConstant.fees).doc(description).set({
+    await _db.schoolCollection(FirebaseConstant.fees).doc(description).set({
       classKey: {division: feeMap}
     }, SetOptions(merge: true));
   }
 
   /// Soft delete
   Future<void> deleteFee(String description, String classNo, String division) async {
-    await _db.collection(FirebaseConstant.fees).doc(description).update({
+    await _db.schoolCollection(FirebaseConstant.fees).doc(description).update({
       "$classNo.$division.delete": true,"$classNo.$division.deletedAt": FieldValue.serverTimestamp(),
     });
   }
@@ -135,7 +135,7 @@ class FeeListRepository {
   /// Count total students for teacher
   Future<int> getTotalStudents(String teacherId) async {
     final snap = await _db
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where("delete", isEqualTo: false)
         .where("teacherId", isEqualTo: teacherId)
         .get();
@@ -145,7 +145,7 @@ class FeeListRepository {
   /// Get student list for teacher (used by bottomsheet)
   Future<List<Map<String, dynamic>>> getStudentsOfTeacher(String teacherId) async {
     final snap = await _db
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where("delete", isEqualTo: false)
         .where("teacherId", isEqualTo: teacherId)
         .get();
@@ -162,7 +162,7 @@ class FeeListRepository {
 
   /// Get fee descriptions (doc ids) for suggestion list
   Future<List<String>> getFeeDescriptions() async {
-    final snap = await _db.collection(FirebaseConstant.fees).get();
+    final snap = await _db.schoolCollection(FirebaseConstant.fees).get();
     return snap.docs.map((d) => d.id).toList();
   }
 }

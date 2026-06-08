@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:scholo_admin/features/students/controller/student_controller.dart';
 import 'package:scholo_admin/models/students_model.dart';
+import 'package:scholo_admin/models/class_model.dart';
+import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
 import '../../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../../core/constant/firebase_constant.dart';
 import '../../../core/constant/image_constant.dart';
@@ -92,7 +94,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   /// 🔹 Fetch Teachers (with class and division)
   Future<void> _fetchTeachers() async {
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -126,6 +128,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       CloudinaryFile.fromFile(file.path, folder: 'student_images'),
     );
     return response.secureUrl;
+  }
+
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
   }
 
   /// 🔹 Email & Password Validation
@@ -187,53 +196,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
   /// 🔹 Phone Number Field
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Center(
-            child: Text(
-              '+91',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -263,7 +228,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   Widget _buildDropdown(String hint, String? value, List<String> items,
       ValueChanged<String?> onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)))).toList(),
       onChanged: onChanged,
       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
@@ -288,81 +253,116 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     );
   }
 
-  /// 🔹 Teacher Dropdown with Search + Auto Class & Division
-  Widget _buildTeacherDropdown() {
-    final searchController = TextEditingController();
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
 
-    return DropdownButtonFormField2<String>(
-      value: _selectedTeacherName,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'Teacher Name',
-        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
-      dropdownStyleData: DropdownStyleData(
-        maxHeight: 300,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: Colors.white,
-        ),
-      ),
-      dropdownSearchData: DropdownSearchData(
-        searchController: searchController,
-        searchInnerWidgetHeight: 60,
-        searchInnerWidget: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextFormField(
-            controller: searchController,
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              hintText: 'Search teacher...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        searchMatchFn: (item, searchValue) =>
-            item.value!.toLowerCase().contains(searchValue.toLowerCase()),
-      ),
-      items: _teacherList
-          .map((t) => DropdownMenuItem<String>(
-        value: t['name'] as String,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildClassAndDivisionDropdowns(List<ClassModel> classes, StateSetter setSheetState) {
+    final activeClasses = classes.where((c) => !c.delete).toList();
+    final uniqueClassNumbers = activeClasses.map((c) => c.classNo).toSet().toList();
+    uniqueClassNumbers.sort((a, b) => _classNoToInt(a).compareTo(_classNoToInt(b)));
+
+    final availableDivisions = _classNo == null
+        ? <String>[]
+        : activeClasses
+            .where((c) => c.classNo == _classNo)
+            .map((c) => c.division)
+            .toSet()
+            .toList()
+          ..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text(t['name'] as String, style: const TextStyle(fontSize: 14)),
-            Text(
-              "Class ${t['classNo']} - ${t['division']}",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _classNo,
+                hint: const Text("Select Class"),
+                items: uniqueClassNumbers.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _classNo = v;
+                    _division = null; // reset division
+                    _selectedTeacherId = null;
+                    _selectedTeacherName = null;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Class',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _division,
+                hint: const Text("Select Division"),
+                items: availableDivisions.map((d) => DropdownMenuItem<String>(value: d, child: Text(d))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _division = v;
+                    if (_classNo != null && _division != null) {
+                      final selectedClassModel = activeClasses.firstWhere(
+                        (c) => c.classNo == _classNo && c.division == _division,
+                        orElse: () => ClassModel(classNo: _classNo!, division: _division!, className: '', delete: false, createdDate: DateTime.now()),
+                      );
+                      _selectedTeacherId = selectedClassModel.teacherId;
+                      _selectedTeacherName = selectedClassModel.teacherName;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Division',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
             ),
           ],
         ),
-      ))
-          .toList(),
-      onChanged: (v) {
-        setState(() {
-          final selected = _teacherList.firstWhere((t) => t['name'] == v);
-          _selectedTeacherName = selected['name'];
-          _selectedTeacherId = selected['id'];
-          _classNo = selected['classNo'];
-          _division = selected['division'];
-        });
-      },
+        if (_selectedTeacherName != null && _selectedTeacherName!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              "Assigned Teacher: $_selectedTeacherName",
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xff1193D4),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -379,7 +379,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       _parentController.text = student.parentName;
       _addressController.text = student.address;
       _selectedGender = student.gender;
-      _classNo = student.classNo.toString();
+      _classNo = _classNoToString(student.classNo);
       _division = student.division;
       _selectedTeacherName = student.teacherName;
       _selectedTeacherId = student.teacherId;
@@ -413,220 +413,254 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Center(
-        child: Container(
-          width: 600,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 40,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final List<ClassModel> classes = ref.read(classesStreamProvider).value ?? <ClassModel>[];
+          return Center(
+            child: Container(
+              width: 600,
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 40,
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(28),
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: Text(
-                    editingStudent == null ? 'Add New Student' : 'Edit Student Profile',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Profile Image
-                Center(
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 54,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: _selectedFile != null
-                              ? FileImage(_selectedFile!)
-                              : (_uploadedImageUrl != null
-                              ? NetworkImage(_uploadedImageUrl!)
-                              : const AssetImage(ImageConstant.temporaryStudentImage)
-                          as ImageProvider),
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: _pickImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xff1193D4),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Text(
+                        editingStudent == null ? 'Add New Student' : 'Edit Student Profile',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Profile Image
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                            child: CircleAvatar(
+                              radius: 54,
+                              backgroundColor: Colors.grey[200],
+                              backgroundImage: _selectedFile != null
+                                  ? FileImage(_selectedFile!)
+                                  : (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty
+                                  ? NetworkImage(_uploadedImageUrl!)
+                                  : const AssetImage(ImageConstant.temporaryStudentImage)
+                              as ImageProvider),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () async {
+                                await _pickImage();
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xff1193D4),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10)
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_nameController, "Name", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_rollController, "Roll No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildPhoneField(),
+                    const SizedBox(height: 14),
+                    _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setSheetState(() => _selectedGender = v)),
+                    const SizedBox(height: 14),
+                    _buildClassAndDivisionDropdowns(classes, setSheetState),
+                    const SizedBox(height: 14),
+                    _buildDateOfBirthField(),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_addressController, "Address", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
+                    const SizedBox(height: 28),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1193D4),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10)
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_nameController, "Name", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_rollController, "Roll No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(2),
-                ]),
-                const SizedBox(height: 14),
-                _buildPhoneField(),
-                const SizedBox(height: 14),
-                _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setState(() => _selectedGender = v)),
-                const SizedBox(height: 14),
-                _buildTeacherDropdown(),
-                const SizedBox(height: 14),
-                _buildDateOfBirthField(),
-                const SizedBox(height: 14),
-                _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_addressController, "Address", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
-                const SizedBox(height: 14),
-                _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
-                const SizedBox(height: 28),
+                        onPressed: _isUploading
+                            ? null
+                            : () async {
+                          if (_classNo == null || _division == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Select Class and Division")));
+                            return;
+                          }
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xff1193D4),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                          setSheetState(() => _isUploading = true);
+                          setState(() => _isUploading = true);
+                          try {
+                            if (_selectedFile != null) {
+                              _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
+                            }
+
+                            final dob = DateTime.tryParse(
+                              "${_yearController.text}-${_monthController.text}-${_dayController.text}",
+                            ) ??
+                                DateTime(2000, 1, 1);
+
+                            final newStudent = StudentsModel(
+                              studentId: editingStudent?.studentId ?? '',
+                              admissionNo: int.parse(_admissionController.text),
+                              rollNo: int.parse(_rollController.text),
+                              studentName: _nameController.text,
+                              mobileNo: _mobileController.text,
+                              email: _emailController.text,
+                              password: _passwordController.text,
+                              address: _addressController.text,
+                              parentName: _parentController.text,
+                              classNo: _classNoToInt(_classNo!),
+                              division: _division ?? 'Not',
+                              teacherName: _selectedTeacherName ?? '',
+                              teacherId: _selectedTeacherId ?? '',
+                              gender: _selectedGender ?? '',
+                              delete: false,
+                              imageUrl: _uploadedImageUrl ?? '',
+                              dateOfBirth: dob,
+                              createdDate: editingStudent?.createdDate ?? DateTime.now(),
+                            );
+
+                            final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
+                            final classRepo = ref.read(classWiseTeacherRepoProvider);
+                            String studentId = '';
+                            if (editingStudent != null) {
+                              studentId = editingStudent!.studentId;
+                              await studentCollectionRef.doc(studentId).update(newStudent.toMap());
+
+                              await classRepo.syncStudentToClass(
+                                oldClassNo: _classNoToString(editingStudent!.classNo),
+                                oldDivision: editingStudent!.division,
+                                newClassNo: _classNoToString(newStudent.classNo),
+                                newDivision: newStudent.division,
+                                studentId: studentId,
+                                studentName: newStudent.studentName,
+                                imageUrl: newStudent.imageUrl,
+                                rollNo: newStudent.rollNo,
+                              );
+                            } else {
+                              final doc = await studentCollectionRef.add(newStudent.toMap());
+                              studentId = doc.id;
+                              await doc.update({'studentId': studentId});
+
+                              await classRepo.syncStudentToClass(
+                                newClassNo: _classNoToString(newStudent.classNo),
+                                newDivision: newStudent.division,
+                                studentId: studentId,
+                                studentName: newStudent.studentName,
+                                imageUrl: newStudent.imageUrl,
+                                rollNo: newStudent.rollNo,
+                              );
+                            }
+
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(content: Text("Error: $e")));
+                            }
+                          } finally {
+                            setSheetState(() => _isUploading = false);
+                            setState(() => _isUploading = false);
+                          }
+                        },
+                        child: _isUploading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                          editingStudent != null ? "Update Student" : "Add Student",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
                       ),
                     ),
-                    onPressed: _isUploading
-                        ? null
-                        : () async {
-                      if (_selectedTeacherId == null || _classNo == null || _division == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Select a valid teacher")));
-                        return;
-                      }
-
-                      setState(() => _isUploading = true);
-                      try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
-                        }
-
-                        final dob = DateTime.tryParse(
-                          "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                        ) ??
-                            DateTime(2000, 1, 1);
-
-                        final newStudent = StudentsModel(
-                          studentId: editingStudent?.studentId ?? '',
-                          admissionNo: int.parse(_admissionController.text),
-                          rollNo: int.parse(_rollController.text),
-                          studentName: _nameController.text,
-                          mobileNo: _mobileController.text,
-                          email: _emailController.text,
-                          password: _passwordController.text,
-                          address: _addressController.text,
-                          parentName: _parentController.text,
-                          classNo: int.parse(_classNo ?? '0'),
-                          division: _division ?? 'Not',
-                          teacherName: _selectedTeacherName ?? '',
-                          teacherId: _selectedTeacherId ?? '',
-                          gender: _selectedGender ?? '',
-                          delete: false,
-                          imageUrl: _uploadedImageUrl ?? '',
-                          dateOfBirth: dob,
-                          createdDate: editingStudent?.createdDate ?? DateTime.now(),
-                        );
-
-                        final ref = FirebaseFirestore.instance.collection(FirebaseConstant.student);
-                        if (editingStudent != null) {
-                          await ref.doc(editingStudent!.studentId).update(newStudent.toMap());
-                        } else {
-                          final doc = await ref.add(newStudent.toMap());
-                          await doc.update({'studentId': doc.id});
-                        }
-
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text("Error: $e")));
-                        }
-                      } finally {
-                        setState(() => _isUploading = false);
-                      }
-                    },
-                    child: _isUploading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                      editingStudent != null ? "Update Student" : "Add Student",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -647,7 +681,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
                   ),
@@ -685,7 +719,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xff1193D4).withOpacity(0.2), width: 4),
+                              border: Border.all(color: const Color(0xff1193D4).withValues(alpha: 0.2), width: 4),
                             ),
                             child: CircleAvatar(
                               radius: 50,
@@ -1014,9 +1048,20 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         elevation: 0,
                                       ),
-                                      onPressed: () {
+                                      onPressed: () async {
                                         Navigator.pop(context);
-                                        controller.deleteStudent(student.studentId);
+                                        await controller.deleteStudent(student.studentId);
+
+                                        final classRepo = ref.read(classWiseTeacherRepoProvider);
+                                        await classRepo.syncStudentToClass(
+                                          oldClassNo: _classNoToString(student.classNo),
+                                          oldDivision: student.division,
+                                          studentId: student.studentId,
+                                          studentName: student.studentName,
+                                          imageUrl: student.imageUrl,
+                                          rollNo: student.rollNo,
+                                          isDeleted: true,
+                                        );
                                       },
                                       child: const Text("Delete"),
                                     ),
@@ -1063,6 +1108,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   /// 🔹 Build Main UI
   @override
   Widget build(BuildContext context) {
+    ref.watch(classesStreamProvider);
     final studentState = ref.watch(studentControllerProvider);
     final controller = ref.read(studentControllerProvider.notifier);
 
@@ -1218,7 +1264,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                       border: Border.all(color: Colors.grey.shade200),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),

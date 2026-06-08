@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../models/studentMark_model.dart';
@@ -19,7 +20,7 @@ final examMarksStreamProvider =
       ({String examTitle, int classNo, String division})
     >((ref, params) {
       return FirebaseFirestore.instance
-          .collection(FirebaseConstant.studentsMark)
+          .schoolCollection(FirebaseConstant.studentsMark)
           .doc(params.examTitle)
           .snapshots()
           .map((doc) {
@@ -64,7 +65,27 @@ class StudentsMarksPage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xffF7F9FC),
         elevation: 0,
-        titleSpacing: 20,
+        leadingWidth: 70,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 20, top: 8, bottom: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                )
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+              onPressed: () => context.pop(),
+            ),
+          ),
+        ),
+        titleSpacing: 10,
         title: Text(
           examTitle,
           style: const TextStyle(
@@ -230,7 +251,7 @@ class StudentsMarksPage extends ConsumerWidget {
         border: Border.all(color: const Color(0xffE5E7EB)),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.10),
+            color: Colors.grey.withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 10),
           ),
@@ -385,7 +406,7 @@ class StudentsMarksPage extends ConsumerWidget {
     if (confirm != true) return;
 
     final docRef = FirebaseFirestore.instance
-        .collection(FirebaseConstant.studentsMark)
+        .schoolCollection(FirebaseConstant.studentsMark)
         .doc(examTitle);
 
     final snap = await docRef.get();
@@ -599,7 +620,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                     onPressed: _isFormValid
                         ? () async {
                             final docRef = FirebaseFirestore.instance
-                                .collection(FirebaseConstant.studentsMark)
+                                .schoolCollection(FirebaseConstant.studentsMark)
                                 .doc(widget.examTitle);
 
                             final snap = await docRef.get();

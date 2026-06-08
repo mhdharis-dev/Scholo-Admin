@@ -1,6 +1,5 @@
 // lib/features/teacherView/class_dashbord/controller/teacherdashbord_controller.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../models/fees_model.dart';
 import '../../../../models/otherTeacher_model.dart';
 import '../repository/teacherdashbord_repository.dart';

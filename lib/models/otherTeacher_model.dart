@@ -68,19 +68,19 @@ class OtherTeacherModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'teacherName': this.teacherName,
-      'teacherId': this.teacherId,
-      'subject': this.subject,
-      'imageUrl': this.imageUrl,
-      'employeeId': this.employeeId,
-      'mobileNo': this.mobileNo,
-      'isPermanent': this.isPermanent,
-      'substitutedBy': this.substitutedBy,
-      'substitutedDate': this.substitutedDate,
-      'substitutedId': this.substitutedId,
-      'substitutedImageUrl': this.substitutedImageUrl,
-      'substitutedMobileNo': this.substitutedMobileNo,
-      'email': this.email,
+      'teacherName': teacherName,
+      'teacherId': teacherId,
+      'subject': subject,
+      'imageUrl': imageUrl,
+      'employeeId': employeeId,
+      'mobileNo': mobileNo,
+      'isPermanent': isPermanent,
+      'substitutedBy': substitutedBy,
+      'substitutedDate': substitutedDate,
+      'substitutedId': substitutedId,
+      'substitutedImageUrl': substitutedImageUrl,
+      'substitutedMobileNo': substitutedMobileNo,
+      'email': email,
     };
   }
 

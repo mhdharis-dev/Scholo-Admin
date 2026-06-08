@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 import 'period_model.dart'; // Make sure this path points to your PeriodSlotModel
 
 class DraftTimetableModel {
@@ -9,6 +10,7 @@ class DraftTimetableModel {
   final DateTime createdDate;
   final Map<String, String> dayTypes; // e.g. {'Monday': 'Working Day'}
   final Map<String, List<PeriodSlotModel>> scheduleData; // The raw grid data
+  final String schoolId;
 
   const DraftTimetableModel({
     this.id,
@@ -18,6 +20,7 @@ class DraftTimetableModel {
     required this.createdDate,
     required this.dayTypes,
     required this.scheduleData,
+    this.schoolId = '',
   });
 
   DraftTimetableModel copyWith({
@@ -28,6 +31,7 @@ class DraftTimetableModel {
     DateTime? createdDate,
     Map<String, String>? dayTypes,
     Map<String, List<PeriodSlotModel>>? scheduleData,
+    String? schoolId,
   }) {
     return DraftTimetableModel(
       id: id ?? this.id,
@@ -37,6 +41,7 @@ class DraftTimetableModel {
       createdDate: createdDate ?? this.createdDate,
       dayTypes: dayTypes ?? this.dayTypes,
       scheduleData: scheduleData ?? this.scheduleData,
+      schoolId: schoolId ?? this.schoolId,
     );
   }
 
@@ -51,6 +56,7 @@ class DraftTimetableModel {
       'scheduleData': scheduleData.map(
             (key, value) => MapEntry(key, value.map((slot) => slot.toMap()).toList()),
       ),
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
     };
   }
 
@@ -71,6 +77,7 @@ class DraftTimetableModel {
           (value as List<dynamic>).map((e) => PeriodSlotModel.fromMap(e as Map<String, dynamic>)).toList(),
         ),
       ) ?? {},
+      schoolId: map['schoolId'] ?? '',
     );
   }
 }

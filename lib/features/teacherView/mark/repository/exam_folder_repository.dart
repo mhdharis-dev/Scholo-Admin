@@ -42,7 +42,7 @@ class ExamFolderRepository {
 
   Stream<List<QueryDocumentSnapshot>> getFirebaseExams(String teacherId) {
     return _firestore
-        .collection(FirebaseConstant.studentsMark)
+        .schoolCollection(FirebaseConstant.studentsMark)
         .where("teacherId", isEqualTo: teacherId)
         .where("delete", isEqualTo: false)
         .orderBy("uploadedAt", descending: true) // ✅ added
@@ -52,7 +52,7 @@ class ExamFolderRepository {
 
   Future<void> softDeleteExam(String docId) async {
     await _firestore
-        .collection(FirebaseConstant.studentsMark)
+        .schoolCollection(FirebaseConstant.studentsMark)
         .doc(docId)
         .update({
       "delete": true,
@@ -62,7 +62,7 @@ class ExamFolderRepository {
 
   Future<List<String>> getExamNamesOnce(String teacherId) async {
     final snap = await _firestore
-        .collection(FirebaseConstant.studentsMark)
+        .schoolCollection(FirebaseConstant.studentsMark)
         .where("teacherId", isEqualTo: teacherId)
         .where("delete", isEqualTo: false)
         .orderBy("uploadedAt", descending: true) // ✅ added

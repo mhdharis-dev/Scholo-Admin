@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 
 // ── Sample data model (replace with your real provider/model) ──
 class NotificationItem {
@@ -83,13 +84,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
   final List<String> _filters = ['All', 'Week', 'Month', 'Year'];
   final List<String> _audiences = ['All', 'Teachers', 'Specific Class'];
-  final List<String> _classes = [
-    '11A', '11B', '11C', '11D',
-    '10A', '10B', '10C', '10D',
-    '9A',  '9B',  '9C',  '9D',
-    '8A',  '8B',  '8C',  '8D',
-  ];
-  String _selectedClass = '11A';
+  List<String> _classes = [];
+  String _selectedClass = '';
 
   @override
   void dispose() {
@@ -100,6 +96,20 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final classesAsync = ref.watch(classesStreamProvider);
+    final classesList = classesAsync.value ?? [];
+    final activeClasses = classesList.where((c) => !c.delete).toList();
+    _classes = activeClasses.map((c) => "${c.classNo}${c.division}").toSet().toList();
+    _classes.sort();
+
+    if (_classes.isNotEmpty) {
+      if (!_classes.contains(_selectedClass)) {
+        _selectedClass = _classes.first;
+      }
+    } else {
+      _selectedClass = '';
+    }
+
     // Replace with your real provider watches here:
     // final notifications = ref.watch(notificationsProvider);
 
@@ -146,7 +156,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -188,7 +198,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -251,7 +261,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -314,10 +324,10 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             ),
             const SizedBox(height: 8),
             _DropdownField(
-              value: _selectedClass,
-              items: _classes,
+              value: _selectedClass.isNotEmpty ? _selectedClass : 'No Class Available',
+              items: _classes.isNotEmpty ? _classes : ['No Class Available'],
               onChanged: (val) {
-                if (val != null) setState(() => _selectedClass = val);
+                if (val != null && val != 'No Class Available') setState(() => _selectedClass = val);
               },
             ),
           ],
@@ -395,7 +405,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -542,7 +552,7 @@ class _NotificationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

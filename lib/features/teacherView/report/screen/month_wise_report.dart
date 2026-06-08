@@ -1,10 +1,10 @@
 // lib/features/report/month_wise_report/screen/month_wise_report_screen.dart
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -52,12 +52,33 @@ class MonthWiseReport extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Reports for ${controller.monthLabel}',
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                        onPressed: () => context.pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Reports for ${controller.monthLabel}',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
 
                 Row(
@@ -128,7 +149,7 @@ class MonthWiseReport extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -748,9 +769,9 @@ class MonthWiseReport extends ConsumerWidget {
     final totalDays = workingDays.length;
 
     double presentUnits = 0;
-    studentDayUnits.values.forEach(
-          (days) => presentUnits += days.values.fold(0, (a, b) => a + b),
-    );
+    for (var days in studentDayUnits.values) {
+      presentUnits += days.values.fold(0, (a, b) => a + b);
+    }
 
     final totalPossible = totalStudents * totalDays;
     final percentage =

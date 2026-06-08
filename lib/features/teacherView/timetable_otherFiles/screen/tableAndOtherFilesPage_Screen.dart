@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:scholo_admin/features/teacherView/timetable_otherFiles/screen/timetableLayoutMaker.dart';
 import 'package:speed_dial_fab/speed_dial_fab.dart';
 import 'package:printing/printing.dart';
@@ -197,7 +198,7 @@ class _TableAndOtherFilePageScreenState
     return Row(
       children: [
         IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
@@ -372,7 +373,7 @@ class _TableAndOtherFilePageScreenState
   }
 
   Widget _buildDocumentCard(OtherFilesModel item) {
-    final url = item.fileUrl?.toLowerCase() ?? '';
+    final url = item.fileUrl.toLowerCase() ?? '';
     final isImage =
         url.endsWith('.jpg') ||
         url.endsWith('.jpeg') ||
@@ -415,9 +416,9 @@ class _TableAndOtherFilePageScreenState
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(15),
               ),
-              child: isImage && (item.fileUrl?.isNotEmpty ?? false)
+              child: isImage && (item.fileUrl.isNotEmpty ?? false)
                   ? Image.network(
-                      item.fileUrl!,
+                      item.fileUrl,
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>

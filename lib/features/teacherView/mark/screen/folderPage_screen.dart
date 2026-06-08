@@ -1,8 +1,8 @@
 import 'dart:developer';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../controller/exam_folder_controller.dart';
 import 'studentsMarksPage_screen.dart';
 import '../../../../core/constant/image_constant.dart';
@@ -27,40 +27,77 @@ class _ExamFolderPageState extends ConsumerState<ExamFolderPageScreen> {
       backgroundColor: const Color(0xffF6F8FB),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: examAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) {
-            log(e.toString());
-            return Center(child: Text(e.toString()));
-          },
-          data: (docs) {
-            final firebaseNames = docs.map((e) => e.id).toList();
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                      )
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                    onPressed: () => context.pop(),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  "Exam Folders",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: examAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) {
+                  log(e.toString());
+                  return Center(child: Text(e.toString()));
+                },
+                data: (docs) {
+                  final firebaseNames = docs.map((e) => e.id).toList();
 
-            final allFolders = {...tempFolders, ...firebaseNames}.toList();
+                  final allFolders = {...tempFolders, ...firebaseNames}.toList();
 
-            return GridView.builder(
-              itemCount: allFolders.length + 1,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.1,
+                  return GridView.builder(
+                    itemCount: allFolders.length + 1,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 1.1,
+                    ),
+                    itemBuilder: (_, index) {
+                      if (index == allFolders.length) {
+                        return _newFolder(context);
+                      }
+
+                      final examName = allFolders[index];
+
+                      return _folderCard(
+                        context,
+                        examName: examName,
+                        isTemp: tempFolders.contains(examName),
+                      );
+                    },
+                  );
+                },
               ),
-              itemBuilder: (_, index) {
-                if (index == allFolders.length) {
-                  return _newFolder(context);
-                }
-
-                final examName = allFolders[index];
-
-                return _folderCard(
-                  context,
-                  examName: examName,
-                  isTemp: tempFolders.contains(examName),
-                );
-              },
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

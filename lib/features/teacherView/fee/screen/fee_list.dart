@@ -79,7 +79,7 @@ class _FeeListScreenState extends ConsumerState<FeeListScreen> {
                       controller: descriptionController,
                       onSelectSuggestion: (selected) async {
                         // prefill amount if description exists for this class/division
-                        final snap = await FirebaseFirestore.instance.collection(FirebaseConstant.fees).doc(selected).get();
+                        final snap = await FirebaseFirestore.instance.schoolCollection(FirebaseConstant.fees).doc(selected).get();
                         if (snap.exists) {
                           final map = snap.data();
                           final mapped = map?[teacher.classNo.toString()]?[teacher.division];

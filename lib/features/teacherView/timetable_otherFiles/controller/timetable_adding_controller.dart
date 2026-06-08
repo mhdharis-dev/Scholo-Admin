@@ -36,9 +36,11 @@ class TimetableController extends StateNotifier<AsyncValue<void>> {
 
     if (result.hasError) {
       state = AsyncError(result.error!, result.stackTrace!);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${result.error}"), backgroundColor: Colors.red),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${result.error}"), backgroundColor: Colors.red),
+        );
+      }
     } else {
       state = const AsyncData(null);
       onSuccess();

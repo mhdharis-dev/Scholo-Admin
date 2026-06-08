@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constant/firebase_constant.dart';
@@ -45,7 +46,7 @@ final teacherProvider = FutureProvider.family<TeacherModel, String>((
   teacherId,
 ) async {
   final doc = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .doc(teacherId)
       .get();
 
@@ -57,7 +58,7 @@ final studentsProvider = FutureProvider.family<List<StudentsModel>, String>((
   teacherId,
 ) async {
   final snap = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.student)
+      .schoolCollection(FirebaseConstant.student)
       .where("teacherId", isEqualTo: teacherId)
       .where("delete", isEqualTo: false)
       .orderBy("rollNo") // ✅ ORDER BY ROLL NUMBER
@@ -123,6 +124,36 @@ class MarkAddingPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(24),
                 child: ListView(
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                              )
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                            onPressed: () => context.pop(),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Text(
+                          "Add Marks",
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     /// HEADER
                     _examHeader(
                       teacher: teacher,
@@ -178,7 +209,7 @@ class MarkAddingPage extends ConsumerWidget {
                                     );
 
                                     await FirebaseFirestore.instance
-                                        .collection(FirebaseConstant.studentsMark)
+                                        .schoolCollection(FirebaseConstant.studentsMark)
                                         .doc(examTitle) // same exam
                                         .set(
                                       {
@@ -227,7 +258,7 @@ class MarkAddingPage extends ConsumerWidget {
                                 );
                               },
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),

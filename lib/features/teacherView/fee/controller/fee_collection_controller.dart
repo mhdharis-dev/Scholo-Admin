@@ -13,7 +13,7 @@ final feeCollectionRepositoryProvider = Provider<FeeCollectionRepository>((ref) 
 /// teacher details provider (reuse)
 final teacherDetailsProvider = FutureProvider.family<TeacherModel?, String>((ref, teacherId) async {
   final doc = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .doc(teacherId)
       .get();
   if (!doc.exists) return null;

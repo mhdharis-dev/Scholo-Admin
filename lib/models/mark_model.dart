@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 import 'package:scholo_admin/models/studentMark_model.dart';
 
 class MarkModel {
@@ -9,6 +10,7 @@ class MarkModel {
   final String teacherId;
   final String division;
   final String markType;
+  final String schoolId;
 
 
   final DateTime uploadedAt;
@@ -30,6 +32,7 @@ class MarkModel {
     required this.uploadedAt,
     required this.delete,
     required this.studentsMark,
+    this.schoolId = '',
 
     // ✅ ADDED
     this.deletedAt,
@@ -45,6 +48,7 @@ class MarkModel {
     DateTime? uploadedAt,
     bool? delete,
     List<StudentMarkModel>? studentsMark,
+    String? schoolId,
 
     // ✅ ADDED
     DateTime? deletedAt,
@@ -59,6 +63,7 @@ class MarkModel {
       uploadedAt: uploadedAt ?? this.uploadedAt,
       delete: delete ?? this.delete,
       studentsMark: studentsMark ?? this.studentsMark,
+      schoolId: schoolId ?? this.schoolId,
 
       // ✅ ADDED
       deletedAt: deletedAt ?? this.deletedAt,
@@ -75,6 +80,7 @@ class MarkModel {
       'markType': markType,
       'uploadedAt': Timestamp.fromDate(uploadedAt),
       'delete': delete,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       // ✅ ADDED
       'deletedAt': deletedAt == null
@@ -93,6 +99,7 @@ class MarkModel {
       teacherId: map['teacherId'] ?? '',
       division: map['division'] ?? '',
       markType: map['markType'] ?? '',
+      schoolId: map['schoolId'] ?? '',
 
       uploadedAt: (map['uploadedAt'] is Timestamp)
           ? (map['uploadedAt'] as Timestamp).toDate()

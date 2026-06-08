@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -13,12 +12,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
-import 'package:scholo_admin/features/events/screen/events_screen.dart';
-import 'package:scholo_admin/features/students/screen/students_list.dart';
-import 'package:scholo_admin/features/teacherView/class_dashbord/screen/classWiseTeacherView_screen.dart';
-import 'package:scholo_admin/features/teacherView/class_dashbord/screen/teacherViewDashbord.dart';
-import 'package:scholo_admin/features/teachers/screen/teacher_list.dart';
+import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import 'package:scholo_admin/models/students_model.dart';
+import 'package:scholo_admin/models/class_model.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../../core/cloudinaryServies/cloudinary_service.dart';
@@ -26,7 +23,6 @@ import '../../../core/constant/image_constant.dart';
 import '../../../models/event_model.dart';
 import '../../../models/fees_model.dart';
 import '../../../models/teacher_model.dart';
-import '../../teacherView/attendance/screen/attendance_page.dart';
 
 // -----------------------------------------------------------------------------
 // RIVERPOD PROVIDERS
@@ -53,7 +49,7 @@ final teachersDropdownProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .where('delete', isEqualTo: false)
       .get();
 
@@ -111,7 +107,7 @@ final teacherImageUploadProvider = Provider<Future<String> Function(File)>((
 
 final feeDescriptionsProvider = FutureProvider<List<String>>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.fees)
+      .schoolCollection(FirebaseConstant.fees)
       .get();
 
   final Set<String> descriptions = {};
@@ -126,7 +122,7 @@ final feeDescriptionsProvider = FutureProvider<List<String>>((ref) async {
 final saveFeeProvider = Provider<Future<void> Function(FeeModel)>((ref) {
   return (FeeModel fee) async {
     final docRef = FirebaseFirestore.instance
-        .collection(FirebaseConstant.fees)
+        .schoolCollection(FirebaseConstant.fees)
         .doc(fee.description);
 
     await docRef.set({
@@ -151,7 +147,7 @@ final upcomingEventsProvider = FutureProvider<List<EventModel>>((ref) async {
 
 final eventFirestoreProvider = Provider<CollectionReference<EventModel>>((ref) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.events)
+      .schoolCollection(FirebaseConstant.events)
       .withConverter<EventModel>(
         fromFirestore: (snap, _) => EventModel.fromMap(snap.data()!),
         toFirestore: (event, _) => event.toMap(),
@@ -160,7 +156,7 @@ final eventFirestoreProvider = Provider<CollectionReference<EventModel>>((ref) {
 
 final totalStudentsProvider = FutureProvider<int>((ref) async {
   final snap = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.student)
+      .schoolCollection(FirebaseConstant.student)
       .where('delete', isEqualTo: false)
       .get();
 
@@ -169,7 +165,7 @@ final totalStudentsProvider = FutureProvider<int>((ref) async {
 
 final feesCollectedProvider = FutureProvider<double>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.fees)
+      .schoolCollection(FirebaseConstant.fees)
       .get();
 
   double totalCollected = 0;
@@ -201,7 +197,7 @@ final feesCollectedProvider = FutureProvider<double>((ref) async {
 
 final pendingFeesProvider = FutureProvider<double>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.fees)
+      .schoolCollection(FirebaseConstant.fees)
       .get();
 
   double totalPending = 0;
@@ -243,7 +239,7 @@ final pendingFeesProvider = FutureProvider<double>((ref) async {
 
 final teachersProvider = FutureProvider<List<TeacherModel>>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .orderBy('teacherName')
       .limit(10)
       .get();
@@ -257,7 +253,7 @@ final teachersProvider = FutureProvider<List<TeacherModel>>((ref) async {
 
 final studentsProvider = FutureProvider<List<StudentsModel>>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.student)
+      .schoolCollection(FirebaseConstant.student)
       .orderBy('studentName')
       .limit(10)
       .get();
@@ -270,7 +266,7 @@ final studentsProvider = FutureProvider<List<StudentsModel>>((ref) async {
 
 final activeTeachersProvider = FutureProvider<List<TeacherModel>>((ref) async {
   final snapshot = await FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .where('delete', isEqualTo: false) // active only
       .orderBy('teacherName')
       .get();
@@ -286,7 +282,7 @@ final activeTeachersProvider = FutureProvider<List<TeacherModel>>((ref) async {
 final addTeacherProvider = Provider<Future<void> Function(TeacherModel)>((ref) {
   return (TeacherModel teacher) async {
     final doc = FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(); // 🔥 auto ID
 
     await doc.set(teacher.copyWith(id: doc.id).toMap());
@@ -307,7 +303,7 @@ final todayAttendanceProvider =
   log("👨‍🎓 Total students in school => $totalStudents");
 
   return firestore
-      .collection(FirebaseConstant.attendance)
+      .schoolCollection(FirebaseConstant.attendance)
       .doc(dateKey)
       .snapshots()
       .map((doc) {
@@ -396,13 +392,13 @@ final unmarkedClassesProvider =
   log("🔍 unmarkedClassesProvider: Fetching teachers and attendance for dateKey => '$dateKey'");
 
   final teachersSnap = await firestore
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .where('delete', isEqualTo: false)
       .where('classNo', isNotEqualTo: 0)
       .get();
 
   final attendanceDoc = await firestore
-      .collection(FirebaseConstant.attendance)
+      .schoolCollection(FirebaseConstant.attendance)
       .doc(dateKey)
       .get();
 
@@ -475,7 +471,7 @@ StreamProvider<void>((ref) async* {
   final firestore = FirebaseFirestore.instance;
 
   final snapshot =
-  await firestore.collection(FirebaseConstant.teacher).get();
+  await firestore.schoolCollection(FirebaseConstant.teacher).get();
 
   final now = DateTime.now();
 
@@ -512,6 +508,13 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTime focusedDay = DateTime.now();
+
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
+  }
 
   @override
   void initState() {
@@ -578,16 +581,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     Color(0xff64748B), // Grey
   ];
 
-  final List<String> allClasses = const [
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "11",
-    "12",
-  ];
+  List<String> allClasses = [];
 
   Widget _inputBox({required Widget child, double height = 50}) {
     return Container(
@@ -660,7 +654,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.20),
+                    color: Colors.black.withValues(alpha: 0.20),
                     blurRadius: 25,
                     offset: const Offset(0, 10),
                   ),
@@ -1016,7 +1010,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                   ),
                                 )
-                                .toList(),
+                                ,
                           ],
                         ),
 
@@ -1084,7 +1078,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 );
 
                                 final colorString =
-                                    "0x${selectedColor!.value.toRadixString(16)}";
+                                    "0x${selectedColor!.toARGB32().toRadixString(16)}";
 
                                 final event = EventModel(
                                   title: titleController.text.trim(),
@@ -1186,17 +1180,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   //------------------------------fee add--------------------------------------------
 
-  final List<String> feeClasses = const [
-    'All',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    '10',
-    '11',
-    '12',
-  ];
+  List<String> feeClasses = [];
 
   void _showAddFeeBottomSheet() async {
     final descriptionController = TextEditingController();
@@ -1210,7 +1194,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     /// 🔹 FETCH ALL STUDENTS (ADMIN ACTION)
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -1225,7 +1209,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       };
     }).toList();
 
-    void _updateStudents(
+    void updateStudents(
       String feeText,
       void Function(void Function()) setState,
     ) {
@@ -1284,7 +1268,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         controller: descriptionController,
                         onSelectSuggestion: (selected) async {
                           final snap = await FirebaseFirestore.instance
-                              .collection(FirebaseConstant.fees)
+                              .schoolCollection(FirebaseConstant.fees)
                               .doc(selected)
                               .get();
 
@@ -1313,7 +1297,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         onChanged: (val) {
-                          _updateStudents(val, setState);
+                          updateStudents(val, setState);
                         },
                       ),
 
@@ -1335,14 +1319,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         runSpacing: 10,
                         children: feeClasses.map((cls) {
                           final isSelected = cls == 'All'
-                              ? selectedClasses.length == 8
+                              ? selectedClasses.length == (feeClasses.length - 1)
                               : selectedClasses.contains(cls);
 
                           return GestureDetector(
                             onTap: () {
                               setState(() {
                                 if (cls == 'All') {
-                                  if (selectedClasses.length == 8) {
+                                  if (selectedClasses.length == (feeClasses.length - 1)) {
                                     selectedClasses.clear();
                                   } else {
                                     selectedClasses = feeClasses
@@ -1356,7 +1340,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 }
                               });
 
-                              _updateStudents(amountController.text, setState);
+                              updateStudents(amountController.text, setState);
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1371,7 +1355,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                       : Colors.grey.shade300,
                                 ),
                                 color: isSelected
-                                    ? Colors.blue.withOpacity(.12)
+                                    ? Colors.blue.withValues(alpha: .12)
                                     : Colors.grey.shade100,
                               ),
                               child: Text(
@@ -1475,7 +1459,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 );
 
                                 await FirebaseFirestore.instance
-                                    .collection(FirebaseConstant.fees)
+                                    .schoolCollection(FirebaseConstant.fees)
                                     .doc(
                                       fee.description,
                                     ) // 👈 description = docId
@@ -1671,7 +1655,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<Map<String, Map<String, String>>> _getTeachersMap() async {
     final snap = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -1690,7 +1674,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<Map<String, List<Map<String, dynamic>>>>
   _getStudentsByClassDivision() async {
     final snap = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -1796,7 +1780,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ValueChanged<String?> onChanged,
   ) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items
           .map((e) => DropdownMenuItem(
                 value: e,
@@ -1827,56 +1811,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Center(
-            child: Text(
-              '+91',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF475569),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -1933,8 +1870,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _dayController.clear();
     _monthController.clear();
     _yearController.clear();
-    _selectedClass = null;
-    _selectedDiv = null;
+    _selectedClass = '0';
+    _selectedDiv = 'Nil';
     _selectedGender = null;
     _uploadedImageUrl = null;
     _selectedFile = null;
@@ -1955,7 +1892,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
               ),
@@ -2001,7 +1938,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -2180,94 +2117,116 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
 
 
-  Widget _buildTeacherDropdown() {
-    final teachersAsync = ref.watch(teachersDropdownProvider);
-    final searchController = TextEditingController();
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
 
-    return teachersAsync.when(
-      loading: () => const CircularProgressIndicator(),
-      error: (e, _) => const Text("Failed to load teachers"),
-      data: (teacherList) {
-        return DropdownButtonFormField2<String>(
-          value: _selectedTeacherName,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: 'Teacher Name',
-            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-          dropdownStyleData: DropdownStyleData(
-            maxHeight: 300,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: Colors.white,
-            ),
-          ),
-          dropdownSearchData: DropdownSearchData(
-            searchController: searchController,
-            searchInnerWidgetHeight: 60,
-            searchInnerWidget: Padding(
-              padding: const EdgeInsets.all(8),
-              child: TextFormField(
-                controller: searchController,
+  Widget _buildClassAndDivisionDropdowns(List<ClassModel> classes, StateSetter setSheetState) {
+    final activeClasses = classes.where((c) => !c.delete).toList();
+    final uniqueClassNumbers = activeClasses.map((c) => c.classNo).toSet().toList();
+    uniqueClassNumbers.sort((a, b) => _classNoToInt(a).compareTo(_classNoToInt(b)));
+
+    final availableDivisions = _classNo == null
+        ? <String>[]
+        : activeClasses
+            .where((c) => c.classNo == _classNo)
+            .map((c) => c.division)
+            .toSet()
+            .toList()
+          ..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _classNo,
+                hint: const Text("Select Class"),
+                items: uniqueClassNumbers.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _classNo = v;
+                    _division = null; // reset division
+                    _selectedTeacherId = null;
+                    _selectedTeacherName = null;
+                  });
+                },
                 decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  hintText: 'Search teacher...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
+                  labelText: 'Class',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
                   ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
               ),
             ),
-            searchMatchFn: (item, searchValue) =>
-                item.value!.toLowerCase().contains(searchValue.toLowerCase()),
-          ),
-          items: teacherList
-              .map(
-                (t) => DropdownMenuItem<String>(
-                  value: t['name']!,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(t['name']!, style: const TextStyle(fontSize: 14)),
-                      Text(
-                        "Class ${t['classNo']} - ${t['division']}",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _division,
+                hint: const Text("Select Division"),
+                items: availableDivisions.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                onChanged: (v) {
+                  setSheetState(() {
+                    _division = v;
+                    if (_classNo != null && _division != null) {
+                      final selectedClassModel = activeClasses.firstWhere(
+                        (c) => c.classNo == _classNo && c.division == _division,
+                        orElse: () => ClassModel(classNo: _classNo!, division: _division!, className: '', delete: false, createdDate: DateTime.now()),
+                      );
+                      _selectedTeacherId = selectedClassModel.teacherId;
+                      _selectedTeacherName = selectedClassModel.teacherName;
+                    }
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Division',
+                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFFF8FAFC),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
                   ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
-              )
-              .toList(),
-          onChanged: (v) {
-            final selected = teacherList.firstWhere((t) => t['name'] == v);
-            setState(() {
-              _selectedTeacherName = selected['name'];
-              _selectedTeacherId = selected['id'];
-              _classNo = selected['classNo'];
-              _division = selected['division'];
-            });
-          },
-        );
-      },
+              ),
+            ),
+          ],
+        ),
+        if (_selectedTeacherName != null && _selectedTeacherName!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              "Assigned Teacher: $_selectedTeacherName",
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xff1193D4),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -2298,220 +2257,238 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Center(
-        child: Container(
-          width: 600,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 40,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final List<ClassModel> classes = ref.read(classesStreamProvider).value ?? <ClassModel>[];
+          return Center(
+            child: Container(
+              width: 600,
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 40,
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(28),
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
                   ),
-                ),
-                const SizedBox(height: 18),
-                const Center(
-                  child: Text(
-                    'Add New Student',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                /// PROFILE IMAGE
-                Center(
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 54,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: _selectedFile != null
-                              ? FileImage(_selectedFile!)
-                              : const AssetImage(ImageConstant.temporaryStudentImage)
-                                  as ImageProvider,
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: _pickImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xff1193D4),
+                    ),
+                    const SizedBox(height: 18),
+                    const Center(
+                      child: Text(
+                        'Add New Student',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    /// PROFILE IMAGE
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                            child: CircleAvatar(
+                              radius: 54,
+                              backgroundColor: Colors.grey[200],
+                              backgroundImage: _selectedFile != null
+                                  ? FileImage(_selectedFile!)
+                                  : const AssetImage(ImageConstant.temporaryStudentImage)
+                                      as ImageProvider,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () async {
+                                await _pickImage();
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xff1193D4),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildTextFieldWithValidation(_admissionController, "Admission No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_nameController, "Name"),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_rollController, "Roll No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(5),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildPhoneField(),
+                    const SizedBox(height: 14),
+                    _buildDropdown("Gender", _selectedGender, ['Male', 'Female', 'Other'], (v) => setSheetState(() => _selectedGender = v)),
+                    const SizedBox(height: 14),
+                    _buildClassAndDivisionDropdowns(classes, setSheetState),
+                    const SizedBox(height: 14),
+                    const Text(
+                      "Date of Birth",
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDateOfBirthField(),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_parentController, "Parent Name"),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_addressController, "Address"),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_emailController, "Email",
+                        isEmail: true, readOnly: true),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(_passwordController, "Password",
+                        isPassword: true, readOnly: true),
+                    const SizedBox(height: 28),
+
+                    /// SAVE BUTTON
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1193D4),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildTextFieldWithValidation(_admissionController, "Admission No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ]),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_nameController, "Name"),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_rollController, "Roll No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(5),
-                ]),
-                const SizedBox(height: 14),
-                _buildPhoneField(),
-                const SizedBox(height: 14),
-                _buildDropdown("Gender", _selectedGender, ['Male', 'Female', 'Other'], (v) => setState(() => _selectedGender = v)),
-                const SizedBox(height: 14),
-                _buildTeacherDropdown(),
-                const SizedBox(height: 14),
-                const Text(
-                  "Date of Birth",
-                  style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                _buildDateOfBirthField(),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_parentController, "Parent Name"),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_addressController, "Address"),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_emailController, "Email",
-                    isEmail: true, readOnly: true),
-                const SizedBox(height: 14),
-                _buildTextFieldWithValidation(_passwordController, "Password",
-                    isPassword: true, readOnly: true),
-                const SizedBox(height: 28),
+                        onPressed: _isUploading
+                            ? null
+                            : () async {
+                                if (_classNo == null || _division == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Select Class and Division"),
+                                    ),
+                                  );
+                                  return;
+                                }
 
-                /// SAVE BUTTON
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xff1193D4),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                                setSheetState(() => _isUploading = true);
+                                setState(() => _isUploading = true);
+
+                                try {
+                                  if (_selectedFile != null) {
+                                    _uploadedImageUrl = await _uploadToCloudinary(
+                                      _selectedFile!,
+                                    );
+                                  }
+
+                                  final dob =
+                                      DateTime.tryParse(
+                                        "${_yearController.text}-${_monthController.text}-${_dayController.text}",
+                                      ) ??
+                                      DateTime(2000, 1, 1);
+
+                                  final student = StudentsModel(
+                                    studentId: '',
+                                    admissionNo: int.parse(_admissionController.text),
+                                    rollNo: int.parse(_rollController.text),
+                                    studentName: _nameController.text,
+                                    mobileNo: _mobileController.text,
+                                    email: _emailController.text,
+                                    password: _passwordController.text,
+                                    address: _addressController.text,
+                                    parentName: _parentController.text,
+                                    classNo: _classNoToInt(_classNo!),
+                                    division: _division!,
+                                    teacherName: _selectedTeacherName ?? '',
+                                    teacherId: _selectedTeacherId ?? '',
+                                    gender: _selectedGender ?? '',
+                                    delete: false,
+                                    imageUrl: _uploadedImageUrl ?? '',
+                                    dateOfBirth: dob,
+                                    createdDate: DateTime.now(),
+                                  );
+
+                                  final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(
+                                    FirebaseConstant.student,
+                                  );
+                                  final classRepo = ref.read(classWiseTeacherRepoProvider);
+                                  final doc = await studentCollectionRef.add(student.toMap());
+                                  final studentId = doc.id;
+                                  await doc.update({'studentId': studentId});
+
+                                  await classRepo.syncStudentToClass(
+                                    newClassNo: _classNoToString(student.classNo),
+                                    newDivision: student.division,
+                                    studentId: studentId,
+                                    studentName: student.studentName,
+                                    imageUrl: student.imageUrl,
+                                    rollNo: student.rollNo,
+                                  );
+
+                                  Navigator.pop(context);
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                                } finally {
+                                  setSheetState(() => _isUploading = false);
+                                  setState(() => _isUploading = false);
+                                }
+                              },
+                        child: _isUploading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text("Add Student"),
                       ),
                     ),
-                    onPressed: _isUploading
-                        ? null
-                        : () async {
-                            if (_selectedTeacherId == null ||
-                                _classNo == null ||
-                                _division == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Select a valid teacher"),
-                                ),
-                              );
-                              return;
-                            }
-
-                            setState(() => _isUploading = true);
-
-                            try {
-                              if (_selectedFile != null) {
-                                _uploadedImageUrl = await _uploadToCloudinary(
-                                  _selectedFile!,
-                                );
-                              }
-
-                              final dob =
-                                  DateTime.tryParse(
-                                    "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                                  ) ??
-                                  DateTime(2000, 1, 1);
-
-                              final student = StudentsModel(
-                                studentId: '',
-                                admissionNo: int.parse(_admissionController.text),
-                                rollNo: int.parse(_rollController.text),
-                                studentName: _nameController.text,
-                                mobileNo: _mobileController.text,
-                                email: _emailController.text,
-                                password: _passwordController.text,
-                                address: _addressController.text,
-                                parentName: _parentController.text,
-                                classNo: int.parse(_classNo!),
-                                division: _division!,
-                                teacherName: _selectedTeacherName!,
-                                teacherId: _selectedTeacherId!,
-                                gender: _selectedGender ?? '',
-                                delete: false,
-                                imageUrl: _uploadedImageUrl ?? '',
-                                dateOfBirth: dob,
-                                createdDate: DateTime.now(),
-                              );
-
-                              final ref = FirebaseFirestore.instance.collection(
-                                FirebaseConstant.student,
-                              );
-
-                              final doc = await ref.add(student.toMap());
-                              await doc.update({'studentId': doc.id});
-
-                              Navigator.pop(context);
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-                            } finally {
-                              setState(() => _isUploading = false);
-                            }
-                          },
-                    child: _isUploading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Add Student"),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -2519,6 +2496,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   //------------------------------- body ------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final classesAsync = ref.watch(classesStreamProvider);
+    final classesList = classesAsync.value ?? [];
+    final activeClasses = classesList.where((c) => !c.delete).toList();
+    final uniqueClasses = activeClasses.map((c) => c.classNo).toSet().toList();
+    uniqueClasses.sort((a, b) => _classNoToInt(a).compareTo(_classNoToInt(b)));
+    allClasses = uniqueClasses;
+    feeClasses = ['All', ...uniqueClasses];
+
     ref.watch(cleanExpiredSubstitutionsProvider); // 👈 AUTO RUN
     final totalStudentsAsync = ref.watch(totalStudentsProvider);
     final feesCollectedAsync = ref.watch(feesCollectedProvider);
@@ -2680,7 +2665,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           border: Border.all(color: Colors.grey.shade100, width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -2692,9 +2677,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.08),
+                color: iconColor.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: iconColor.withOpacity(0.15), width: 1),
+                border: Border.all(color: iconColor.withValues(alpha: 0.15), width: 1),
               ),
               child: Icon(icon, size: 28, color: iconColor),
             ),
@@ -3261,7 +3246,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xff1193D4).withOpacity(0.08),
+                  color: const Color(0xff1193D4).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: const Color(0xff1193D4), size: 20),
@@ -3402,9 +3387,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
+              color: color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: color.withOpacity(0.15), width: 1),
+              border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -3771,7 +3756,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [const Color(0xff1193D4).withOpacity(0.4), const Color(0xff1193D4).withOpacity(0.1)],
+                  colors: [const Color(0xff1193D4).withValues(alpha: 0.4), const Color(0xff1193D4).withValues(alpha: 0.1)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -3835,7 +3820,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         BoxShadow(
           blurRadius: 16,
           offset: const Offset(0, 8),
-          color: Colors.black.withOpacity(.03),
+          color: Colors.black.withValues(alpha: .03),
         ),
       ],
     );

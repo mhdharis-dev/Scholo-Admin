@@ -11,7 +11,7 @@ class FeeCollectionRepository {
 
   /// Stream all fee entries for a teacher (flattened list with classNo & division)
   Stream<List<Map<String, dynamic>>> streamFeesByTeacher(String teacherId) {
-    return _firestore.collection(FirebaseConstant.fees).snapshots().map((snap) {
+    return _firestore.schoolCollection(FirebaseConstant.fees).snapshots().map((snap) {
       final List<Map<String, dynamic>> result = [];
 
       for (final doc in snap.docs) {
@@ -40,14 +40,14 @@ class FeeCollectionRepository {
 
   /// Get a single fee document map by description (doc id)
   Future<Map<String, dynamic>?> getFeeDoc(String description) async {
-    final doc = await _firestore.collection(FirebaseConstant.fees).doc(description).get();
+    final doc = await _firestore.schoolCollection(FirebaseConstant.fees).doc(description).get();
     return doc.exists ? doc.data() : null;
   }
 
   /// Save fee using FeeModel (creates/merges into document)
   Future<void> saveFee(FeeModel fee) async {
     await _firestore
-        .collection(FirebaseConstant.fees)
+        .schoolCollection(FirebaseConstant.fees)
         .doc(fee.description)
         .set({
       fee.classNo.toString(): {
@@ -65,15 +65,14 @@ class FeeCollectionRepository {
     required bool collected,
     required int perStudentAmount,
   }) async {
-    final docRef = _firestore.collection(FirebaseConstant.fees).doc(description);
+    final docRef = _firestore.schoolCollection(FirebaseConstant.fees).doc(description);
     final snap = await docRef.get();
     if (!snap.exists) return;
 
     final data = snap.data()!;
     final classMap = data[classNo];
     if (classMap == null) return;
-    final Map<String, dynamic>? feeMap = Map<String, dynamic>.from(classMap[division] ?? {});
-    if (feeMap == null) return;
+    final Map<String, dynamic> feeMap = Map<String, dynamic>.from(classMap[division] ?? {});
 
     final List<dynamic> studentsRaw = List<dynamic>.from(feeMap["students"] ?? []);
     final students = studentsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -99,13 +98,13 @@ class FeeCollectionRepository {
 
   /// Get all fee descriptions for suggestion list
   Future<List<String>> getFeeDescriptions() async {
-    final snap = await _firestore.collection(FirebaseConstant.fees).get();
+    final snap = await _firestore.schoolCollection(FirebaseConstant.fees).get();
     return snap.docs.map((d) => d.id).toList();
   }
 
   /// Get fee map by description
   Future<Map<String, dynamic>?> getFeeByDescription(String description) async {
-    final doc = await _firestore.collection(FirebaseConstant.fees).doc(description).get();
+    final doc = await _firestore.schoolCollection(FirebaseConstant.fees).doc(description).get();
     return doc.exists ? doc.data() : null;
   }
 
@@ -116,7 +115,7 @@ class FeeCollectionRepository {
     required bool completed,
   }) async {
     await _firestore
-        .collection(FirebaseConstant.fees)
+        .schoolCollection(FirebaseConstant.fees)
         .doc(description)
         .update({
       "$classNo.$division.completed": completed,

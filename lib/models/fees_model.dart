@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 class FeeModel {
   final String description; // docId
@@ -12,6 +13,7 @@ class FeeModel {
   final bool delete;
   final bool completed;
   final DateTime createdDate;
+  final String schoolId;
 
   // ✅ ADDED
   final DateTime? deletedAt;
@@ -30,6 +32,7 @@ class FeeModel {
     required this.delete,
     required this.completed,
     required this.createdDate,
+    this.schoolId = '',
 
     // ✅ ADDED
     this.deletedAt,
@@ -49,6 +52,7 @@ class FeeModel {
     bool? delete,
     bool? completed,
     DateTime? createdDate,
+    String? schoolId,
 
     // ✅ ADDED
     DateTime? deletedAt,
@@ -67,6 +71,7 @@ class FeeModel {
       delete: delete ?? this.delete,
       completed: completed ?? this.completed,
       createdDate: createdDate ?? this.createdDate,
+      schoolId: schoolId ?? this.schoolId,
 
       // ✅ ADDED
       deletedAt: deletedAt ?? this.deletedAt,
@@ -88,6 +93,7 @@ class FeeModel {
       'delete': delete,
       'completed': completed,
       'createdDate': Timestamp.fromDate(createdDate),
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       // ✅ ADDED
       'deletedAt':
@@ -109,6 +115,7 @@ class FeeModel {
       teacherId: map['teacherId'] ?? '',
       delete: map['delete'] ?? false,
       completed: map['completed'] ?? false,
+      schoolId: map['schoolId'] ?? '',
 
       createdDate: (map['createdDate'] is Timestamp)
           ? (map['createdDate'] as Timestamp).toDate()

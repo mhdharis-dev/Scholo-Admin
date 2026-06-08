@@ -1,9 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'core/config/session_manager.dart';
 
 import 'core/config/app_environment.dart';
+import 'core/config/firebase_options_prod.dart' as prod;
+import 'core/config/firebase_options_test.dart' as test;
 import 'routes/app_router.dart';
 import 'otherplatform/platformError_page.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SessionManager.init();
+  
+  const String flavor = String.fromEnvironment('app.flavor', defaultValue: 'prod');
+  
+  final FirebaseOptions firebaseOptions;
+  final AppConfig appConfig;
+  
+  if (flavor == 'test') {
+    firebaseOptions = test.DefaultFirebaseOptions.currentPlatform;
+    appConfig = AppConfig.testing();
+  } else {
+    firebaseOptions = prod.DefaultFirebaseOptions.currentPlatform;
+    appConfig = AppConfig.production();
+  }
+  
+  await Firebase.initializeApp(
+    options: firebaseOptions,
+  );
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        appConfigProvider.overrideWithValue(appConfig),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
@@ -26,12 +61,10 @@ class MyApp extends ConsumerWidget {
           primary: primaryColor,
           secondary: primaryColor,
           surface: Colors.grey.shade100,
-          background: Colors.grey.shade100,
           error: Colors.red,
           onPrimary: Colors.white,
           onSecondary: Colors.white,
           onSurface: textColor,
-          onBackground: textColor,
           onError: Colors.white,
         ),
         appBarTheme: const AppBarTheme(

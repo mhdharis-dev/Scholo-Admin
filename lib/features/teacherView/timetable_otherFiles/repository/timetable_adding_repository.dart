@@ -11,7 +11,7 @@ class TimetableRepository {
   // Stream teacher data
   Stream<TeacherModel> getTeacher(String teacherId) {
     return _firestore
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .snapshots()
         .map((snapshot) {
@@ -29,7 +29,7 @@ class TimetableRepository {
     required String timetableName,
     required TimetableModel model,
   }) async {
-    await _firestore.collection(FirebaseConstant.timetable).doc(classNo).set({
+    await _firestore.schoolCollection(FirebaseConstant.timetable).doc(classNo).set({
       'divisions': {
         division: {
           'timetables': {
@@ -44,13 +44,13 @@ class TimetableRepository {
   Future<String> saveDraft(DraftTimetableModel model, {String? draftId}) async {
     if (draftId != null) {
       await _firestore
-          .collection(FirebaseConstant.draftTimetable)
+          .schoolCollection(FirebaseConstant.draftTimetable)
           .doc(draftId)
           .set(model.toMap());
       return draftId;
     } else {
       final doc = await _firestore
-          .collection(FirebaseConstant.draftTimetable)
+          .schoolCollection(FirebaseConstant.draftTimetable)
           .add(model.toMap());
       return doc.id;
     }
@@ -59,7 +59,7 @@ class TimetableRepository {
   // Delete Draft
   Future<void> deleteDraft(String draftId) async {
     await _firestore
-        .collection(FirebaseConstant.draftTimetable)
+        .schoolCollection(FirebaseConstant.draftTimetable)
         .doc(draftId)
         .delete();
   }

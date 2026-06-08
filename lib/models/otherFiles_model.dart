@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 class OtherFilesModel {
   final int classNo;
@@ -15,6 +16,7 @@ class OtherFilesModel {
 
   final bool delete;
   final String teacherId;
+  final String schoolId;
 
   const OtherFilesModel({
     required this.id,
@@ -28,6 +30,7 @@ class OtherFilesModel {
     this.deletedDate,
     required this.classNo,
     required this.division,
+    this.schoolId = '',
   });
 
   // --------------------------------------------------
@@ -45,6 +48,7 @@ class OtherFilesModel {
     DateTime? deletedDate,
     int? classNo,
     String? division,
+    String? schoolId,
   }) {
     return OtherFilesModel(
       id: id ?? this.id,
@@ -58,6 +62,7 @@ class OtherFilesModel {
       deletedDate: deletedDate ?? this.deletedDate,
       classNo: classNo ?? this.classNo,
       division: division ?? this.division,
+      schoolId: schoolId ?? this.schoolId,
     );
   }
 
@@ -82,6 +87,7 @@ class OtherFilesModel {
           : Timestamp.fromDate(deletedDate!),
 
       'teacherId': teacherId,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
     };
   }
 
@@ -99,6 +105,7 @@ class OtherFilesModel {
       teacherId: map['teacherId'] ?? '',
       classNo: map['classNo'] ?? 0,
       division: map['division'] ?? '',
+      schoolId: map['schoolId'] ?? '',
 
       uploadedAt: (map['uploadedAt'] as Timestamp).toDate(),
 

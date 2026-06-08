@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 class EventModel {
   final String title; // Used as Firestore document ID
@@ -9,6 +10,7 @@ class EventModel {
   final List<String> classes;
   final DateTime createdAt;
   final bool delete;
+  final String schoolId;
 
   // ✅ ADDED
   final DateTime? deletedAt;
@@ -22,6 +24,7 @@ class EventModel {
     required this.classes,
     required this.createdAt,
     required this.delete,
+    this.schoolId = '',
 
     // ✅ ADDED
     this.deletedAt,
@@ -36,6 +39,7 @@ class EventModel {
     List<String>? classes,
     DateTime? createdAt,
     bool? delete,
+    String? schoolId,
 
     // ✅ ADDED
     DateTime? deletedAt,
@@ -49,6 +53,7 @@ class EventModel {
       classes: classes ?? this.classes,
       createdAt: createdAt ?? this.createdAt,
       delete: delete ?? this.delete,
+      schoolId: schoolId ?? this.schoolId,
 
       // ✅ ADDED
       deletedAt: deletedAt ?? this.deletedAt,
@@ -65,6 +70,7 @@ class EventModel {
       'classes': classes,
       'createdAt': Timestamp.fromDate(createdAt),
       'delete': delete,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       // ✅ ADDED
       'deletedAt':
@@ -82,6 +88,7 @@ class EventModel {
       classes: List<String>.from(map['classes'] ?? []),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       delete: map['delete'] ?? false,
+      schoolId: map['schoolId'] ?? '',
 
       // ✅ ADDED
       deletedAt: map['deletedAt'] != null

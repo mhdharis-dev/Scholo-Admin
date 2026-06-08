@@ -10,7 +10,7 @@ class TeacherRepository {
 
   Stream<List<TeacherModel>> getTeachers() {
     return _firestore
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -18,17 +18,21 @@ class TeacherRepository {
         .toList());
   }
 
-  Future<void> addTeacher(TeacherModel teacher) async {
-    final docRef = await _firestore.collection(FirebaseConstant.teacher).add(teacher.toMap());
-    await docRef.update({'id': docRef.id});
+  Future<String> addTeacher(TeacherModel teacher) async {
+    final docRef = teacher.id.isNotEmpty
+        ? _firestore.schoolCollection(FirebaseConstant.teacher).doc(teacher.id)
+        : _firestore.schoolCollection(FirebaseConstant.teacher).doc();
+    final newTeacher = teacher.copyWith(id: docRef.id);
+    await docRef.set(newTeacher.toMap());
+    return docRef.id;
   }
 
   Future<void> updateTeacher(TeacherModel teacher) async {
-    await _firestore.collection(FirebaseConstant.teacher).doc(teacher.id).update(teacher.toMap());
+    await _firestore.schoolCollection(FirebaseConstant.teacher).doc(teacher.id).update(teacher.toMap());
   }
 
   Future<void> deleteTeacher(String id) async {
-    await _firestore.collection(FirebaseConstant.teacher).doc(id).update({'delete': true, "deletedAt": FieldValue.serverTimestamp(),});
+    await _firestore.schoolCollection(FirebaseConstant.teacher).doc(id).update({'delete': true, "deletedAt": FieldValue.serverTimestamp(),});
   }
 
   Future<String> uploadImage(File file) async {

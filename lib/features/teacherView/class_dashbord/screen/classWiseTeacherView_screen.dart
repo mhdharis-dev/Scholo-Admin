@@ -10,9 +10,11 @@ import 'package:scholo_admin/core/constant/firebase_constant.dart';
 
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/teacher_model.dart';
+import '../../../../models/class_model.dart';
+import '../../../../models/students_model.dart';
 import '../../../teachers/controller/teacher_controller.dart';
 import '../controller/class_wise_teacher_view_controller.dart';
-import 'teacherViewDashbord.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
 
 class ClassWiseTeacherViewScreen extends ConsumerStatefulWidget {
   const ClassWiseTeacherViewScreen({super.key});
@@ -24,7 +26,7 @@ class ClassWiseTeacherViewScreen extends ConsumerStatefulWidget {
 
 class _ClassWiseTeacherViewScreenState
     extends ConsumerState<ClassWiseTeacherViewScreen> {
-  final Map<int, bool> _expanded = {};
+  final Map<String, bool> _expanded = {};
   bool _initialized = false;
 
   // Controllers for Editing
@@ -84,24 +86,46 @@ class _ClassWiseTeacherViewScreenState
     super.dispose();
   }
 
-  void _showAssignmentDialog({TeacherModel? teacher}) {
+  int _classNoToInt(String classNoStr) {
+    if (classNoStr == 'LKG') return -2;
+    if (classNoStr == 'UKG') return -1;
+    return int.tryParse(classNoStr) ?? 0;
+  }
+
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
+  }
+
+  int _compareClassNos(String a, String b) {
+    return _classNoToInt(a).compareTo(_classNoToInt(b));
+  }
+
+  void _showAssignmentDialog({
+    TeacherModel? teacher,
+    String? prefilledClassNo,
+    String? prefilledDivision,
+  }) {
+    final classesAsync = ref.read(classesStreamProvider);
+    final classes = classesAsync.value ?? [];
+
     showDialog(
       context: context,
       builder: (context) {
         String? selectedTeacherId = teacher?.id;
         String? selectedTeacherName = teacher?.teacherName;
 
-        String? selectedGrade = teacher?.classNo != 0 ? teacher?.classNo.toString() : null;
-        String? selectedDivision = teacher?.division != "Nil" ? teacher?.division : null;
+        String? selectedGrade = teacher != null
+            ? (teacher.classNo != 0 ? _classNoToString(teacher.classNo) : null)
+            : prefilledClassNo;
+        String? selectedDivision = teacher != null
+            ? (teacher.division != "Nil" ? teacher.division : null)
+            : prefilledDivision;
 
-        // ✅ Grades 5–12
-        final grades = List.generate(8, (i) => (i + 5).toString());
-
-        // ✅ Divisions A–N
-        final allDivisions = [
-          "A","B","C","D","E","F","G","H",
-          "I","J","K","L","M","N"
-        ];
+        final grades = classes.map((c) => c.classNo).toSet().toList();
+        grades.sort(_compareClassNos);
 
         return StatefulBuilder(
           builder: (context, setState) {
@@ -155,7 +179,7 @@ class _ClassWiseTeacherViewScreenState
 
                       StreamBuilder(
                         stream: FirebaseFirestore.instance
-                            .collection(FirebaseConstant.teacher)
+                            .schoolCollection(FirebaseConstant.teacher)
                             .where("classNo", isEqualTo: 0)
                             .where("delete", isEqualTo: false)
                             .snapshots(),
@@ -256,7 +280,7 @@ class _ClassWiseTeacherViewScreenState
                                     value: selectedGrade,
                                     hint: const Text("Grade"),
                                     isExpanded: true,
-                                    items: grades.map((g) => DropdownMenuItem(value: g, child: Text("Grade $g"))).toList(),
+                                    items: grades.map((g) => DropdownMenuItem(value: g, child: Text(g == 'LKG' || g == 'UKG' ? g : "Grade $g"))).toList(),
                                     onChanged: (val) {
                                       setState(() {
                                         selectedGrade = val;
@@ -281,19 +305,23 @@ class _ClassWiseTeacherViewScreenState
                               else
                                 StreamBuilder(
                                   stream: FirebaseFirestore.instance
-                                      .collection(FirebaseConstant.teacher) // Check assigned divisions
-                                      .where("classNo", isEqualTo: int.parse(selectedGrade!))
+                                      .schoolCollection(FirebaseConstant.teacher) // Check assigned divisions
+                                      .where("classNo", isEqualTo: _classNoToInt(selectedGrade!))
                                       .where("delete", isEqualTo: false)
                                       .snapshots(),
                                   builder: (context, snapshot) {
                                     if (!snapshot.hasData) return const CircularProgressIndicator();
+
+                                    // Collect all divisions defined for this grade
+                                    final gradeClasses = classes.where((c) => c.classNo == selectedGrade).toList();
+                                    final definedDivisions = gradeClasses.map((c) => c.division).where((d) => d.isNotEmpty).toList();
 
                                     final usedDivisions = snapshot.data!.docs
                                         .where((doc) => doc.id != selectedTeacherId) // Exclude current teacher
                                         .map((doc) => doc["division"].toString())
                                         .toList();
 
-                                    final availableDivisions = allDivisions.where((d) => !usedDivisions.contains(d)).toList();
+                                    final availableDivisions = definedDivisions.where((d) => !usedDivisions.contains(d)).toList();
 
                                     return Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -340,13 +368,31 @@ class _ClassWiseTeacherViewScreenState
                                 return;
                               }
 
+                              final classNoInt = _classNoToInt(selectedGrade!);
+                              final oldClassNo = teacher != null && teacher.classNo != 0
+                                  ? _classNoToString(teacher.classNo)
+                                  : null;
+                              final oldDivision = teacher != null && teacher.division != "Nil"
+                                  ? teacher.division
+                                  : null;
+
                               await FirebaseFirestore.instance
-                                  .collection(FirebaseConstant.teacher)
+                                  .schoolCollection(FirebaseConstant.teacher)
                                   .doc(selectedTeacherId)
                                   .update({
-                                "classNo": int.parse(selectedGrade!),
+                                "classNo": classNoInt,
                                 "division": selectedDivision,
                               });
+
+                              final repo = ref.read(classWiseTeacherRepoProvider);
+                              await repo.syncTeacherToClass(
+                                oldClassNo: oldClassNo,
+                                oldDivision: oldDivision,
+                                newClassNo: selectedGrade,
+                                newDivision: selectedDivision,
+                                teacherId: selectedTeacherId!,
+                                teacherName: selectedTeacherName!,
+                              );
 
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -368,9 +414,1046 @@ class _ClassWiseTeacherViewScreenState
     );
   }
 
+  void _showAddClassSheet([String? classNo, List<ClassModel>? classItems]) {
+    final isEditing = classNo != null && classItems != null;
+    String? selectedClassNo = classNo;
+    
+    // Find initial class name
+    String initialClassName = '';
+    if (isEditing && classItems.isNotEmpty) {
+      initialClassName = classItems.first.className;
+    }
+    final classNameController = TextEditingController(text: initialClassName);
+    final divisionInputController = TextEditingController();
+    
+    // Divisions list state
+    List<String> selectedDivisions = isEditing
+        ? classItems.map((c) => c.division).toList()
+        : [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Center(
+            child: Container(
+              width: 600,
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 40,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Text(
+                        isEditing ? 'Edit Class Details' : 'Add New Class',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Dropdown for class number
+                    const Text(
+                      "Class Number",
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildDropdown(
+                      "Select Class Number",
+                      selectedClassNo,
+                      ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+                      (v) {
+                        setSheetState(() => selectedClassNo = v);
+                      },
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Optional Class Name
+                    const Text(
+                      "Class Name (Optional)",
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: classNameController,
+                      decoration: InputDecoration(
+                        hintText: selectedClassNo != null ? "Class $selectedClassNo" : "Enter class name",
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Tag-based division adding field
+                    const Text(
+                      "Divisions",
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Currently selected divisions wrapped chips
+                    if (selectedDivisions.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: selectedDivisions.map((div) {
+                          return Chip(
+                            label: Text(
+                              div,
+                              style: const TextStyle(
+                                color: Color(0xff2F80ED),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            backgroundColor: const Color(0xffEEF6FF),
+                            deleteIcon: const Icon(Icons.close, size: 16, color: Color(0xff2F80ED)),
+                            onDeleted: () {
+                              setSheetState(() {
+                                selectedDivisions.remove(div);
+                              });
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: const Color(0xff2F80ED).withValues(alpha: 0.2)),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Input for new division
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: divisionInputController,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: InputDecoration(
+                              hintText: "Enter division (e.g., A, B, A1)",
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                            onSubmitted: (val) {
+                              final text = val.trim().toUpperCase();
+                              if (text.isNotEmpty && !selectedDivisions.contains(text)) {
+                                setSheetState(() {
+                                  selectedDivisions.add(text);
+                                  divisionInputController.clear();
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xff2F80ED),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                          onPressed: () {
+                            final text = divisionInputController.text.trim().toUpperCase();
+                            if (text.isNotEmpty && !selectedDivisions.contains(text)) {
+                              setSheetState(() {
+                                selectedDivisions.add(text);
+                                divisionInputController.clear();
+                              });
+                            }
+                          },
+                          child: const Text("Add"),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Quick suggestions (clickable choice chips)
+                    const Text(
+                      "Suggestions",
+                      style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((div) {
+                        final isSelected = selectedDivisions.contains(div);
+                        return ChoiceChip(
+                          label: Text(div),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setSheetState(() {
+                              if (selected) {
+                                if (!selectedDivisions.contains(div)) {
+                                  selectedDivisions.add(div);
+                                }
+                              } else {
+                                selectedDivisions.remove(div);
+                              }
+                            });
+                          },
+                          selectedColor: const Color(0xffEEF6FF),
+                          backgroundColor: const Color(0xffF1F5F9),
+                          labelStyle: TextStyle(
+                            color: isSelected ? const Color(0xff2F80ED) : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: isSelected ? const Color(0xff2F80ED).withValues(alpha: 0.3) : Colors.transparent,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Save / Cancel Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("Cancel", style: TextStyle(color: Color(0xFF475569))),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xff1193D4),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            onPressed: () async {
+                              if (selectedClassNo == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Please select a Class Number")),
+                                );
+                                return;
+                              }
+
+                              final name = classNameController.text.trim();
+                              final finalClassName = name.isEmpty ? "Class $selectedClassNo" : name;
+                              final repo = ref.read(classWiseTeacherRepoProvider);
+
+                              final initialDivisions = isEditing
+                                  ? classItems.map((c) => c.division).toList()
+                                  : <String>[];
+
+                              // 1. Add new divisions
+                              for (final div in selectedDivisions) {
+                                if (!initialDivisions.contains(div)) {
+                                  final classModel = ClassModel(
+                                    classNo: selectedClassNo!,
+                                    division: div,
+                                    className: finalClassName,
+                                    delete: false,
+                                    createdDate: DateTime.now(),
+                                  );
+                                  await repo.addClass(classModel);
+                                } else {
+                                  // Update existing className if changed
+                                  final existingModel = classItems!.firstWhere((c) => c.division == div, orElse: () => ClassModel(classNo: selectedClassNo!, division: div, className: finalClassName, delete: false, createdDate: DateTime.now()));
+                                  if (existingModel.className != finalClassName) {
+                                    await repo.updateClass(existingModel.copyWith(className: finalClassName));
+                                  }
+                                }
+                              }
+
+                              // 2. Remove divisions that were deleted
+                              for (final oldDiv in initialDivisions) {
+                                if (!selectedDivisions.contains(oldDiv)) {
+                                  final existingModel = classItems!.firstWhere((c) => c.division == oldDiv, orElse: () => ClassModel(classNo: selectedClassNo!, division: oldDiv, className: finalClassName, delete: false, createdDate: DateTime.now()));
+                                  if (existingModel.classId != null) {
+                                    await repo.deleteClass(existingModel.classId!);
+                                  }
+                                }
+                              }
+
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      isEditing
+                                          ? "Class updated successfully"
+                                          : "Class created successfully",
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text(isEditing ? "Update" : "Save Class"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDeleteClassDialog(String classNo, List<ClassModel> classItems) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 380,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                "Delete Class",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Are you sure you want to delete Grade $classNo?",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF64748B), height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel", style: TextStyle(color: Color(0xFF475569))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final repo = ref.read(classWiseTeacherRepoProvider);
+                        for (final c in classItems) {
+                          await repo.deleteClass(c.classId!);
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("$classNo deleted successfully")),
+                        );
+                      },
+                      child: const Text("Delete"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getNextClassNo(String current) {
+    if (current == 'LKG') return 'UKG';
+    if (current == 'UKG') return '1';
+    final currentVal = int.tryParse(current);
+    if (currentVal != null) {
+      return (currentVal + 1).toString();
+    }
+    return current;
+  }
+
+  Widget _buildInfoDisplay({
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: valueColor ?? const Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPromoteSheet(ClassModel classModel) {
+    final classes = ref.read(classesStreamProvider).value ?? [];
+    final teachers = ref.read(teachersProvider).value ?? [];
+
+    // Filter target classes: non-deleted and not the current class
+    final targetClasses = classes.where((c) => c.classId != classModel.classId && !c.delete).toList();
+    targetClasses.sort((a, b) {
+      final cmp = _compareClassNos(a.classNo, b.classNo);
+      if (cmp != 0) return cmp;
+      return a.division.compareTo(b.division);
+    });
+
+    if (targetClasses.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("No Target Classes"),
+          content: const Text("Please create other classes first in Classroom Management before promoting students."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final nextClassNo = _getNextClassNo(classModel.classNo);
+    final nextDivision = classModel.division;
+
+    // Prefill with computed target class if exists
+    ClassModel? initialTargetClass = targetClasses.firstWhere(
+      (c) => c.classNo == nextClassNo && c.division == nextDivision,
+      orElse: () => targetClasses.first,
+    );
+
+    // We'll store selected student IDs here
+    final List<String> selectedStudentIds = [];
+    bool isPromoting = false;
+    bool initializedSelections = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            ClassModel? selectedTargetClass = initialTargetClass;
+            String? selectedTeacherIdForTargetClass = selectedTargetClass?.teacherId;
+
+            return Center(
+              child: Container(
+                width: 600,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
+                margin: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  top: 40,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 30,
+                      offset: const Offset(0, 15),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 14),
+                      Center(
+                        child: Container(
+                          width: 48,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Center(
+                        child: Text(
+                          'Promote Students',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Column(
+                          children: [
+                            // Source Class (Current)
+                            _buildInfoDisplay(
+                              label: "Current Class",
+                              value: "${classModel.classNo} - ${classModel.division} (${classModel.className.isEmpty ? 'Grade ' + classModel.classNo : classModel.className})",
+                            ),
+                            const SizedBox(height: 14),
+                            // Select Target Class Dropdown
+                            DropdownButtonFormField<ClassModel>(
+                              value: selectedTargetClass,
+                              items: targetClasses.map((c) {
+                                return DropdownMenuItem<ClassModel>(
+                                  value: c,
+                                  child: Text("${c.classNo} - ${c.division} (${c.className.isEmpty ? 'Grade ' + c.classNo : c.className})"),
+                                );
+                              }).toList(),
+                              onChanged: (newClass) {
+                                setSheetState(() {
+                                  selectedTargetClass = newClass;
+                                  initialTargetClass = newClass;
+                                  selectedTeacherIdForTargetClass = newClass?.teacherId;
+                                });
+                              },
+                              decoration: InputDecoration(
+                                labelText: "Select Target Class",
+                                labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            // Assign/Reassign Teacher Dropdown for target class
+                            DropdownButtonFormField<String>(
+                              value: (selectedTeacherIdForTargetClass != null && selectedTeacherIdForTargetClass!.isNotEmpty)
+                                  ? selectedTeacherIdForTargetClass
+                                  : null,
+                              hint: const Text("Unassigned / No Teacher"),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: null,
+                                  child: Text("Unassigned / No Teacher"),
+                                ),
+                                ...teachers.map((t) {
+                                  final currentAssign = t.classNo != 0
+                                      ? " (Assigned: ${_classNoToString(t.classNo)}-${t.division})"
+                                      : " (Unassigned)";
+                                  return DropdownMenuItem<String>(
+                                    value: t.id,
+                                    child: Text("${t.teacherName}$currentAssign"),
+                                  );
+                                }),
+                              ],
+                              onChanged: (newTeacherId) {
+                                setSheetState(() {
+                                  selectedTeacherIdForTargetClass = newTeacherId;
+                                });
+                              },
+                              decoration: InputDecoration(
+                                labelText: "Assigned Teacher for Target Class",
+                                labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          future: FirebaseFirestore.instance
+                              .schoolCollection(FirebaseConstant.student)
+                              .where('classNo', isEqualTo: _classNoToInt(classModel.classNo))
+                              .where('division', isEqualTo: classModel.division)
+                              .where('delete', isEqualTo: false)
+                              .get(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return Center(child: Text("Error loading students: ${snapshot.error}"));
+                            }
+                            final docs = snapshot.data?.docs ?? [];
+                            if (docs.isEmpty) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(20.0),
+                                  child: Text("No students found in this class section."),
+                                ),
+                              );
+                            }
+
+                            final students = docs.map((doc) => StudentsModel.fromMap(doc.data())).toList();
+
+                            // Populate selections on first load
+                            if (!initializedSelections && students.isNotEmpty) {
+                              selectedStudentIds.addAll(students.map((s) => s.studentId));
+                              initializedSelections = true;
+                            }
+
+                            final allSelected = students.isNotEmpty && selectedStudentIds.length == students.length;
+
+                            return Column(
+                              children: [
+                                CheckboxListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 28),
+                                  title: const Text(
+                                    "Select All Students",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF334155)),
+                                  ),
+                                  value: allSelected,
+                                  activeColor: const Color(0xff1193D4),
+                                  onChanged: (val) {
+                                    setSheetState(() {
+                                      selectedStudentIds.clear();
+                                      if (val == true) {
+                                        selectedStudentIds.addAll(students.map((s) => s.studentId));
+                                      }
+                                    });
+                                  },
+                                ),
+                                const Divider(height: 1),
+                                Expanded(
+                                  child: ListView.separated(
+                                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
+                                    itemCount: students.length,
+                                    separatorBuilder: (_, __) => const Divider(height: 1),
+                                    itemBuilder: (context, idx) {
+                                      final s = students[idx];
+                                      final isSelected = selectedStudentIds.contains(s.studentId);
+                                      return CheckboxListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          s.studentName,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        ),
+                                        subtitle: Text("Roll No: ${s.rollNo} | Admission: ${s.admissionNo}"),
+                                        value: isSelected,
+                                        activeColor: const Color(0xff1193D4),
+                                        secondary: CircleAvatar(
+                                          radius: 18,
+                                          backgroundImage: s.imageUrl.isNotEmpty
+                                              ? NetworkImage(s.imageUrl)
+                                              : const AssetImage(ImageConstant.temporaryStudentImage) as ImageProvider,
+                                        ),
+                                        onChanged: (val) {
+                                          setSheetState(() {
+                                            if (val == true) {
+                                              selectedStudentIds.add(s.studentId);
+                                            } else {
+                                              selectedStudentIds.remove(s.studentId);
+                                            }
+                                          });
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(28.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(color: Colors.grey.shade300),
+                                ),
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Cancel", style: TextStyle(color: Color(0xFF475569))),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xff1193D4),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: 0,
+                                ),
+                                onPressed: isPromoting || selectedStudentIds.isEmpty || selectedTargetClass == null
+                                    ? null
+                                    : () async {
+                                        setSheetState(() => isPromoting = true);
+                                        try {
+                                          final studentCollectionRef = FirebaseFirestore.instance
+                                              .schoolCollection(FirebaseConstant.student);
+                                          final classRepo = ref.read(classWiseTeacherRepoProvider);
+
+                                          // 1. Reassign/Sync Teacher if changed
+                                          String finalTeacherId = selectedTargetClass!.teacherId;
+                                          String finalTeacherName = selectedTargetClass!.teacherName;
+
+                                          final oldTeacherId = selectedTargetClass!.teacherId;
+                                          final newTeacherId = selectedTeacherIdForTargetClass;
+
+                                          if (newTeacherId != oldTeacherId) {
+                                            // Clear old teacher if one was assigned
+                                            if (oldTeacherId.isNotEmpty) {
+                                              await FirebaseFirestore.instance
+                                                  .schoolCollection(FirebaseConstant.teacher)
+                                                  .doc(oldTeacherId)
+                                                  .update({
+                                                'classNo': 0,
+                                                'division': 'Nil',
+                                              });
+                                            }
+
+                                            if (newTeacherId != null && newTeacherId.isNotEmpty) {
+                                              final newTeacher = teachers.firstWhere((t) => t.id == newTeacherId);
+                                              finalTeacherId = newTeacherId;
+                                              finalTeacherName = newTeacher.teacherName;
+
+                                              // Update new teacher's class details
+                                              await FirebaseFirestore.instance
+                                                  .schoolCollection(FirebaseConstant.teacher)
+                                                  .doc(newTeacherId)
+                                                  .update({
+                                                'classNo': _classNoToInt(selectedTargetClass!.classNo),
+                                                'division': selectedTargetClass!.division,
+                                              });
+
+                                              // Sync new teacher to the target class doc
+                                              await classRepo.syncTeacherToClass(
+                                                oldClassNo: _classNoToString(newTeacher.classNo),
+                                                oldDivision: newTeacher.division,
+                                                newClassNo: selectedTargetClass!.classNo,
+                                                newDivision: selectedTargetClass!.division,
+                                                teacherId: newTeacherId,
+                                                teacherName: newTeacher.teacherName,
+                                              );
+                                            } else {
+                                              finalTeacherId = '';
+                                              finalTeacherName = '';
+
+                                              // Clear target class teacher
+                                              await classRepo.syncTeacherToClass(
+                                                oldClassNo: selectedTargetClass!.classNo,
+                                                oldDivision: selectedTargetClass!.division,
+                                                newClassNo: '',
+                                                newDivision: '',
+                                                teacherId: '',
+                                                teacherName: '',
+                                              );
+                                            }
+                                          }
+
+                                          // Fetch the current selected student details to sync correctly
+                                          final studentsSnap = await studentCollectionRef.get();
+                                          final selectedStudents = studentsSnap.docs
+                                              .where((doc) => selectedStudentIds.contains(doc.id))
+                                              .map((doc) => StudentsModel.fromMap(doc.data()))
+                                              .toList();
+
+                                          for (final s in selectedStudents) {
+                                            // 1. Update Student doc in Firestore
+                                            await studentCollectionRef.doc(s.studentId).update({
+                                              'classNo': _classNoToInt(selectedTargetClass!.classNo),
+                                              'division': selectedTargetClass!.division,
+                                              'teacherId': finalTeacherId,
+                                              'teacherName': finalTeacherName,
+                                            });
+
+                                            // 2. Sync to Classes subcollection/document using repo helper
+                                            await classRepo.syncStudentToClass(
+                                              oldClassNo: _classNoToString(s.classNo),
+                                              oldDivision: s.division,
+                                              newClassNo: selectedTargetClass!.classNo,
+                                              newDivision: selectedTargetClass!.division,
+                                              studentId: s.studentId,
+                                              studentName: s.studentName,
+                                              imageUrl: s.imageUrl,
+                                              rollNo: s.rollNo,
+                                            );
+                                          }
+
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  "Successfully promoted ${selectedStudentIds.length} students to ${selectedTargetClass!.classNo}-${selectedTargetClass!.division}",
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text("Promotion failed: $e")),
+                                            );
+                                          }
+                                        } finally {
+                                          setSheetState(() => isPromoting = false);
+                                        }
+                                      },
+                                child: isPromoting
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                      )
+                                    : const Text("Promote Selected"),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyDivisionCard(ClassModel classModel) {
+    return Container(
+      width: 160,
+      margin: const EdgeInsets.only(right: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xffFFFBEB),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.amber.shade100,
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.amber.shade700,
+                      size: 28,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(
+                      Icons.more_vert,
+                      size: 18,
+                      color: Colors.grey,
+                    ),
+                    onSelected: (value) {
+                      if (value == 'promote') {
+                        _showPromoteSheet(classModel);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'promote',
+                        child: Row(
+                          children: [
+                            Icon(Icons.trending_up_rounded,
+                                size: 16, color: Colors.green),
+                            SizedBox(width: 8),
+                            Text('Promote'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Section ${classModel.division}",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Unassigned",
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.amber,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 34,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xffFEF3C7),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () {
+                _showAssignmentDialog(
+                  prefilledClassNo: classModel.classNo,
+                  prefilledDivision: classModel.division,
+                );
+              },
+              child: const Text(
+                "Assign",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.amber,
+                ),
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final teachersAsync = ref.watch(teachersProvider);
+    final classesAsync = ref.watch(classesStreamProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xffF6F8FC),
@@ -381,7 +1464,7 @@ class _ClassWiseTeacherViewScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             /// ===================================================
-            /// TOP HEADER (Title + Button)
+            /// TOP HEADER (Title + Buttons)
             /// ===================================================
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -408,25 +1491,49 @@ class _ClassWiseTeacherViewScreenState
                   ],
                 ),
 
-                /// Assign Teacher Button
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xff2F80ED),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                /// Buttons Row
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff10B981),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        _showAddClassSheet();
+                      },
+                      icon: const Icon(Icons.add_circle_outline_rounded, size: 18, color: Colors.white),
+                      label: const Text(
+                        "Add Class",
+                        style: TextStyle(fontSize: 13, color: Colors.white),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    elevation: 0,
-                  ),
-                  onPressed: () {
-                    _showAssignmentDialog();
-                  },
-                  icon: const Icon(Icons.person_add_alt_1, size: 18),
-                  label: const Text(
-                    "Assign teacher",
-                    style: TextStyle(fontSize: 13),
-                  ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff2F80ED),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        _showAssignmentDialog();
+                      },
+                      icon: const Icon(Icons.person_add_alt_1, size: 18, color: Colors.white),
+                      label: const Text(
+                        "Assign teacher",
+                        style: TextStyle(fontSize: 13, color: Colors.white),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -434,166 +1541,297 @@ class _ClassWiseTeacherViewScreenState
             const SizedBox(height: 25),
 
             /// ===================================================
-            /// MAIN LISTVIEW (Dropdown Grades)
+            /// MAIN LISTVIEW
             /// ===================================================
             Expanded(
-              child: teachersAsync.when(
-                data: (teachers) {
+              child: classesAsync.when(
+                data: (classes) {
+                  return teachersAsync.when(
+                    data: (teachers) {
+                      final totalStaff = teachers.length;
+                      final assignedStaff = teachers.where((t) => t.classNo != 0).length;
 
-                  // ✅ REAL COUNTS
-                  final totalStaff = teachers.length;
-
-                  final assignedStaff =
-                      teachers.where((t) => t.classNo != 0).length;
-
-                  if (teachers.isEmpty) {
-                    return const Center(child: Text("No teachers found."));
-                  }
-
-                  /// 🔹 GROUP TEACHERS BY CLASS
-                  final Map<int, List<TeacherModel>> classGroups = {};
-                  for (final t in teachers) {
-                    classGroups.putIfAbsent(t.classNo, () => []).add(t);
-                  }
-
-                  /// 🔹 SORT CLASSES (class 0 goes LAST)
-                  final List<int> sortedClassList = classGroups.keys
-                      .where((c) => c != 0)
-                      .toList()
-                    ..sort();
-
-                  if (classGroups.containsKey(0)) {
-                    sortedClassList.add(0);
-                  }
-
-                  /// 🔹 AUTO EXPAND FIRST CLASS
-                  if (!_initialized && sortedClassList.isNotEmpty) {
-                    _expanded[sortedClassList.first] = true;
-                    _initialized = true;
-                  }
-
-                  return ListView.builder(
-                    itemCount: sortedClassList.length + 1,
-                    itemBuilder: (context, index) {
-                      /// ===================================================
-                      /// BOTTOM STAFF CARDS
-                      /// ===================================================
-                      if (index == sortedClassList.length) {
-                        return _buildBottomStaffCards(
-                          totalStaff: totalStaff,
-                          assignedStaff: assignedStaff,
-                        );
+                      final Map<String, List<ClassModel>> classGroups = {};
+                      for (final c in classes) {
+                        classGroups.putIfAbsent(c.classNo, () => []).add(c);
                       }
                       
-                      final classNo = sortedClassList[index];
-                      final classTeachers = classGroups[classNo]!
-                        ..sort((a, b) => a.division.compareTo(b.division));
+                      final sortedClassNos = classGroups.keys.toList()
+                        ..sort(_compareClassNos);
 
-                      final bool isOtherClass = classNo == 0;
+                      final otherTeachers = teachers.where((t) => t.classNo == 0).toList();
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            )
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            /// HEADER
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 15,
-                                      backgroundColor:
-                                      const Color(0xffEAF4FF),
-                                      child: Text(
-                                        isOtherClass ? "O" : "$classNo",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xff2F80ED),
+                      final int classCount = sortedClassNos.length;
+                      final bool hasOtherTeachers = otherTeachers.isNotEmpty;
+                      final int itemCount = classCount + (hasOtherTeachers ? 1 : 0) + 1;
+
+                      if (!_initialized && sortedClassNos.isNotEmpty) {
+                        _expanded[sortedClassNos.first] = true;
+                        _initialized = true;
+                      }
+
+                      if (classes.isEmpty && teachers.isEmpty) {
+                        return const Center(child: Text("No classes or teachers found."));
+                      }
+
+                      return ListView.builder(
+                        itemCount: itemCount,
+                        itemBuilder: (context, index) {
+                          // 1. Bottom staff cards
+                          if (index == itemCount - 1) {
+                            return _buildBottomStaffCards(
+                              totalStaff: totalStaff,
+                              assignedStaff: assignedStaff,
+                            );
+                          }
+
+                          // 2. Class cards
+                          if (index < classCount) {
+                            final classNo = sortedClassNos[index];
+                            final listForThisClass = classGroups[classNo]!;
+                            final classItem = listForThisClass.first;
+                            final bool isExpanded = _expanded[classNo] == true;
+
+                            listForThisClass.sort((a, b) => a.division.compareTo(b.division));
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  )
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  /// HEADER
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 15,
+                                            backgroundColor: const Color(0xffEAF4FF),
+                                            child: Text(
+                                              classNo,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xff2F80ED),
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                classItem.className.isEmpty ? "Grade $classNo" : classItem.className,
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                "${listForThisClass.length} Sections",
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit, color: Colors.grey, size: 18),
+                                            onPressed: () {
+                                              _showAddClassSheet(classNo, listForThisClass);
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                                            onPressed: () {
+                                              _showDeleteClassDialog(classNo, listForThisClass);
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: Icon(
+                                              isExpanded
+                                                  ? Icons.keyboard_arrow_up_rounded
+                                                  : Icons.keyboard_arrow_down_rounded,
+                                              color: Colors.grey,
+                                            ),
+                                            onPressed: () => setState(() {
+                                              _expanded[classNo] = !isExpanded;
+                                            }),
+                                          ),
+                                        ],
+                                      )
+                                    ],
+                                  ),
+
+                                  /// TEACHERS / DIVISIONS
+                                  if (isExpanded) ...[
+                                    const SizedBox(height: 18),
+                                    if (listForThisClass.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 8),
+                                        child: Text(
+                                          "No divisions registered. Edit class to add divisions.",
+                                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                                        ),
+                                      )
+                                    else
+                                      SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          children: listForThisClass.map((c) {
+                                            TeacherModel? matchingTeacher;
+                                            if (c.teacherId.isNotEmpty) {
+                                              for (final t in teachers) {
+                                                if (t.id == c.teacherId) {
+                                                  matchingTeacher = t;
+                                                  break;
+                                                }
+                                              }
+                                            }
+                                            if (matchingTeacher == null) {
+                                              final classNoInt = _classNoToInt(classNo);
+                                              for (final t in teachers) {
+                                                if (t.classNo == classNoInt && t.division == c.division) {
+                                                  matchingTeacher = t;
+                                                  break;
+                                                }
+                                              }
+                                            }
+
+                                            if (matchingTeacher != null) {
+                                              return _buildTeacherCard(matchingTeacher, false, c);
+                                            } else {
+                                              return _buildEmptyDivisionCard(c);
+                                            }
+                                          }).toList(),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 10),
+                                  ]
+                                ],
+                              ),
+                            );
+                          }
 
-                                    Column(
-                                      crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          isOtherClass
-                                              ? "Other Teachers"
-                                              : "Grade $classNo",
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          isOtherClass
-                                          ? '${classTeachers.length} Teachers'
-                                          : "${classTeachers.length} Sections",
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-
-                                IconButton(
-                                  icon: Icon(
-                                    _expanded[classNo] == true
-                                        ? Icons.keyboard_arrow_up_rounded
-                                        : Icons.keyboard_arrow_down_rounded,
-                                    color: Colors.grey,
-                                  ),
-                                  onPressed: () => setState(() {
-                                    _expanded[classNo] =
-                                    !(_expanded[classNo] ?? false);
-                                  }),
+                          // 3. Other Teachers section
+                          final bool isExpanded = _expanded["Other"] == true;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
                                 )
                               ],
                             ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                /// HEADER
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 15,
+                                          backgroundColor: const Color(0xffEAF4FF),
+                                          child: const Text(
+                                            "O",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xff2F80ED),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
 
-                            /// TEACHERS
-                            if (_expanded[classNo] == true) ...[
-                              const SizedBox(height: 18),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              "Other Teachers",
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${otherTeachers.length} Teachers',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
 
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: classTeachers.map((teacher) {
-                                    return _buildTeacherCard(
-                                      teacher,
-                                      isOtherClass,
-                                    );
-                                  }).toList(),
+                                    IconButton(
+                                      icon: Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up_rounded
+                                            : Icons.keyboard_arrow_down_rounded,
+                                        color: Colors.grey,
+                                      ),
+                                      onPressed: () => setState(() {
+                                        _expanded["Other"] = !isExpanded;
+                                      }),
+                                    )
+                                  ],
                                 ),
-                              ),
-                            ]
-                          ],
-                        ),
+
+                                /// TEACHERS
+                                if (isExpanded) ...[
+                                  const SizedBox(height: 18),
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: otherTeachers.map((teacher) {
+                                        return _buildTeacherCard(
+                                          teacher,
+                                          true,
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ]
+                              ],
+                            ),
+                          );
+                        },
                       );
                     },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text("Error: $e")),
                   );
                 },
-                loading: () =>
-                const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text("Error: $e")),
               ),
             ),
@@ -685,7 +1923,7 @@ class _ClassWiseTeacherViewScreenState
       ValueChanged<String?> onChanged,
       ) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items
           .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
           .toList(),
@@ -714,53 +1952,9 @@ class _ClassWiseTeacherViewScreenState
 
   /// Phone field
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Center(
-            child: Text(
-              '+91',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -841,7 +2035,7 @@ class _ClassWiseTeacherViewScreenState
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
               ),
@@ -887,7 +2081,7 @@ class _ClassWiseTeacherViewScreenState
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -1098,7 +2292,7 @@ class _ClassWiseTeacherViewScreenState
     );
   }
 
-  Widget _buildTeacherCard(TeacherModel teacher, bool isOtherClass) {
+  Widget _buildTeacherCard(TeacherModel teacher, bool isOtherClass, [ClassModel? classModel]) {
     return Container(
       width: 160,
       margin: const EdgeInsets.only(right: 14),
@@ -1188,13 +2382,25 @@ class _ClassWiseTeacherViewScreenState
                                           ),
                                           onPressed: () async {
                                             Navigator.pop(context);
+                                            final oldClassNo = _classNoToString(teacher.classNo);
+                                            final oldDivision = teacher.division;
+
                                             await FirebaseFirestore.instance
-                                                .collection(FirebaseConstant.teacher)
+                                                .schoolCollection(FirebaseConstant.teacher)
                                                 .doc(teacher.id)
                                                 .update({
                                               "classNo": 0,
                                               "division": "Nil",
                                             });
+
+                                            final repo = ref.read(classWiseTeacherRepoProvider);
+                                            await repo.syncTeacherToClass(
+                                              oldClassNo: oldClassNo,
+                                              oldDivision: oldDivision,
+                                              teacherId: teacher.id,
+                                              teacherName: teacher.teacherName,
+                                            );
+
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(content: Text("${teacher.teacherName} moved to unassigned staff")),
                                             );
@@ -1209,10 +2415,14 @@ class _ClassWiseTeacherViewScreenState
                             ),
                           ),
                         );
+                      } else if (value == 'promote') {
+                        if (classModel != null) {
+                          _showPromoteSheet(classModel);
+                        }
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
                         value: 'edit',
                         child: Row(
                           children: [
@@ -1223,7 +2433,7 @@ class _ClassWiseTeacherViewScreenState
                           ],
                         ),
                       ),
-                      PopupMenuItem(
+                      const PopupMenuItem(
                         value: 'remove',
                         child: Row(
                           children: [
@@ -1234,6 +2444,18 @@ class _ClassWiseTeacherViewScreenState
                           ],
                         ),
                       ),
+                      if (classModel != null)
+                        const PopupMenuItem(
+                          value: 'promote',
+                          child: Row(
+                            children: [
+                              Icon(Icons.trending_up_rounded,
+                                  size: 16, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text('Promote'),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1349,7 +2571,7 @@ class _ClassWiseTeacherViewScreenState
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 5),
           )

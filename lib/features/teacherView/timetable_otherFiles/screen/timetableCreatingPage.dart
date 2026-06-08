@@ -1,15 +1,12 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:scholo_admin/core/constant/firebase_constant.dart';
 
 import '../../../../models/daftTimetable_model.dart';
 import '../../../../models/dayShedule_model.dart';
 import '../../../../models/period_model.dart';
-import '../../../../models/teacher_model.dart';
 import '../../../../models/timeTable_model.dart';
 import '../controller/timetable_adding_controller.dart';
 import '../repository/timetable_adding_repository.dart';
@@ -177,7 +174,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
           teacherId: teachers?.map((t) => t['id']).join(', '),
           subject: teachers?.map((t) => t['subject']).join(' / '),
           colorValue: teachers?.isNotEmpty == true
-              ? (teachers!.first['color'] as Color).value
+              ? (teachers!.first['color'] as Color).toARGB32()
               : null,
         );
       }).toList();
@@ -342,7 +339,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
         int? slotColor;
         if (slot['color'] != null) {
           slotColor = slot['color'] is Color
-              ? (slot['color'] as Color).value
+              ? (slot['color'] as Color).toARGB32()
               : slot['color'];
         }
 
@@ -355,11 +352,9 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
           joinedNames = teachers.map((t) => t['name']).join(', ');
           joinedIds = teachers.map((t) => t['id']).join(', ');
           joinedSubjects = teachers.map((t) => t['subject']).join(' / ');
-          if (slotColor == null) {
-            slotColor = teachers.first['color'] is Color
-                ? (teachers.first['color'] as Color).value
+          slotColor ??= teachers.first['color'] is Color
+                ? (teachers.first['color'] as Color).toARGB32()
                 : teachers.first['color'];
-          }
         }
 
         return PeriodSlotModel(
@@ -556,7 +551,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                             CheckboxListTile(
                               contentPadding: EdgeInsets.zero,
                               secondary: CircleAvatar(
-                                backgroundColor: c.withOpacity(0.2),
+                                backgroundColor: c.withValues(alpha: 0.2),
                                 child: Text(ot.teacherName[0],
                                     style: TextStyle(color: c, fontWeight: FontWeight.bold)),
                               ),
@@ -682,7 +677,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
             // 4. Global Loading Overlay
             if (isLoading)
               Container(
-                color: Colors.white.withOpacity(0.6),
+                color: Colors.white.withValues(alpha: 0.6),
                 child: const Center(
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
@@ -906,7 +901,8 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
         (slot['assignedTeachers'] as List).isNotEmpty;
 
     return DragTarget<Map<String, dynamic>>(
-      onAccept: (draggedData) {
+      onAcceptWithDetails: (draggedDetails) {
+        final draggedData = draggedDetails.data;
         setState(() {
           if (draggedData.containsKey('sourceDay')) {
             final sourceDay = draggedData['sourceDay'];
@@ -1236,8 +1232,9 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
         if (slot['type'] == 'period') {
           totalPeriods++;
           if (slot.containsKey('assignedTeachers') &&
-              (slot['assignedTeachers'] as List).isNotEmpty)
+              (slot['assignedTeachers'] as List).isNotEmpty) {
             filledPeriods++;
+          }
         }
       }
     }
@@ -1792,7 +1789,7 @@ Widget _buildEmptySlotCard({VoidCallback? onTap}) {
       ),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC).withOpacity(0.5),
+          color: const Color(0xFFF8FAFC).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(

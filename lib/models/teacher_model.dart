@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 import 'otherTeacher_model.dart';
 
@@ -16,6 +17,7 @@ class TeacherModel {
   final String address;
   final String gender;
   final String imageUrl;
+  final String schoolId;
 
   final bool delete;
 
@@ -42,6 +44,7 @@ class TeacherModel {
     required this.delete,
     required this.createdDate,
     required this.dateOfBirth,
+    this.schoolId = '',
 
     this.otherTeachers,
     this.deletedDate,
@@ -63,6 +66,7 @@ class TeacherModel {
     String? address,
     String? gender,
     String? imageUrl,
+    String? schoolId,
     bool? delete,
     DateTime? createdDate,
     DateTime? dateOfBirth,
@@ -83,6 +87,7 @@ class TeacherModel {
       address: address ?? this.address,
       gender: gender ?? this.gender,
       imageUrl: imageUrl ?? this.imageUrl,
+      schoolId: schoolId ?? this.schoolId,
       delete: delete ?? this.delete,
       createdDate: createdDate ?? this.createdDate,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
@@ -109,6 +114,7 @@ class TeacherModel {
       'gender': gender,
       'imageUrl': imageUrl,
       'delete': delete,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       'createdDate': Timestamp.fromDate(createdDate),
 
@@ -118,9 +124,7 @@ class TeacherModel {
 
       'dateOfBirth': Timestamp.fromDate(dateOfBirth),
 
-      'otherTeachers': otherTeachers == null
-          ? null
-          : otherTeachers!.map((e) => e.toMap()).toList(),
+      'otherTeachers': otherTeachers?.map((e) => e.toMap()).toList(),
 
     };
   }
@@ -143,6 +147,7 @@ class TeacherModel {
       gender: map['gender'] ?? '',
       imageUrl: map['imageUrl'] ?? '',
       delete: map['delete'] ?? false,
+      schoolId: map['schoolId'] ?? '',
 
       createdDate: (map['createdDate'] as Timestamp).toDate(),
 

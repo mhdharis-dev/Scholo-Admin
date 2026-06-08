@@ -288,7 +288,7 @@ class _TooltipCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -487,10 +487,10 @@ class _RobotIllustration extends StatelessWidget {
           height: o.size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Color(o.color).withOpacity(o.opacity),
+            color: Color(o.color).withValues(alpha: o.opacity),
             boxShadow: [
               BoxShadow(
-                color: Color(o.color).withOpacity(0.35),
+                color: Color(o.color).withValues(alpha: 0.35),
                 blurRadius: 6,
                 spreadRadius: 1,
               ),
@@ -552,7 +552,7 @@ class _RobotPainter extends CustomPainter {
 
     // ── Shadow below body ───────────────────
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.12)
+      ..color = Colors.black.withValues(alpha: 0.12)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
     canvas.drawOval(
       Rect.fromCenter(
@@ -590,7 +590,7 @@ class _RobotPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(cx - 17, size.height * 0.40),
       3,
-      Paint()..color = Colors.white.withOpacity(0.7),
+      Paint()..color = Colors.white.withValues(alpha: 0.7),
     );
 
     // Right eye
@@ -599,7 +599,7 @@ class _RobotPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(cx + 27, size.height * 0.40),
       3,
-      Paint()..color = Colors.white.withOpacity(0.7),
+      Paint()..color = Colors.white.withValues(alpha: 0.7),
     );
 
     // ── Sad mouth ───────────────────────────
@@ -637,7 +637,7 @@ class _AlertBadge extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF4757).withOpacity(0.40),
+            color: const Color(0xFFFF4757).withValues(alpha: 0.40),
             blurRadius: 12,
             spreadRadius: 2,
           ),
@@ -671,7 +671,7 @@ class _PuzzleBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2ECC71).withOpacity(0.40),
+            color: const Color(0xFF2ECC71).withValues(alpha: 0.40),
             blurRadius: 14,
             spreadRadius: 2,
           ),

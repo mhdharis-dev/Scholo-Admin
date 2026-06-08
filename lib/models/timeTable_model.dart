@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 import 'dayShedule_model.dart';
 
 class TimetableModel {
@@ -13,6 +14,7 @@ class TimetableModel {
   final bool delete;
   final DateTime? deletedDate;
   final Map<String, DayScheduleModel> workingDays;
+  final String schoolId;
 
   const TimetableModel({
     required this.timetableName,
@@ -26,6 +28,7 @@ class TimetableModel {
     required this.delete,
     this.deletedDate,
     required this.workingDays,
+    this.schoolId = '',
   });
 
   TimetableModel copyWith({
@@ -40,6 +43,7 @@ class TimetableModel {
     bool? delete,
     DateTime? deletedDate,
     Map<String, DayScheduleModel>? workingDays,
+    String? schoolId,
   }) {
     return TimetableModel(
       timetableName: timetableName ?? this.timetableName,
@@ -53,6 +57,7 @@ class TimetableModel {
       delete: delete ?? this.delete,
       deletedDate: deletedDate ?? this.deletedDate,
       workingDays: workingDays ?? this.workingDays,
+      schoolId: schoolId ?? this.schoolId,
     );
   }
 
@@ -72,6 +77,7 @@ class TimetableModel {
       'deletedDate': deletedDate != null ? Timestamp.fromDate(deletedDate!) : null,
       // FIX: Convert the map of custom models into a map of JSON maps
       'workingDays': workingDays.map((key, value) => MapEntry(key, value.toMap())),
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
     };
   }
 
@@ -93,6 +99,7 @@ class TimetableModel {
       workingDays: (map['workingDays'] as Map<String, dynamic>?)?.map(
             (key, value) => MapEntry(key, DayScheduleModel.fromMap(value)),
       ) ?? {},
+      schoolId: map['schoolId'] ?? '',
     );
   }
 }

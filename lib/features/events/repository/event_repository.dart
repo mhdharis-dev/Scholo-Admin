@@ -9,7 +9,7 @@ class EventRepository {
   EventRepository(this._firestore);
 
   CollectionReference get _events =>
-      _firestore.collection(FirebaseConstant.events);
+      _firestore.schoolCollection(FirebaseConstant.events);
 
   /// Realtime events stream (only non-deleted)
   Stream<List<EventModel>> getEventsStream() {

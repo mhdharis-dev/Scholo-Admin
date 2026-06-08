@@ -43,7 +43,7 @@ final teacherProvider = StreamProvider.family<TeacherModel, String>((
   teacherId,
 ) {
   return FirebaseFirestore.instance
-      .collection(FirebaseConstant.teacher)
+      .schoolCollection(FirebaseConstant.teacher)
       .doc(teacherId)
       .snapshots()
       .map((snapshot) {
@@ -57,7 +57,7 @@ final teacherProvider = StreamProvider.family<TeacherModel, String>((
 final draftsProvider =
     StreamProvider.family<List<Map<String, dynamic>>, String>((ref, teacherId) {
       return FirebaseFirestore.instance
-          .collection(FirebaseConstant.draftTimetable) // Hardcoded per your model/logic
+          .schoolCollection(FirebaseConstant.draftTimetable) // Hardcoded per your model/logic
           .where('teacherId', isEqualTo: teacherId)
           .snapshots()
           .map(
@@ -711,7 +711,7 @@ class _TimeTableLayoutMakerPageState
     // FIX: Use FirebaseConstant.draftTimetable here
     if (currentDraftId != null) {
       FirebaseFirestore.instance
-          .collection(FirebaseConstant.draftTimetable)
+          .schoolCollection(FirebaseConstant.draftTimetable)
           .doc(currentDraftId)
           .delete();
       currentDraftId = null; // Clear it so it doesn't accidentally trigger again
@@ -756,7 +756,7 @@ class _TimeTableLayoutMakerPageState
           int? slotColor;
           if (slot['color'] != null) {
             slotColor = slot['color'] is Color
-                ? (slot['color'] as Color).value
+                ? (slot['color'] as Color).toARGB32()
                 : slot['color'];
           }
 
@@ -785,13 +785,13 @@ class _TimeTableLayoutMakerPageState
       if (currentDraftId != null) {
         // FIX: Use FirebaseConstant.draftTimetable
         await FirebaseFirestore.instance
-            .collection(FirebaseConstant.draftTimetable)
+            .schoolCollection(FirebaseConstant.draftTimetable)
             .doc(currentDraftId)
             .update(draftModel.toMap());
       } else {
         // FIX: Use FirebaseConstant.draftTimetable
         final docRef = await FirebaseFirestore.instance
-            .collection(FirebaseConstant.draftTimetable)
+            .schoolCollection(FirebaseConstant.draftTimetable)
             .add(draftModel.toMap());
         currentDraftId = docRef.id;
       }
@@ -949,8 +949,9 @@ class _TimeTableLayoutMakerPageState
             ),
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty)
+            if (value == null || value.trim().isEmpty) {
               return 'Please enter a name for the timetable';
+            }
             if (value.length < 3) return 'Name is too short';
             return null;
           },
@@ -979,10 +980,10 @@ class _TimeTableLayoutMakerPageState
                 radius: 12,
                 backgroundColor: const Color(0xFFD1C4E9),
                 backgroundImage:
-                    (teacher.imageUrl != null && teacher.imageUrl!.isNotEmpty)
-                    ? NetworkImage(teacher.imageUrl!)
+                    (teacher.imageUrl.isNotEmpty)
+                    ? NetworkImage(teacher.imageUrl)
                     : null,
-                child: (teacher.imageUrl == null || teacher.imageUrl!.isEmpty)
+                child: (teacher.imageUrl.isEmpty)
                     ? Text(
                         teacher.teacherName.isNotEmpty
                             ? teacher.teacherName[0].toUpperCase()
@@ -1041,7 +1042,7 @@ class _TimeTableLayoutMakerPageState
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1083,7 +1084,7 @@ class _TimeTableLayoutMakerPageState
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -1286,8 +1287,9 @@ class _TimeTableLayoutMakerPageState
                 context: context,
                 initialTime: _parseTime(slot['start']),
               );
-              if (picked != null)
+              if (picked != null) {
                 _updateTimeAndCascade(day, index, 'start', _formatTime(picked));
+              }
             },
             child: _timeColumn(slot['start'], "START TIME"),
           ),
@@ -1322,8 +1324,9 @@ class _TimeTableLayoutMakerPageState
                 context: context,
                 initialTime: _parseTime(slot['end']),
               );
-              if (picked != null)
+              if (picked != null) {
                 _updateTimeAndCascade(day, index, 'end', _formatTime(picked));
+              }
             },
             child: _timeColumn(
               slot['end'],
@@ -1384,8 +1387,9 @@ class _TimeTableLayoutMakerPageState
                 context: context,
                 initialTime: _parseTime(slot['start']),
               );
-              if (picked != null)
+              if (picked != null) {
                 _updateTimeAndCascade(day, index, 'start', _formatTime(picked));
+              }
             },
             child: Text(
               slot['start'],
@@ -1421,8 +1425,9 @@ class _TimeTableLayoutMakerPageState
                 context: context,
                 initialTime: _parseTime(slot['end']),
               );
-              if (picked != null)
+              if (picked != null) {
                 _updateTimeAndCascade(day, index, 'end', _formatTime(picked));
+              }
             },
             child: Text(
               slot['end'],
@@ -1499,8 +1504,9 @@ class _TimeTableLayoutMakerPageState
     });
 
     double completionPercentage = 0.0;
-    if (workingDaysCount > 0)
+    if (workingDaysCount > 0) {
       completionPercentage = completedWorkingDays / workingDaysCount;
+    }
 
     String totalWeeklyTimeStr =
         "${totalWeeklyMinutes ~/ 60}h ${totalWeeklyMinutes % 60}m";
@@ -1699,7 +1705,7 @@ class _TimeTableLayoutMakerPageState
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withOpacity(0.1)),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

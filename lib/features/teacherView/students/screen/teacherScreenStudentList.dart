@@ -1,31 +1,35 @@
+import 'dart:developer';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scholo_admin/features/teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
+import 'package:scholo_admin/core/widgets/phone_field.dart';
 
 import '../../../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/students_model.dart';
 
-class TeacherScreenStudentList extends StatefulWidget {
+class TeacherScreenStudentList extends ConsumerStatefulWidget {
   final String teacherId; // ✅ TeacherId from previous page
 
   const TeacherScreenStudentList({super.key, required this.teacherId});
 
   @override
-  State<TeacherScreenStudentList> createState() =>
+  ConsumerState<TeacherScreenStudentList> createState() =>
       _TeacherScreenStudentListState();
 }
 
-class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
+class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentList> {
   // Controllers
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -38,6 +42,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
   final _dayController = TextEditingController();
   final _monthController = TextEditingController();
   final _yearController = TextEditingController();
+  final _searchController = TextEditingController();
 
   File? _selectedFile;
   String? _uploadedImageUrl;
@@ -50,6 +55,10 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
   String? _division;
 
   StudentsModel? editingStudent;
+
+  // New State variables for redesign
+  DateTime _selectedDate = DateTime.now();
+  String _selectedFilter = 'All'; // 'All', 'Present', 'Absent'
 
   @override
   void initState() {
@@ -87,13 +96,14 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     _dayController.dispose();
     _monthController.dispose();
     _yearController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   /// 🔹 Fetch Teachers List
   Future<void> _fetchTeachers() async {
     final doc = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(widget.teacherId)
         .get();
 
@@ -107,6 +117,13 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
         _division = data['division'];
       });
     }
+  }
+
+  String _classNoToString(int classNoInt) {
+    if (classNoInt == -2) return 'LKG';
+    if (classNoInt == -1) return 'UKG';
+    if (classNoInt == 0) return 'Other';
+    return classNoInt.toString();
   }
 
   Future<String> _uploadToCloudinary(File file) async {
@@ -193,53 +210,9 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
 
   /// 🔹 Phone Field
   Widget _buildPhoneField() {
-    return Row(
-      children: [
-        Container(
-          width: 70,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: const Center(
-            child: Text(
-              '+91',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: TextField(
-            controller: _mobileController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(10),
-            ],
-            decoration: InputDecoration(
-              labelText: 'Mobile No',
-              labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return CountryPhoneField(
+      controller: _mobileController,
+      labelText: 'Mobile No',
     );
   }
 
@@ -251,7 +224,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     ValueChanged<String?> onChanged,
   ) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       items: items.map((e) {
         return DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)));
       }).toList(),
@@ -353,7 +326,6 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
       _selectedGender = null;
       _uploadedImageUrl = null;
       _selectedFile = null;
-      // Note: _selectedTeacherName, _selectedTeacherId, _classNo, _division are pre-set for this teacher
     }
 
     showModalBottomSheet(
@@ -372,7 +344,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
               ),
@@ -418,22 +390,22 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        child: CircleAvatar(
-                          radius: 54,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: _selectedFile != null
-                              ? FileImage(_selectedFile!)
-                              : (_uploadedImageUrl != null
-                                    ? NetworkImage(_uploadedImageUrl!)
-                                    : const AssetImage(ImageConstant.temporaryStudentImage)
-                                  as ImageProvider),
-                        ),
+                      ),
+                      CircleAvatar(
+                        radius: 54,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: _selectedFile != null
+                            ? FileImage(_selectedFile!)
+                            : (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty
+                                  ? NetworkImage(_uploadedImageUrl!)
+                                  : const AssetImage(ImageConstant.temporaryStudentImage)
+                                as ImageProvider),
                       ),
                       Positioned(
                         bottom: 4,
@@ -540,12 +512,36 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                           createdDate: editingStudent?.createdDate ?? DateTime.now(),
                         );
 
-                        final ref = FirebaseFirestore.instance.collection(FirebaseConstant.student);
+                        final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
+                        final classRepo = ref.read(classWiseTeacherRepoProvider);
+                        String studentId = '';
                         if (editingStudent != null) {
-                          await ref.doc(editingStudent!.studentId).update(newStudent.toMap());
+                          studentId = editingStudent!.studentId;
+                          await studentCollectionRef.doc(studentId).update(newStudent.toMap());
+
+                          await classRepo.syncStudentToClass(
+                            oldClassNo: _classNoToString(editingStudent!.classNo),
+                            oldDivision: editingStudent!.division,
+                            newClassNo: _classNoToString(newStudent.classNo),
+                            newDivision: newStudent.division,
+                            studentId: studentId,
+                            studentName: newStudent.studentName,
+                            imageUrl: newStudent.imageUrl,
+                            rollNo: newStudent.rollNo,
+                          );
                         } else {
-                          final doc = await ref.add(newStudent.toMap());
-                          await doc.update({'studentId': doc.id});
+                          final doc = await studentCollectionRef.add(newStudent.toMap());
+                          studentId = doc.id;
+                          await doc.update({'studentId': studentId});
+
+                          await classRepo.syncStudentToClass(
+                            newClassNo: _classNoToString(newStudent.classNo),
+                            newDivision: newStudent.division,
+                            studentId: studentId,
+                            studentName: newStudent.studentName,
+                            imageUrl: newStudent.imageUrl,
+                            rollNo: newStudent.rollNo,
+                          );
                         }
 
                         if (context.mounted) {
@@ -592,7 +588,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
                   ),
@@ -630,7 +626,7 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
                           Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xff1193D4).withOpacity(0.2), width: 4),
+                              border: Border.all(color: const Color(0xff1193D4).withValues(alpha: 0.2), width: 4),
                             ),
                             child: CircleAvatar(
                               radius: 50,
@@ -763,22 +759,192 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
     );
   }
 
-  //===========================================================
-  //====================== UI BUILD ============================
-  //===========================================================
+  // Soft Delete Dialog & Function
+  void _deleteStudent(BuildContext context, StudentsModel student) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Delete Student"),
+        content: Text("Are you sure you want to delete ${student.studentName}? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                // 1. Soft delete in student collection
+                await FirebaseFirestore.instance
+                    .schoolCollection(FirebaseConstant.student)
+                    .doc(student.studentId)
+                    .update({
+                      'delete': true,
+                      'deletedAt': FieldValue.serverTimestamp(),
+                    });
+
+                // 2. Sync to Classes collection (which decrements count)
+                final classRepo = ref.read(classWiseTeacherRepoProvider);
+                await classRepo.syncStudentToClass(
+                  oldClassNo: _classNoToString(student.classNo),
+                  oldDivision: student.division,
+                  studentId: student.studentId,
+                  studentName: student.studentName,
+                  imageUrl: student.imageUrl,
+                  rollNo: student.rollNo,
+                  isDeleted: true,
+                );
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Student deleted successfully")),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Error deleting student: $e")),
+                  );
+                }
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Attendance Toggle Cycle: Unmarked (Absent/null) -> Present -> Absent -> Unmarked
+  Future<void> _toggleStudentAttendance(String studentId, StudentsModel student, String? currentStatus) async {
+    String newStatus;
+    String newPresentDetail;
+
+    if (currentStatus == null) {
+      newStatus = "Morning & Evening";
+      newPresentDetail = "Full Day";
+    } else if (currentStatus == "Absent") {
+      newStatus = "Unmarked";
+      newPresentDetail = "";
+    } else {
+      newStatus = "Absent";
+      newPresentDetail = "Absent";
+    }
+
+    final dateId = " ${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}";
+    final docRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.attendance).doc(dateId);
+
+    try {
+      final docSnap = await docRef.get();
+      List<dynamic> attendanceList = [];
+      Map<String, dynamic> docData = {};
+
+      if (docSnap.exists) {
+        docData = Map<String, dynamic>.from(docSnap.data()!);
+      }
+
+      final classKey = _classNo ?? '0';
+      final classDiv = (_division ?? 'Not').toUpperCase();
+
+      if (docData[classKey] != null && docData[classKey][classDiv] != null) {
+        attendanceList = List<dynamic>.from(docData[classKey][classDiv]);
+      }
+
+      // Remove existing record for studentId
+      attendanceList.removeWhere((item) => item['studentId'] == studentId);
+
+      if (newStatus != "Unmarked") {
+        // Add updated record
+        final record = {
+          'classNo': int.parse(_classNo ?? '0'),
+          'rollNo': student.rollNo,
+          'studentId': student.studentId,
+          'division': student.division,
+          'studentName': student.studentName,
+          'teacherName': _selectedTeacherName ?? '',
+          'status': newStatus,
+          'presentDetail': newPresentDetail,
+          'teacherId': widget.teacherId,
+          'date': Timestamp.fromDate(_selectedDate),
+          'schoolId': '',
+        };
+        attendanceList.add(record);
+      }
+
+      // Build updated payload
+      if (docData[classKey] == null) {
+        docData[classKey] = {};
+      }
+      docData[classKey][classDiv] = attendanceList;
+
+      await docRef.set(docData, SetOptions(merge: true));
+    } catch (e) {
+      log("Error toggling attendance: $e");
+    }
+  }
+
+  Widget _filterTab(
+    String label,
+    bool isSelected,
+    Color activeColor,
+    VoidCallback onTap, {
+    IconData? icon,
+  }) {
+    final isBlueTab = label == "All";
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xff1193D4) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xff1193D4) : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : activeColor,
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : (isBlueTab ? Colors.grey.shade700 : activeColor),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final dateId = " ${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}";
+
     return Scaffold(
       backgroundColor: const Color(0xffF6F8FC),
 
       /// Floating Add Button
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xff4C6FFF),
+        shape: const CircleBorder(),
+        backgroundColor: const Color(0xff1193D4),
         onPressed: () {
           _openStudentDialog(); // ✅ Add Student
         },
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.person_add_alt_1, color: Colors.white),
       ),
 
       body: Padding(
@@ -786,168 +952,430 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 15),
+            // Top Navigation Title Bar
+            Row(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                      )
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                    onPressed: () => context.pop(),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  "Students & Class View",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
+            // Class Teacher & Dropdowns Card
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Class Teacher:${_selectedTeacherName ?? ''}",
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff1193D4),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Class Overview",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      // CLASS SELECTOR/DISPLAY
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.grey.shade100),
+                          ),
+                          child: Row(
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("CLASS", style: TextStyle(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Class ${_classNo != null ? _classNoToString(int.tryParse(_classNo!) ?? 0) : ''}-${_division ?? ''}",
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              const Icon(Icons.keyboard_arrow_down, color: Colors.blue),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // DATE PICKER
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _selectedDate,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                _selectedDate = picked;
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xffF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.grey.shade100),
+                            ),
+                            child: Row(
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text("DATE", style: TextStyle(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      DateFormat("MMM dd, yyyy").format(_selectedDate),
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                const Spacer(),
+                                const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.blue),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  /// 🔹 Left: Assigned Teacher
-                  Row(
-                    children: [
-                      Container(
-                        height: 36,
-                        width: 36,
-                        decoration: BoxDecoration(
-                          color: const Color(0xffEEF3FF),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.person,
-                          color: Color(0xff4C6FFF),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
+            ),
+            const SizedBox(height: 20),
+
+            // Nested Streams for Attendance Document and Students
+            Expanded(
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .schoolCollection(FirebaseConstant.attendance)
+                    .doc(dateId)
+                    .snapshots(),
+                builder: (context, attendanceSnapshot) {
+                  // Map of studentId -> status
+                  final attendanceMap = <String, String>{};
+                  if (attendanceSnapshot.hasData && attendanceSnapshot.data!.exists) {
+                    try {
+                      final docData = attendanceSnapshot.data!.data() as Map<String, dynamic>;
+                      final classKey = _classNo ?? '0';
+                      final classDiv = (_division ?? 'Not').toUpperCase();
+                      if (docData[classKey] != null && docData[classKey][classDiv] != null) {
+                        final list = docData[classKey][classDiv] as List<dynamic>;
+                        for (var item in list) {
+                          attendanceMap[item['studentId']] = item['status'] ?? 'Absent';
+                        }
+                      }
+                    } catch (e) {
+                      log("Error parsing attendance stream: $e");
+                    }
+                  }
+
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .schoolCollection(FirebaseConstant.student)
+                        .where("teacherId", isEqualTo: widget.teacherId)
+                        .where("delete", isEqualTo: false)
+                        .orderBy("rollNo")
+                        .snapshots(),
+                    builder: (context, studentSnapshot) {
+                      if (!studentSnapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final docs = studentSnapshot.data!.docs;
+                      final totalStudents = docs.length;
+
+                      // Count present and absent
+                      int presentCount = 0;
+                      int absentCount = 0;
+                      
+                      final allStudents = docs.map((doc) {
+                        final s = StudentsModel.fromMap(doc.data() as Map<String, dynamic>);
+                        final status = attendanceMap[s.studentId];
+                        if (status != null && status != 'Absent') {
+                          presentCount++;
+                        } else if (status == 'Absent') {
+                          absentCount++;
+                        }
+                        return s;
+                      }).toList();
+
+                      final attendancePercentage = totalStudents > 0
+                          ? ((presentCount / totalStudents) * 100).round()
+                          : 0;
+
+                      // Apply search query and filter tab
+                      final query = _searchController.text.trim().toLowerCase();
+                      var filteredStudents = allStudents;
+
+                      if (query.isNotEmpty) {
+                        filteredStudents = filteredStudents.where((s) {
+                          return s.studentName.toLowerCase().contains(query) ||
+                              s.rollNo.toString().contains(query);
+                        }).toList();
+                      }
+
+                      if (_selectedFilter != 'All') {
+                        filteredStudents = filteredStudents.where((s) {
+                          final status = attendanceMap[s.studentId];
+                          if (_selectedFilter == 'Present') {
+                            return status != null && status != 'Absent';
+                          } else {
+                            return status == 'Absent';
+                          }
+                        }).toList();
+                      }
+
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "ASSIGNED TEACHER",
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey,
-                              letterSpacing: 1,
+                          // Class Overview Card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "Class Overview",
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "${DateFormat("MMM dd, yyyy").format(_selectedDate)} • ${DateFormat("EEEE").format(_selectedDate)}",
+                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      "$attendancePercentage% Attendance",
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xff1193D4),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                // Split Progress Bar
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: SizedBox(
+                                    height: 8,
+                                    child: Row(
+                                      children: [
+                                        if (presentCount > 0)
+                                          Expanded(
+                                            flex: presentCount,
+                                            child: Container(color: Colors.green),
+                                          ),
+                                        if (absentCount > 0)
+                                          Expanded(
+                                            flex: absentCount,
+                                            child: Container(color: Colors.redAccent),
+                                          ),
+                                        if (presentCount == 0 && absentCount == 0)
+                                          Expanded(
+                                            child: Container(color: Colors.grey.shade200),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.green,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "$presentCount Present",
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.redAccent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "$absentCount Absent",
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _selectedTeacherName ?? "Loading...",
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(height: 20),
+
+                          // Search Bar
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade100),
                             ),
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: (val) {
+                                setState(() {});
+                              },
+                              decoration: InputDecoration(
+                                hintText: "Search students or roll no ...",
+                                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                                prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
+                                border: InputBorder.none,
+                                fillColor : Colors.transparent,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Filter Tabs
+                          Row(
+                            children: [
+                              _filterTab("All", _selectedFilter == "All", Colors.blue, () {
+                                setState(() => _selectedFilter = "All");
+                              }),
+                              const SizedBox(width: 10),
+                              _filterTab("Present", _selectedFilter == "Present", Colors.green, () {
+                                setState(() => _selectedFilter = "Present");
+                              }, icon: Icons.check_circle_outline),
+                              const SizedBox(width: 10),
+                              _filterTab("Absent", _selectedFilter == "Absent", Colors.redAccent, () {
+                                setState(() => _selectedFilter = "Absent");
+                              }, icon: Icons.cancel_outlined),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Students Title
+                          const Text(
+                            "Students Details",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // List View
+                          Expanded(
+                            child: filteredStudents.isEmpty
+                                ? const Center(child: Text("No Students Found"))
+                                : ListView.builder(
+                                    itemCount: filteredStudents.length,
+                                    itemBuilder: (context, index) {
+                                      final student = filteredStudents[index];
+                                      final attStatus = attendanceMap[student.studentId];
+
+                                      return studentCard(
+                                        student: student,
+                                        attendanceStatus: attStatus,
+                                        onView: () {
+                                          showStudentDetailsModal(context, student);
+                                        },
+                                        onEdit: () {
+                                          _openStudentDialog(student);
+                                        },
+                                        onDelete: () {
+                                          _deleteStudent(context, student);
+                                        },
+                                        onToggleAttendance: () {
+                                          _toggleStudentAttendance(student.studentId, student, attStatus);
+                                        },
+                                      );
+                                    },
+                                  ),
                           ),
                         ],
-                      ),
-                    ],
-                  ),
-
-                  /// 🔹 Right: Date + Class Filter (UI only)
-                  Row(
-                    children: [
-                      /// Date Button
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(
-                              Icons.calendar_today,
-                              size: 14,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              "October 24, 2023",
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      /// Class Filter Button
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(
-                              Icons.filter_list,
-                              size: 14,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(width: 6),
-                            Text("All Classes", style: TextStyle(fontSize: 12)),
-                            SizedBox(width: 4),
-                            Icon(Icons.keyboard_arrow_down, size: 16),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Students Details",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// ✅ REALTIME STUDENT LIST
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection(FirebaseConstant.student)
-                    .where("teacherId", isEqualTo: widget.teacherId)
-                    .where("delete", isEqualTo: false)
-                    .orderBy("rollNo")
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final docs = snapshot.data!.docs;
-
-                  if (docs.isEmpty) {
-                    return const Center(child: Text("No Students Found"));
-                  }
-
-                  return ListView.builder(
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final student = StudentsModel.fromMap(
-                        docs[index].data() as Map<String, dynamic>,
-                      );
-
-                      return studentCard(
-                        student: student,
-                        onView: () {
-                          showStudentDetailsModal(context, student);
-                        },
-                        onEdit: () {
-                          _openStudentDialog(student);
-                        },
                       );
                     },
                   );
@@ -963,152 +1391,177 @@ class _TeacherScreenStudentListState extends State<TeacherScreenStudentList> {
 
 Widget studentCard({
   required StudentsModel student,
+  required String? attendanceStatus,
   required VoidCallback onView,
   required VoidCallback onEdit,
+  required VoidCallback onDelete,
+  required VoidCallback onToggleAttendance,
 }) {
   return Container(
     margin: const EdgeInsets.only(bottom: 16),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 12,
           offset: const Offset(0, 6),
         ),
       ],
     ),
-    child: Row(
-      children: [
-        /// 🔹 Profile Image + Roll Badge
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: student.imageUrl.isNotEmpty
-                  ? NetworkImage(student.imageUrl)
-                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                        as ImageProvider,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: attendanceStatus == null
+                  ? Colors.grey.shade300
+                  : (attendanceStatus == "Absent" ? Colors.redAccent : Colors.green),
+              width: 6,
             ),
-
-            /// Roll Number Badge
-            Positioned(
-              top: -4,
-              left: -4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xff4C6FFF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  "#${student.rollNo}",
-                  style: const TextStyle(
-                    fontSize: 9,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-
-        const SizedBox(width: 16),
-
-        /// 🔹 Name + Pills
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                student.studentName,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            /// 🔹 Profile Image + Status Badge on bottom right
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  onTap: onToggleAttendance,
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.grey.shade200,
+                    backgroundImage: student.imageUrl.isNotEmpty
+                        ? NetworkImage(student.imageUrl)
+                        : const AssetImage(ImageConstant.temporaryStudentImage)
+                              as ImageProvider,
+                  ),
                 ),
-              ),
-
-              const SizedBox(height: 6),
-
-              Row(
-                children: [
-                  /// Class Pill
-                  pillWidget(
-                    text: "Class ${student.classNo}-${student.division}",
-                    bg: const Color(0xffEEF3FF),
-                    textColor: const Color(0xff4C6FFF),
+                if (attendanceStatus != null)
+                  Positioned(
+                    bottom: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: attendanceStatus == "Absent" ? Colors.redAccent : Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Icon(
+                        attendanceStatus == "Absent" ? Icons.close : Icons.check,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
 
-                  const SizedBox(width: 8),
+                /// Roll Number Badge on top left
+                Positioned(
+                  top: -4,
+                  left: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xff4C6FFF),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      "#${student.rollNo}",
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
-                  /// Status Pill
-                  pillWidget(
-                    text: "Active",
-                    bg: Colors.green.withOpacity(0.15),
-                    textColor: Colors.green,
+            const SizedBox(width: 16),
+
+            /// 🔹 Name + Roll
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    student.studentName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Roll No. #${student.rollNo.toString().padLeft(3, '0')}",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade500,
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+
+            /// 🔹 Actions (View, Edit, Delete)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // View Profile Icon
+                Container(
+                  height: 36,
+                  width: 36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xff1193D4),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.remove_red_eye, size: 16, color: Colors.white),
+                    onPressed: onView,
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Edit Icon
+                Container(
+                  height: 36,
+                  width: 36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xffEEF3FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.edit, size: 16, color: Color(0xff1193D4)),
+                    onPressed: onEdit,
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Delete Icon
+                Container(
+                  height: 36,
+                  width: 36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xffFEE2E2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                    onPressed: onDelete,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-
-        /// 🔹 View Profile
-        TextButton.icon(
-          onPressed: onView,
-          icon: const Icon(
-            Icons.remove_red_eye_outlined,
-            size: 18,
-            color: Colors.grey,
-          ),
-          label: const Text(
-            "View profile",
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ),
-
-        const SizedBox(width: 6),
-
-        /// 🔹 Edit Button
-        Container(
-          height: 36,
-          width: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xffEEF3FF),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.edit, size: 18, color: Color(0xff4C6FFF)),
-            onPressed: onEdit,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget pillWidget({
-  required String text,
-  required Color bg,
-  required Color textColor,
-}) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: textColor,
       ),
     ),
   );

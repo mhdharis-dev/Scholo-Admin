@@ -13,7 +13,7 @@ class TeacherDashbordRepository {
   /// Get teacher by id
   Future<TeacherModel?> getTeacher(String teacherId) async {
     final doc = await _db
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .get();
     if (!doc.exists) return null;
@@ -23,7 +23,7 @@ class TeacherDashbordRepository {
   /// Count total students for a teacher
   Future<int> getTotalStudents(String teacherId) async {
     final snap = await _db
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .where('teacherId', isEqualTo: teacherId)
         .get();
@@ -32,7 +32,7 @@ class TeacherDashbordRepository {
 
   /// Stream fees for this teacher (flattened)
   Stream<List<Map<String, dynamic>>> getFees(String teacherId) {
-    return _db.collection(FirebaseConstant.fees).snapshots().map((snap) {
+    return _db.schoolCollection(FirebaseConstant.fees).snapshots().map((snap) {
       final List<Map<String, dynamic>> result = [];
       for (final doc in snap.docs) {
         final root = doc.data();
@@ -61,7 +61,7 @@ class TeacherDashbordRepository {
 
   /// Get fee descriptions (doc ids) for suggestions
   Future<List<String>> getFeeDescriptions() async {
-    final snap = await _db.collection(FirebaseConstant.fees).get();
+    final snap = await _db.schoolCollection(FirebaseConstant.fees).get();
     return snap.docs.map((d) => d.id).toList();
   }
 
@@ -72,7 +72,7 @@ class TeacherDashbordRepository {
   Future<Map<String, int>> getTodayAttendanceCounts(String teacherId) async {
     // 1) get teacher (to obtain classNo + division)
     final teacherDoc = await _db
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .get();
     if (!teacherDoc.exists) {
@@ -88,7 +88,7 @@ class TeacherDashbordRepository {
         " ${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
 
     final doc = await _db
-        .collection(FirebaseConstant.attendance)
+        .schoolCollection(FirebaseConstant.attendance)
         .doc(dateId)
         .get();
     if (!doc.exists) return {'present': 0, 'absent': 0};
@@ -138,7 +138,7 @@ class TeacherDashbordRepository {
 
   /// Save Fee using FeeModel
   Future<void> saveFee(FeeModel fee) async {
-    await _db.collection(FirebaseConstant.fees).doc(fee.description).set({
+    await _db.schoolCollection(FirebaseConstant.fees).doc(fee.description).set({
       fee.classNo.toString(): {fee.division: fee.toMap()},
     }, SetOptions(merge: true));
   }
@@ -147,7 +147,7 @@ class TeacherDashbordRepository {
   /// ✅ Stream Other Teachers List
   Stream<List<OtherTeacherModel>> streamOtherTeachers(String teacherId) {
     return _db
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .doc(teacherId)
         .snapshots()
         .map((doc) {

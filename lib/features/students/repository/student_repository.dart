@@ -11,7 +11,7 @@ class StudentRepository {
   /// 🔹 Stream all students (excluding deleted)
   Stream<List<StudentsModel>> streamStudents() {
     return _firestore
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .snapshots()
         .map((snap) => snap.docs
@@ -22,7 +22,7 @@ class StudentRepository {
   /// 🔹 Fetch all teachers for dropdown
   Future<List<Map<String, dynamic>>> fetchTeachers() async {
     final snapshot = await _firestore
-        .collection(FirebaseConstant.teacher)
+        .schoolCollection(FirebaseConstant.teacher)
         .where('delete', isEqualTo: false)
         .get();
 
@@ -41,7 +41,7 @@ class StudentRepository {
 
   /// 🔹 Save or Update Student
   Future<void> saveStudent(StudentsModel model) async {
-    final ref = _firestore.collection(FirebaseConstant.student);
+    final ref = _firestore.schoolCollection(FirebaseConstant.student);
 
     if (model.studentId.isEmpty) {
       final doc = await ref.add(model.toMap());
@@ -54,7 +54,7 @@ class StudentRepository {
   /// 🔹 Soft Delete
   Future<void> deleteStudent(String id) async {
     await _firestore
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .doc(id)
         .update({'delete': true, "deletedAt": FieldValue.serverTimestamp(),});
   }

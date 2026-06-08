@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +34,7 @@ class OtherFilesRepository {
 
     /// 2️⃣ Create Firestore Document Reference
     final doc = _firestore
-        .collection(FirebaseConstant.otherFile)
+        .schoolCollection(FirebaseConstant.otherFile)
         .doc();
 
     /// 3️⃣ Create Model instance

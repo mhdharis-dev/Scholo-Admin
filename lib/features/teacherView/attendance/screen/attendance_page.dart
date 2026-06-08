@@ -80,7 +80,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12.withOpacity(0.05),
+            color: Colors.black12.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )

@@ -12,7 +12,7 @@ class TimetableAndOtherFilesPageRepository {
   /// 🔥 Get otherFiles (Latest First)
   Stream<List<OtherFilesModel>> getOtherFiles(String teacherId) {
     return _firestore
-        .collection(FirebaseConstant.otherFile)
+        .schoolCollection(FirebaseConstant.otherFile)
         .where('teacherId', isEqualTo: teacherId)
         .where('delete', isEqualTo: false)
         .orderBy('uploadedAt', descending: true)
@@ -25,7 +25,7 @@ class TimetableAndOtherFilesPageRepository {
   /// 🔥 Soft Delete Other Files
   Future<void> softDeleteOtherFiles(String id) async {
     await _firestore
-        .collection(FirebaseConstant.otherFile)
+        .schoolCollection(FirebaseConstant.otherFile)
         .doc(id)
         .update({
       'delete': true,
@@ -36,7 +36,7 @@ class TimetableAndOtherFilesPageRepository {
   /// 🔥 Update Title
   Future<void> updateTitleOtherFiles(String id, String newTitle) async {
     await _firestore
-        .collection(FirebaseConstant.otherFile)
+        .schoolCollection(FirebaseConstant.otherFile)
         .doc(id)
         .update({
       'tittle': newTitle, // Note: Ensure 'tittle' isn't a typo for 'title' in Firestore
@@ -46,7 +46,7 @@ class TimetableAndOtherFilesPageRepository {
   /// 🔥 Get timetable (Latest First)
   Stream<List<TimetableModel>> getTimeTables(String classNo, String division, String teacherId) {
     return _firestore
-        .collection(FirebaseConstant.timetable)
+        .schoolCollection(FirebaseConstant.timetable)
         .doc(classNo) // Target the document ID directly (e.g., "12")
         .snapshots()
         .map((doc) {
@@ -78,7 +78,7 @@ class TimetableAndOtherFilesPageRepository {
   /// 🔥 Soft Delete Timetable
   Future<void> softDeleteTimeTables(String id) async {
     await _firestore
-        .collection(FirebaseConstant.timetable)
+        .schoolCollection(FirebaseConstant.timetable)
         .doc(id)
         .update({
       'delete': true,

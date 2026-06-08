@@ -21,7 +21,7 @@ class AttendanceRepository {
   // -----------------------------------------------------
   Future<TeacherModel> fetchTeacher(String teacherId) async {
     final doc =
-    await _fire.collection(FirebaseConstant.teacher).doc(teacherId).get();
+    await _fire.schoolCollection(FirebaseConstant.teacher).doc(teacherId).get();
 
     if (!doc.exists) {
       throw Exception("Teacher not found");
@@ -35,7 +35,7 @@ class AttendanceRepository {
   // -----------------------------------------------------
   Future<List<StudentsModel>> fetchStudents(TeacherModel teacher) async {
     final snap = await _fire
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where('delete', isEqualTo: false)
         .where('classNo', isEqualTo: teacher.classNo)
         .where('division', isEqualTo: teacher.division.toUpperCase())
@@ -59,7 +59,7 @@ class AttendanceRepository {
         " ${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}";
 
     final doc =
-    await _fire.collection(FirebaseConstant.attendance).doc(dateId).get();
+    await _fire.schoolCollection(FirebaseConstant.attendance).doc(dateId).get();
 
     if (!doc.exists) return {};
 
@@ -102,7 +102,7 @@ class AttendanceRepository {
     };
 
     await _fire
-        .collection(FirebaseConstant.attendance)
+        .schoolCollection(FirebaseConstant.attendance)
         .doc(dateId)
         .set(payload, SetOptions(merge: true));
   }

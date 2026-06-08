@@ -34,7 +34,7 @@ class _FeeCollectionPageState extends ConsumerState<FeeCollectionPage> {
   // 🔥 Fetch full student details
   Future<void> _fetchStudentDetails() async {
     final snapshot = await FirebaseFirestore.instance
-        .collection(FirebaseConstant.student)
+        .schoolCollection(FirebaseConstant.student)
         .where("delete", isEqualTo: false)
         .where("teacherId", isEqualTo: widget.teacherId)
         .get();
@@ -216,7 +216,7 @@ class _FeeCollectionPageState extends ConsumerState<FeeCollectionPage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
-                          BoxShadow(color: Colors.black12.withOpacity(0.04), blurRadius: 8),
+                          BoxShadow(color: Colors.black12.withValues(alpha: 0.04), blurRadius: 8),
                         ],
                       ),
                       child: Column(
@@ -390,7 +390,7 @@ class _FeeCollectionPageState extends ConsumerState<FeeCollectionPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black12.withOpacity(0.04), blurRadius: 8),
+          BoxShadow(color: Colors.black12.withValues(alpha: 0.04), blurRadius: 8),
         ],
       ),
       child: Row(

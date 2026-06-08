@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/config/session_manager.dart';
 
 class StudentsModel {
   final int admissionNo;
@@ -17,6 +18,7 @@ class StudentsModel {
   final String parentName;
   final String address;
   final String gender;
+  final String schoolId;
 
   final bool delete;
 
@@ -45,6 +47,7 @@ class StudentsModel {
     required this.gender,
     required this.dateOfBirth,
     required this.parentName,
+    this.schoolId = '',
     this.deletedDate,
   });
 
@@ -67,6 +70,7 @@ class StudentsModel {
     String? parentName,
     String? address,
     String? gender,
+    String? schoolId,
     bool? delete,
     DateTime? createdDate,
     DateTime? dateOfBirth,
@@ -91,6 +95,7 @@ class StudentsModel {
       address: address ?? this.address,
       parentName: parentName ?? this.parentName,
       gender: gender ?? this.gender,
+      schoolId: schoolId ?? this.schoolId,
       deletedDate: deletedDate ?? this.deletedDate,
     );
   }
@@ -112,6 +117,7 @@ class StudentsModel {
       'studentId': studentId,
       'teacherId': teacherId,
       'delete': delete,
+      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       'createdDate': Timestamp.fromDate(createdDate),
 
@@ -148,6 +154,7 @@ class StudentsModel {
       address: map['address'] ?? '',
       parentName: map['parentName'] ?? '',
       delete: map['delete'] ?? false,
+      schoolId: map['schoolId'] ?? '',
 
       createdDate:
       (map['createdDate'] as Timestamp).toDate(),

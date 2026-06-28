@@ -10,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:scholo_admin/features/teacherView/report/screen/month_wise_report.dart';
 import 'package:share_plus/share_plus.dart';
+import '../helper/attendance_pdf_helper.dart';
 import '../../../../models/teacher_model.dart';
 import '../controller/year_wise_report_controller.dart';
 
@@ -82,11 +83,11 @@ class _YearWiseReportScreenState
       }
 
       data.forEach((_, divisions) {
-        if (divisions is Map<String, dynamic>) {
+        if (divisions is Map) {
           divisions.forEach((_, students) {
             if (students is List) {
               for (final s in students) {
-                if (s is! Map<String, dynamic>) continue;
+                if (s is! Map) continue;
 
                 final roll = (s['rollNo'] ?? 0) as int;
                 final status =
@@ -155,152 +156,11 @@ class _YearWiseReportScreenState
     required String monthLabel,
     required List<Map<String, dynamic>> dates,
   }) async {
-    final pdf = pw.Document();
-
-    final teacherName = teacher.teacherName;
-    final classNo = teacher.classNo;
-    final division = teacher.division;
-
-    // 1) Build matrix: rollNo -> { day: status }
-    final Map<int, Map<int, String>> matrix = {}; // roll -> { day -> status }
-    final Map<int, String> studentNames = {}; // roll -> name
-
-    for (final entry in dates) {
-      final dateStr = entry['date'] as String; // "15-11-2025"
-      final data = entry['data'] as Map<String, dynamic>;
-
-      int day = 0;
-      try {
-        day = int.parse(dateStr.split('-')[0]); // DD
-      } catch (_) {}
-
-      if (day <= 0 || day > 31) continue;
-
-      data.forEach((_, divisions) {
-        if (divisions is Map<String, dynamic>) {
-          divisions.forEach((_, students) {
-            if (students is List) {
-              for (final s in students) {
-                if (s is! Map<String, dynamic>) continue;
-
-                final roll = (s['rollNo'] ?? 0) as int;
-                final name = (s['studentName'] ?? '').toString();
-                final status = (s['status'] ?? '').toString();
-
-                studentNames[roll] = name;
-                matrix.putIfAbsent(roll, () => {});
-                matrix[roll]![day] = status;
-              }
-            }
-          });
-        }
-      });
-    }
-
-    final sortedRolls = studentNames.keys.toList()..sort();
-
-    // Count totals & stats:
-    final stats = _calculateMonthStats(dates);
-    final totalStudents = sortedRolls.length;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(20),
-        build: (ctx) => [
-          pw.Center(
-            child: pw.Text(
-              "$monthLabel Attendance Report",
-              style: pw.TextStyle(
-                fontSize: 22,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Divider(),
-          pw.SizedBox(height: 10),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text("Teacher: $teacherName"),
-              pw.Text("Class: $classNo"),
-              pw.Text("Division: $division"),
-            ],
-          ),
-          pw.SizedBox(height: 12),
-
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.8),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(2),
-              1: const pw.FlexColumnWidth(2),
-              2: const pw.FlexColumnWidth(2),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                children: [
-                  _summaryCell("Total Students: $totalStudents"),
-                  _summaryCell(
-                      "Attendance: ${stats.attendancePercentage.toStringAsFixed(1)}%"),
-                  _summaryCell("Leave Days: ${stats.leaveDays}"),
-                ],
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 10),
-
-          pw.Row(
-            children: [
-              _legendCircle(PdfColors.green, "Full Day present"),
-              pw.SizedBox(width: 16),
-              _legendCircle(PdfColors.blue, "Half Day present"),
-              pw.SizedBox(width: 16),
-              _legendCircle(PdfColors.red, "Absent"),
-            ],
-          ),
-          pw.SizedBox(height: 10),
-
-          // Matrix table
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.grey600, width: 0.4),
-            children: [
-              // Header row: Roll, Name, 1..31
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                children: [
-                  _headerCell("Roll"),
-                  _headerCell("Student Name"),
-                  ...List.generate(31, (i) => _headerCell("${i + 1}")),
-                ],
-              ),
-
-              // Student rows
-              ...sortedRolls.map((roll) {
-                final name = studentNames[roll] ?? "";
-                final daysMap = matrix[roll] ?? {};
-
-                return pw.TableRow(
-                  children: [
-                    _dataCell(roll.toString()),
-                    _dataCell(name),
-                    ...List.generate(31, (i) {
-                      final day = i + 1;
-                      final status = daysMap[day] ?? "";
-                      final color = _statusToColor(status);
-                      return _circleCell(color);
-                    }),
-                  ],
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
+    return AttendancePdfHelper.generateMonthlyReportPdf(
+      teacher: teacher,
+      monthLabel: monthLabel,
+      rawDates: dates,
     );
-
-    return pdf.save();
   }
 
   // --------------------------------------------------
@@ -313,182 +173,12 @@ class _YearWiseReportScreenState
     required Map<String, List<Map<String, dynamic>>> groupedData,
     required List<String> yearMonths,
   }) async {
-    final pdf = pw.Document();
-
-    final teacherName = teacher.teacherName;
-    final classNo = teacher.classNo;
-    final division = teacher.division;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(20),
-        build: (ctx) {
-          final widgets = <pw.Widget>[];
-
-          widgets.add(
-            pw.Center(
-              child: pw.Text(
-                "Yearly Attendance Report - $yearLabel",
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 20));
-
-          for (final monthKey in yearMonths) {
-            final monthLabel = _formatMonthKey(monthKey);
-            final dates = groupedData[monthKey]!;
-            final stats = _calculateMonthStats(dates);
-
-            // Build matrix for this month
-            final Map<int, Map<int, String>> matrix = {};
-            final Map<int, String> studentNames = {};
-
-            for (final entry in dates) {
-              final dateStr = entry['date'] as String; // "DD-MM-YYYY"
-              final data = entry['data'] as Map<String, dynamic>;
-
-              int day = 0;
-              try {
-                day = int.parse(dateStr.split('-')[0]); // DD
-              } catch (_) {}
-
-              if (day <= 0 || day > 31) continue;
-
-              data.forEach((_, divisions) {
-                if (divisions is Map<String, dynamic>) {
-                  divisions.forEach((_, students) {
-                    if (students is List) {
-                      for (final s in students) {
-                        if (s is! Map<String, dynamic>) continue;
-
-                        final roll = (s['rollNo'] ?? 0) as int;
-                        final name = (s['studentName'] ?? '').toString();
-                        final status = (s['status'] ?? '').toString();
-
-                        studentNames[roll] = name;
-                        matrix.putIfAbsent(roll, () => {});
-                        matrix[roll]![day] = status;
-                      }
-                    }
-                  });
-                }
-              });
-            }
-
-            final sortedRolls = studentNames.keys.toList()..sort();
-            final totalStudents = sortedRolls.length;
-
-            widgets.add(
-              pw.Text(
-                monthLabel,
-                style: pw.TextStyle(
-                  fontSize: 18,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-            );
-            widgets.add(pw.SizedBox(height: 8));
-
-            widgets.add(
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text("Teacher: $teacherName"),
-                  pw.Text("Class: $classNo"),
-                  pw.Text("Division: $division"),
-                ],
-              ),
-            );
-            widgets.add(pw.SizedBox(height: 8));
-
-            widgets.add(
-              pw.Table(
-                border:
-                pw.TableBorder.all(color: PdfColors.grey700, width: 0.8),
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(2),
-                  1: const pw.FlexColumnWidth(2),
-                  2: const pw.FlexColumnWidth(2),
-                },
-                children: [
-                  pw.TableRow(
-                    decoration:
-                    const pw.BoxDecoration(color: PdfColors.grey300),
-                    children: [
-                      _summaryCell("Total Students: $totalStudents"),
-                      _summaryCell(
-                          "Attendance: ${stats.attendancePercentage.toStringAsFixed(1)}%"),
-                      _summaryCell("Leave Days: ${stats.leaveDays}"),
-                    ],
-                  ),
-                ],
-              ),
-            );
-
-            widgets.add(pw.SizedBox(height: 8));
-            widgets.add(
-              pw.Row(
-                children: [
-                  _legendCircle(PdfColors.green, "Full Day present"),
-                  pw.SizedBox(width: 16),
-                  _legendCircle(PdfColors.blue, "Half Day present"),
-                  pw.SizedBox(width: 16),
-                  _legendCircle(PdfColors.red, "Absent"),
-                ],
-              ),
-            );
-            widgets.add(pw.SizedBox(height: 8));
-
-            widgets.add(
-              pw.Table(
-                border:
-                pw.TableBorder.all(color: PdfColors.grey600, width: 0.4),
-                children: [
-                  pw.TableRow(
-                    decoration:
-                    const pw.BoxDecoration(color: PdfColors.grey300),
-                    children: [
-                      _headerCell("Roll"),
-                      _headerCell("Student Name"),
-                      ...List.generate(31, (i) => _headerCell("${i + 1}")),
-                    ],
-                  ),
-                  ...sortedRolls.map((roll) {
-                    final name = studentNames[roll] ?? "";
-                    final daysMap = matrix[roll] ?? {};
-                    return pw.TableRow(
-                      children: [
-                        _dataCell(roll.toString()),
-                        _dataCell(name),
-                        ...List.generate(31, (i) {
-                          final day = i + 1;
-                          final status = daysMap[day] ?? "";
-                          final color = _statusToColor(status);
-                          return _circleCell(color);
-                        }),
-                      ],
-                    );
-                  }),
-                ],
-              ),
-            );
-
-            widgets.add(pw.SizedBox(height: 20));
-            widgets.add(pw.Divider());
-            widgets.add(pw.SizedBox(height: 20));
-          }
-
-          return widgets;
-        },
-      ),
+    return AttendancePdfHelper.generateYearlyReportPdf(
+      teacher: teacher,
+      yearLabel: yearLabel,
+      groupedData: groupedData,
+      yearMonths: yearMonths,
     );
-
-    return pdf.save();
   }
 
   // --------------------------------------------------
@@ -752,6 +442,26 @@ class _YearWiseReportScreenState
                       ),
                     ),
                     const Spacer(),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                        onPressed: () {
+                          ref.invalidate(yearWiseReportControllerProvider(widget.teacherId));
+                          ref.invalidate(selectedYearProvider);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     // Year dropdown
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),

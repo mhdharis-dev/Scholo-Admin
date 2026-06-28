@@ -9,25 +9,123 @@ class TimetableAndOtherFilesPageRepository {
   TimetableAndOtherFilesPageRepository({required FirebaseFirestore firestore})
       : _firestore = firestore;
 
+  Future<void> _updateNoteField(String id, Map<String, dynamic> updates) async {
+    // 1. Update flat documents matching 'id' field
+    final flatQuery = await _firestore
+        .schoolCollection(FirebaseConstant.notes)
+        .where('id', isEqualTo: id)
+        .get();
+    for (var doc in flatQuery.docs) {
+      await doc.reference.update(updates);
+    }
+
+    // 2. Search and update nested structures
+    final snapshot = await _firestore.schoolCollection(FirebaseConstant.notes).get();
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (!data.containsKey('teacherId')) {
+        // It's a nested document
+        String? foundDivision;
+        String? foundTitle;
+        data.forEach((divisionKey, divisionVal) {
+          if (divisionVal is Map<String, dynamic>) {
+            divisionVal.forEach((noteTitle, noteData) {
+              if (noteData is Map<String, dynamic> && noteData['id'] == id) {
+                foundDivision = divisionKey;
+                foundTitle = noteTitle;
+              }
+            });
+          }
+        });
+
+        if (foundDivision != null && foundTitle != null) {
+          // Construct the nested updates map
+          final Map<String, dynamic> nestedUpdates = {};
+          updates.forEach((key, value) {
+            nestedUpdates['$foundDivision.$foundTitle.$key'] = value;
+          });
+          await doc.reference.update(nestedUpdates);
+        }
+      }
+    }
+  }
+
   /// 🔥 Get otherFiles (Latest First)
   Stream<List<OtherFilesModel>> getOtherFiles(String teacherId) {
     return _firestore
-        .schoolCollection(FirebaseConstant.otherFile)
-        .where('teacherId', isEqualTo: teacherId)
-        .where('delete', isEqualTo: false)
-        .orderBy('uploadedAt', descending: true)
+        .schoolCollection(FirebaseConstant.notes)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => OtherFilesModel.fromMap(doc.data()))
-        .toList());
+        .map((snapshot) {
+      final List<OtherFilesModel> list = [];
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data.containsKey('teacherId')) {
+          final isDeleted = data['delete'] == true;
+          if (data['teacherId'] == teacherId && !isDeleted) {
+            final map = Map<String, dynamic>.from(data);
+            if (map['tittle'] == null) {
+              map['tittle'] = map['title'] ?? '';
+            }
+            if (map['uploadedAt'] == null) {
+              final idStr = map['id']?.toString() ?? '';
+              final ms = int.tryParse(idStr);
+              if (ms != null && ms > 1000000000000) {
+                map['uploadedAt'] = Timestamp.fromDate(DateTime.fromMillisecondsSinceEpoch(ms));
+              } else {
+                map['uploadedAt'] = Timestamp.now();
+              }
+            }
+            list.add(OtherFilesModel.fromMap(map));
+          }
+        } else {
+          // Nested structure: document ID is classNo, fields are division maps
+          data.forEach((divisionKey, divisionVal) {
+            if (divisionVal is Map<String, dynamic>) {
+              divisionVal.forEach((noteTitle, noteData) {
+                if (noteData is Map<String, dynamic>) {
+                  final isDeleted = noteData['delete'] == true;
+                  if (noteData['teacherId'] == teacherId && !isDeleted) {
+                    final map = Map<String, dynamic>.from(noteData);
+                    if (map['tittle'] == null || map['tittle'].toString().isEmpty) {
+                      map['tittle'] = map['title'] ?? noteTitle;
+                    }
+                    if (map['classNo'] == null) {
+                      map['classNo'] = int.tryParse(doc.id) ?? 0;
+                    }
+                    if (map['division'] == null || map['division'].toString().isEmpty) {
+                      map['division'] = divisionKey;
+                    }
+                    final idStr = map['id']?.toString() ?? '';
+                    final ms = int.tryParse(idStr);
+                    if (ms != null && ms > 1000000000000) {
+                      map['uploadedAt'] = Timestamp.fromDate(DateTime.fromMillisecondsSinceEpoch(ms));
+                    } else {
+                      map['uploadedAt'] = Timestamp.now();
+                    }
+                    list.add(OtherFilesModel.fromMap(map));
+                  }
+                }
+              });
+            }
+          });
+        }
+      }
+      final seenIds = <String>{};
+      final List<OtherFilesModel> uniqueList = [];
+      for (var note in list) {
+        if (note.id.isNotEmpty && !seenIds.contains(note.id)) {
+          seenIds.add(note.id);
+          uniqueList.add(note);
+        }
+      }
+      uniqueList.sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
+      return uniqueList;
+    });
   }
 
   /// 🔥 Soft Delete Other Files
   Future<void> softDeleteOtherFiles(String id) async {
-    await _firestore
-        .schoolCollection(FirebaseConstant.otherFile)
-        .doc(id)
-        .update({
+    await _updateNoteField(id, {
       'delete': true,
       'deletedDate': Timestamp.now(),
     });
@@ -35,11 +133,8 @@ class TimetableAndOtherFilesPageRepository {
 
   /// 🔥 Update Title
   Future<void> updateTitleOtherFiles(String id, String newTitle) async {
-    await _firestore
-        .schoolCollection(FirebaseConstant.otherFile)
-        .doc(id)
-        .update({
-      'tittle': newTitle, // Note: Ensure 'tittle' isn't a typo for 'title' in Firestore
+    await _updateNoteField(id, {
+      'tittle': newTitle,
     });
   }
 
@@ -76,13 +171,17 @@ class TimetableAndOtherFilesPageRepository {
   }
 
   /// 🔥 Soft Delete Timetable
-  Future<void> softDeleteTimeTables(String id) async {
+  Future<void> softDeleteTimeTables({
+    required String classNo,
+    required String division,
+    required String timetableName,
+  }) async {
     await _firestore
         .schoolCollection(FirebaseConstant.timetable)
-        .doc(id)
+        .doc(classNo)
         .update({
-      'delete': true,
-      'deletedDate': Timestamp.now(),
+      'divisions.$division.timetables.$timetableName.delete': true,
+      'divisions.$division.timetables.$timetableName.deletedDate': Timestamp.now(),
     });
   }
 }
@@ -103,12 +202,36 @@ final otherFilesStreamProvider = StreamProvider.family<List<OtherFilesModel>, St
   return repo.getOtherFiles(teacherId);
 });
 
+class TimetableQueryParams {
+  final String classNo;
+  final String division;
+  final String teacherId;
+
+  const TimetableQueryParams({
+    required this.classNo,
+    required this.division,
+    required this.teacherId,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TimetableQueryParams &&
+          runtimeType == other.runtimeType &&
+          classNo == other.classNo &&
+          division == other.division &&
+          teacherId == other.teacherId;
+
+  @override
+  int get hashCode => Object.hash(classNo, division, teacherId);
+}
+
 // StreamProvider for Timetables
-final timetablesListProvider = StreamProvider.family<List<TimetableModel>, Map<String, dynamic>>((ref, params) {
+final timetablesListProvider = StreamProvider.family<List<TimetableModel>, TimetableQueryParams>((ref, params) {
   final repo = ref.watch(timetableAndOtherFilesPageRepositoryProvider);
   return repo.getTimeTables(
-      params['classNo'],
-      params['division'],
-      params['teacherId']
+      params.classNo,
+      params.division,
+      params.teacherId
   );
 });

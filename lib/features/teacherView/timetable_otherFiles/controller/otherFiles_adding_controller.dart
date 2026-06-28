@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../repository/otherFiles_adding_repository.dart';
@@ -14,7 +15,7 @@ class OtherFilesAddingController
     required String teacherId,
     required String title,
     required String subtitle,
-    required String filePath,
+    required Uint8List fileBytes,
     required String fileName,
     required String division,
     required int classNo,
@@ -26,7 +27,7 @@ class OtherFilesAddingController
           teacherId: teacherId,
           title: title,
           subtitle: subtitle,
-          filePath: filePath,
+          fileBytes: fileBytes,
           fileName: fileName,
           division: division,
           classNo: classNo,

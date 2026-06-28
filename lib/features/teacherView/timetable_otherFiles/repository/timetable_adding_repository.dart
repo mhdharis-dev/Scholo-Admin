@@ -63,6 +63,22 @@ class TimetableRepository {
         .doc(draftId)
         .delete();
   }
+
+  // Delete Draft by name and teacherId
+  Future<void> deleteDraftByName({
+    required String teacherId,
+    required String timetableName,
+  }) async {
+    final querySnapshot = await _firestore
+        .schoolCollection(FirebaseConstant.draftTimetable)
+        .where('teacherId', isEqualTo: teacherId)
+        .where('timetableName', isEqualTo: timetableName)
+        .get();
+
+    for (var doc in querySnapshot.docs) {
+      await doc.reference.delete();
+    }
+  }
 }
 
 // Providers

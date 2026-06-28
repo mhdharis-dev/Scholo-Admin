@@ -95,23 +95,50 @@ class OtherFilesModel {
   // FROM MAP
   // --------------------------------------------------
   factory OtherFilesModel.fromMap(Map<String, dynamic> map) {
+    int parsedClassNo = 0;
+    if (map['classNo'] != null) {
+      if (map['classNo'] is int) {
+        parsedClassNo = map['classNo'];
+      } else {
+        parsedClassNo = int.tryParse(map['classNo'].toString()) ?? 0;
+      }
+    }
+
+    DateTime uploadedDateTime;
+    final uploadedAtVal = map['uploadedAt'];
+    if (uploadedAtVal is Timestamp) {
+      uploadedDateTime = uploadedAtVal.toDate();
+    } else if (uploadedAtVal is String) {
+      uploadedDateTime = DateTime.tryParse(uploadedAtVal) ?? DateTime.now();
+    } else if (uploadedAtVal is int) {
+      uploadedDateTime = DateTime.fromMillisecondsSinceEpoch(uploadedAtVal);
+    } else {
+      uploadedDateTime = DateTime.now();
+    }
+
+    DateTime? deletedDateTime;
+    final deletedDateVal = map['deletedDate'];
+    if (deletedDateVal is Timestamp) {
+      deletedDateTime = deletedDateVal.toDate();
+    } else if (deletedDateVal is String) {
+      deletedDateTime = DateTime.tryParse(deletedDateVal);
+    } else if (deletedDateVal is int) {
+      deletedDateTime = DateTime.fromMillisecondsSinceEpoch(deletedDateVal);
+    }
+
     return OtherFilesModel(
       id: map['id'] ?? '',
       fileName: map['fileName'] ?? '',
       fileUrl: map['fileUrl'] ?? '',
-      tittle: map['tittle'] ?? '',
+      tittle: map['tittle'] ?? map['title'] ?? '',
       subtitle: map['subtitle'] ?? '',
       delete: map['delete'] ?? false,
       teacherId: map['teacherId'] ?? '',
-      classNo: map['classNo'] ?? 0,
+      classNo: parsedClassNo,
       division: map['division'] ?? '',
       schoolId: map['schoolId'] ?? '',
-
-      uploadedAt: (map['uploadedAt'] as Timestamp).toDate(),
-
-      deletedDate: map['deletedDate'] != null
-          ? (map['deletedDate'] as Timestamp).toDate()
-          : null,
+      uploadedAt: uploadedDateTime,
+      deletedDate: deletedDateTime,
     );
   }
 }

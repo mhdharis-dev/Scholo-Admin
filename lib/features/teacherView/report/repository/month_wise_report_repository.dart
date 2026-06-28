@@ -56,18 +56,18 @@ class MonthWiseReportRepository {
       final Map<String, dynamic> filteredData = {};
 
       raw.forEach((classKey, divisions) {
-        if (divisions is Map<String, dynamic>) {
+        if (divisions is Map) {
           divisions.forEach((divKey, students) {
             if (students is List) {
               final matching = students
                   .where((s) =>
-              s is Map<String, dynamic> &&
+              s is Map &&
                   s['teacherId'] == teacherId)
                   .map((s) => Map<String, dynamic>.from(s))
                   .toList();
 
               if (matching.isNotEmpty) {
-                filteredData.putIfAbsent(classKey, () => {});
+                filteredData.putIfAbsent(classKey, () => <String, dynamic>{});
                 filteredData[classKey][divKey] = matching;
               }
             }

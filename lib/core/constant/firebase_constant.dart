@@ -7,7 +7,7 @@ class FirebaseConstant {
   static const String student = 'students';
   static const String attendance = 'attendance';
   static const String timetable = 'timetable';
-  static const String otherFile = 'otherFile';
+  static const String notes = 'notes';
   static const String studentsMark = 'studentsMark';
   static const String fees = 'fees';
   static const String events = 'events';

@@ -1278,6 +1278,26 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 20),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.refresh, size: 20, color: Colors.white),
+                          onPressed: () {
+                            ref.invalidate(teacherDetailsProvider(widget.teacherId));
+                            ref.invalidate(totalStudentsProvider(widget.teacherId));
+                            ref.invalidate(feesProvider(widget.teacherId));
+                            ref.invalidate(todayAttendanceProvider(widget.teacherId));
+                            ref.invalidate(otherTeachersProvider(widget.teacherId));
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),

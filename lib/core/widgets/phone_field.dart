@@ -3,17 +3,84 @@ import 'package:flutter/services.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
 
 const List<Map<String, dynamic>> countryCodes = [
-  {'name': 'US', 'code': '+1', 'flag': '🇺🇸', 'isoCode': IsoCode.US},
-  {'name': 'IN', 'code': '+91', 'flag': '🇮🇳', 'isoCode': IsoCode.IN},
-  {'name': 'UK', 'code': '+44', 'flag': '🇬🇧', 'isoCode': IsoCode.GB},
-  {'name': 'UAE', 'code': '+971', 'flag': '🇦🇪', 'isoCode': IsoCode.AE},
-  {'name': 'KSA', 'code': '+966', 'flag': '🇸🇦', 'isoCode': IsoCode.SA},
-  {'name': 'PK', 'code': '+92', 'flag': '🇵🇰', 'isoCode': IsoCode.PK},
-  {'name': 'AU', 'code': '+61', 'flag': '🇦🇺', 'isoCode': IsoCode.AU},
-  {'name': 'DE', 'code': '+49', 'flag': '🇩🇪', 'isoCode': IsoCode.DE},
-  {'name': 'FR', 'code': '+33', 'flag': '🇫🇷', 'isoCode': IsoCode.FR},
-  {'name': 'SG', 'code': '+65', 'flag': '🇸🇬', 'isoCode': IsoCode.SG},
+  {'name': 'US', 'code': '+1', 'flag': '🇺🇸', 'isoCode': IsoCode.US, 'min': 10, 'max': 10},
+  {'name': 'IN', 'code': '+91', 'flag': '🇮🇳', 'isoCode': IsoCode.IN, 'min': 10, 'max': 10},
+  {'name': 'UK', 'code': '+44', 'flag': '🇬🇧', 'isoCode': IsoCode.GB, 'min': 9, 'max': 11},
+  {'name': 'UAE', 'code': '+971', 'flag': '🇦🇪', 'isoCode': IsoCode.AE, 'min': 9, 'max': 9},
+  {'name': 'KSA', 'code': '+966', 'flag': '🇸🇦', 'isoCode': IsoCode.SA, 'min': 9, 'max': 9},
+  {'name': 'PK', 'code': '+92', 'flag': '🇵🇰', 'isoCode': IsoCode.PK, 'min': 10, 'max': 10},
+  {'name': 'AU', 'code': '+61', 'flag': '🇦🇺', 'isoCode': IsoCode.AU, 'min': 9, 'max': 9},
+  {'name': 'DE', 'code': '+49', 'flag': '🇩🇪', 'isoCode': IsoCode.DE, 'min': 10, 'max': 11},
+  {'name': 'FR', 'code': '+33', 'flag': '🇫🇷', 'isoCode': IsoCode.FR, 'min': 9, 'max': 9},
+  {'name': 'SG', 'code': '+65', 'flag': '🇸🇬', 'isoCode': IsoCode.SG, 'min': 8, 'max': 8},
 ];
+
+bool isValidPhoneNumber(String fullNumber) {
+  final text = fullNumber.trim();
+  if (text.isEmpty) return false;
+
+  Map<String, dynamic>? matchedCountry;
+  for (final c in countryCodes) {
+    final code = c['code'] as String;
+    if (text.startsWith(code)) {
+      matchedCountry = c;
+      break;
+    }
+  }
+
+  if (matchedCountry == null) return false;
+  final code = matchedCountry['code'] as String;
+  final nationalNumber = text.substring(code.length);
+  final minLen = matchedCountry['min'] as int;
+  final maxLen = matchedCountry['max'] as int;
+
+  if (nationalNumber.length < minLen || nationalNumber.length > maxLen) {
+    return false;
+  }
+
+  try {
+    final parsed = PhoneNumber.parse(nationalNumber, destinationCountry: matchedCountry['isoCode'] as IsoCode);
+    return parsed.isValid();
+  } catch (_) {
+    return true; // Fallback to length validation if parsing throws
+  }
+}
+
+String getPhoneValidationErrorMessage(String fullNumber) {
+  final text = fullNumber.trim();
+  if (text.isEmpty) return 'Mobile number cannot be empty';
+
+  Map<String, dynamic>? matchedCountry;
+  for (final c in countryCodes) {
+    final code = c['code'] as String;
+    if (text.startsWith(code)) {
+      matchedCountry = c;
+      break;
+    }
+  }
+
+  if (matchedCountry == null) return 'Invalid country prefix';
+  final code = matchedCountry['code'] as String;
+  final nationalNumber = text.substring(code.length);
+  final minLen = matchedCountry['min'] as int;
+  final maxLen = matchedCountry['max'] as int;
+
+  if (nationalNumber.length < minLen || nationalNumber.length > maxLen) {
+    if (minLen == maxLen) {
+      return 'Mobile number must be exactly $minLen digits for ${matchedCountry['name']}';
+    }
+    return 'Mobile number must be between $minLen and $maxLen digits for ${matchedCountry['name']}';
+  }
+
+  try {
+    final parsed = PhoneNumber.parse(nationalNumber, destinationCountry: matchedCountry['isoCode'] as IsoCode);
+    if (!parsed.isValid()) {
+      return 'Invalid mobile number for ${matchedCountry['name']}';
+    }
+  } catch (_) {}
+
+  return '';
+}
 
 class CountryPhoneField extends StatefulWidget {
   final TextEditingController controller;
@@ -103,7 +170,10 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
         TextFormField(
           controller: _numberController,
           keyboardType: TextInputType.phone,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(_selectedCountry['max'] as int),
+          ],
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
@@ -159,13 +229,21 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
             if (number.isEmpty) {
               return 'Please enter a mobile number';
             }
+            final minLen = _selectedCountry['min'] as int;
+            final maxLen = _selectedCountry['max'] as int;
+            if (number.length < minLen || number.length > maxLen) {
+              if (minLen == maxLen) {
+                return 'Number must be exactly $minLen digits';
+              }
+              return 'Number must be between $minLen and $maxLen digits';
+            }
             try {
               final parsed = PhoneNumber.parse(number, destinationCountry: _selectedCountry['isoCode'] as IsoCode);
               if (!parsed.isValid()) {
                 return 'Invalid mobile number for ${_selectedCountry['name']}';
               }
             } catch (_) {
-              return 'Invalid mobile number';
+              // Ignore parser errors and just rely on length if it fails
             }
             if (widget.validator != null) {
               return widget.validator!(widget.controller.text);
@@ -192,6 +270,10 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
                     setState(() {
                       _selectedCountry = country;
                       _showCountryPicker = false;
+                      final maxLen = country['max'] as int;
+                      if (_numberController.text.length > maxLen) {
+                        _numberController.text = _numberController.text.substring(0, maxLen);
+                      }
                     });
                     _updateWidgetController();
                   },

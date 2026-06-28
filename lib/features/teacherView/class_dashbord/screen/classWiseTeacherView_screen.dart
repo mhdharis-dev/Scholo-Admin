@@ -930,10 +930,13 @@ class _ClassWiseTeacherViewScreenState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
+        ClassModel? selectedTargetClass = initialTargetClass;
+        String? selectedTeacherIdForTargetClass = classModel.teacherId.isNotEmpty
+            ? classModel.teacherId
+            : selectedTargetClass?.teacherId;
+
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            ClassModel? selectedTargetClass = initialTargetClass;
-            String? selectedTeacherIdForTargetClass = selectedTargetClass?.teacherId;
 
             return Center(
               child: Container(
@@ -1494,6 +1497,26 @@ class _ClassWiseTeacherViewScreenState
                 /// Buttons Row
                 Row(
                   children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                        onPressed: () {
+                          ref.invalidate(teachersProvider);
+                          ref.invalidate(classesStreamProvider);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xff10B981),

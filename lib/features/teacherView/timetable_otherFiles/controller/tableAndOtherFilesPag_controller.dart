@@ -11,12 +11,12 @@ StreamProvider.family<List<OtherFilesModel>, String>((ref, teacherId) {
 });
 
 /// 🔥 Stream Provider for Timetables
-final timetablesListProvider = StreamProvider.family<List<TimetableModel>, Map<String, dynamic>>((ref, params) {
+final timetablesListProvider = StreamProvider.family<List<TimetableModel>, TimetableQueryParams>((ref, params) {
   final repo = ref.watch(timetableAndOtherFilesPageRepositoryProvider);
   return repo.getTimeTables(
-      params['classNo'],
-      params['division'],
-      params['teacherId']
+      params.classNo,
+      params.division,
+      params.teacherId
   );
 });
 
@@ -38,8 +38,18 @@ class TimetableAndOtherFilesPageController {
 
   // --- Timetable Actions ---
 
-  Future<void> deleteTimetable(String id) async {
-    await ref.read(timetableAndOtherFilesPageRepositoryProvider).softDeleteTimeTables(id);
+  Future<void> deleteTimetable({
+    required String classNo,
+    required String division,
+    required String timetableName,
+  }) async {
+    await ref
+        .read(timetableAndOtherFilesPageRepositoryProvider)
+        .softDeleteTimeTables(
+          classNo: classNo,
+          division: division,
+          timetableName: timetableName,
+        );
   }
 }
 

@@ -3,7 +3,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/constant/firebase_constant.dart';
+import '../../../../models/teacher_model.dart';
+import '../../../../models/otherTeacher_model.dart';
 import '../../../../models/daftTimetable_model.dart';
 import '../../../../models/dayShedule_model.dart';
 import '../../../../models/period_model.dart';
@@ -173,6 +177,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
           teacherName: teachers?.map((t) => t['name']).join(', '),
           teacherId: teachers?.map((t) => t['id']).join(', '),
           subject: teachers?.map((t) => t['subject']).join(' / '),
+          mainSubject: slot['mainSubject'] as String?,
           colorValue: teachers?.isNotEmpty == true
               ? (teachers!.first['color'] as Color).toARGB32()
               : null,
@@ -227,19 +232,19 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
   void _handleCancel(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Discard Changes?"),
         content: const Text(
           "Are you sure you want to cancel? All progress on this timetable layout will be lost.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("No, Keep Editing"),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
               _saveDraft();
             },
             child: const Text("Save Draft"),
@@ -252,9 +257,8 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
               ref.invalidate(selectedDayProvider);
               ref.invalidate(dayTypeProvider);
               ref.invalidate(scheduleProvider);
-              Navigator.pop(context);
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
+              Navigator.pop(context);       // Close page
             },
             child: const Text("Discard", style: TextStyle(color: Colors.white)),
           ),
@@ -266,14 +270,14 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
   void _handleEdit(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Edit Layout?"),
         content: const Text(
           "Are you sure you want to Edit? All assignments on this timetable will be lost.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("No, Keep Doing"),
           ),
           ElevatedButton(
@@ -281,8 +285,8 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
               backgroundColor: const Color(0xFFDF1616),
             ),
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
+              Navigator.pop(context);       // Close page
             },
             child: const Text(
               "Yes, Edit",
@@ -365,6 +369,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
           teacherName: joinedNames,
           teacherId: joinedIds,
           subject: joinedSubjects,
+          mainSubject: slot['mainSubject'] as String?,
           colorValue: slotColor,
         );
       }).toList();
@@ -380,6 +385,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
       createdDate: DateTime.now(),
       dayTypes: widget.dayTypes,
       scheduleData: processedSchedule,
+      delete: false,
     );
 
     // 3. Call the Controller to handle the Save/Update logic
@@ -399,7 +405,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
       // Add other setup providers to invalidate here if necessary
 
       // Navigate back to the start
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -413,14 +419,14 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
   void _showSaveDraftConfirmation() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Save as Draft?"),
         content: const Text(
           "Do you want to save your progress as a draft? You can resume editing later.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
@@ -428,10 +434,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
               backgroundColor: const Color(0xFF3B82F6),
             ),
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              Navigator.pop(context);
-
+              Navigator.pop(dialogContext); // Close dialog
               _saveDraft();
             },
             child: const Text(
@@ -444,20 +447,126 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
     );
   }
 
+  Widget _buildDialogTeacherCard({
+    required Map<String, dynamic> teacherData,
+    required bool isSelected,
+    required bool isClassTeacher,
+    required Color accentColor,
+    required VoidCallback onTap,
+  }) {
+    String displaySubject = teacherData['subject'].toUpperCase();
+    if (displaySubject == 'PET' || displaySubject == 'P.E.T') {
+      displaySubject = 'P E T';
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Circular Avatar
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: accentColor.withValues(alpha: 0.15),
+              child: isClassTeacher
+                  ? Icon(Icons.star_border_rounded, color: accentColor, size: 22)
+                  : Text(
+                      teacherData['name'].isNotEmpty
+                          ? (teacherData['name'].toUpperCase() == 'RAMESH'
+                              ? 'r'
+                              : teacherData['name'][0].toUpperCase())
+                          : '?',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+            ),
+            const SizedBox(width: 16),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    teacherData['name'],
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    displaySubject,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: accentColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Checkbox
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF2563EB) : Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1),
+                  width: 1.5,
+                ),
+              ),
+              child: isSelected
+                  ? const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 16,
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- CENTERED MULTI-TEACHER SELECTION DIALOG ---
   void _showTeacherSelectionDialog(String day, int index) {
+    final mainSubjectController = TextEditingController(
+      text: _gridData[day]![index]['mainSubject'] as String? ?? '',
+    );
+    final searchController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (dialogContext) {
         return Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
+          clipBehavior: Clip.antiAlias, // Clip shaded bottom bar to dialog corners
           child: Container(
-            padding: const EdgeInsets.all(24),
+            color: Colors.white,
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
-              maxWidth: 400,
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 480,
             ),
             child: Consumer(
               builder: (context, ref, child) {
@@ -504,38 +613,24 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                           });
                         }
 
-                        List<Widget> listItems = [];
+                        final query = searchController.text.toLowerCase().trim();
 
-                        // 1. Add Head Teacher (Class Teacher)
+                        // Filter Class Teacher
+                        bool showHeadTeacher = false;
                         final headData = {
                           'name': teacher.teacherName,
                           'id': widget.teacherId,
                           'subject': teacher.subject,
                           'color': const Color(0xFF2563EB),
                         };
+                        if (query.isEmpty ||
+                            (headData['name'] as String).toLowerCase().contains(query) ||
+                            (headData['subject'] as String).toLowerCase().contains(query)) {
+                          showHeadTeacher = true;
+                        }
 
-                        listItems.add(
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            secondary: const CircleAvatar(
-                              backgroundColor: Color(0xFFBFDBFE),
-                              child: Icon(Icons.star, color: Color(0xFF2563EB), size: 18),
-                            ),
-                            title: Text(teacher.teacherName,
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text(teacher.subject,
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xFF2563EB),
-                                    fontWeight: FontWeight.bold)),
-                            value: isSelected(widget.teacherId),
-                            onChanged: (bool? val) => toggleSelection(headData),
-                          ),
-                        );
-
-                        listItems.add(const Divider());
-
-                        // 2. Add Other Faculty
+                        // Filter Other Teachers
+                        final filteredOtherTeachersList = <Map<String, dynamic>>[];
                         final otherTeachers = teacher.otherTeachers ?? [];
                         for (int i = 0; i < otherTeachers.length; i++) {
                           final ot = otherTeachers[i];
@@ -546,22 +641,51 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                             'subject': ot.subject,
                             'color': c,
                           };
+                          if (query.isEmpty ||
+                              (otData['name'] as String).toLowerCase().contains(query) ||
+                              (otData['subject'] as String).toLowerCase().contains(query)) {
+                            filteredOtherTeachersList.add(otData);
+                          }
+                        }
 
+                        List<Widget> listItems = [];
+
+                        // 1. Add Head Teacher (Class Teacher)
+                        if (showHeadTeacher) {
                           listItems.add(
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              secondary: CircleAvatar(
-                                backgroundColor: c.withValues(alpha: 0.2),
-                                child: Text(ot.teacherName[0],
-                                    style: TextStyle(color: c, fontWeight: FontWeight.bold)),
+                            _buildDialogTeacherCard(
+                              teacherData: headData,
+                              isSelected: isSelected(widget.teacherId),
+                              isClassTeacher: true,
+                              accentColor: const Color(0xFF2563EB),
+                              onTap: () => toggleSelection(headData),
+                            ),
+                          );
+                        }
+
+                        // 2. Add Other Faculty
+                        for (final otData in filteredOtherTeachersList) {
+                          listItems.add(
+                            _buildDialogTeacherCard(
+                              teacherData: otData,
+                              isSelected: isSelected(otData['id']),
+                              isClassTeacher: false,
+                              accentColor: otData['color'],
+                              onTap: () => toggleSelection(otData),
+                            ),
+                          );
+                        }
+
+                        if (listItems.isEmpty) {
+                          listItems.add(
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 32),
+                                child: Text(
+                                  "No teachers found matching search",
+                                  style: TextStyle(color: Colors.grey),
+                                ),
                               ),
-                              title: Text(ot.teacherName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: Text(ot.subject,
-                                  style: TextStyle(
-                                      fontSize: 10, color: c, fontWeight: FontWeight.bold)),
-                              value: isSelected(ot.teacherId),
-                              onChanged: (bool? val) => toggleSelection(otData),
                             ),
                           );
                         }
@@ -570,49 +694,163 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  "Select Teacher(s)",
-                                  style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F172A)),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.grey),
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Expanded(child: ListView(children: listItems)),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2563EB),
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                ),
-                                onPressed: () {
-                                  // Apply the selections back to the main grid state
-                                  setState(() {
-                                    if (currentSelections.isEmpty) {
-                                      _gridData[day]![index].remove('assignedTeachers');
-                                    } else {
-                                      _gridData[day]![index]['assignedTeachers'] =
-                                          currentSelections;
-                                    }
-                                  });
-                                  Navigator.pop(dialogContext);
-                                },
-                                child: const Text("Apply Assignment",
+                            // 1. Sticky Header
+                            Padding(
+                              padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    "Select Teacher(s)",
                                     style: TextStyle(
-                                        color: Colors.white, fontWeight: FontWeight.bold)),
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0F172A)),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => Navigator.pop(dialogContext),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                            // 2. Scrollable Body
+                            Expanded(
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Search bar
+                                    TextFormField(
+                                      controller: searchController,
+                                      onChanged: (val) {
+                                        setDialogState(() {});
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: "Search by name or subject...",
+                                        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                                        prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8FAFC),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    ...listItems,
+                                    const SizedBox(height: 24),
+                                    if (currentSelections.length > 1) ...[
+                                      const Text(
+                                        "ENTER MAIN SUBJECT NAME",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF2563EB),
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextFormField(
+                                        controller: mainSubjectController,
+                                        decoration: InputDecoration(
+                                          hintText: "e.g., Second Language",
+                                          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                                          ),
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                            horizontal: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // 3. Shaded Sticky Footer
+                            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                            Container(
+                              color: const Color(0xFFF8FAFC),
+                              padding: const EdgeInsets.all(24),
+                              child: SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    padding: const EdgeInsets.symmetric(vertical: 18),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () {
+                                    if (currentSelections.length > 1 &&
+                                        mainSubjectController.text.trim().isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text("Please enter a main subject name"),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    // Apply the selections back to the main grid state
+                                    setState(() {
+                                      if (currentSelections.isEmpty) {
+                                        _gridData[day]![index].remove('assignedTeachers');
+                                        _gridData[day]![index].remove('mainSubject');
+                                      } else {
+                                        _gridData[day]![index]['assignedTeachers'] =
+                                            currentSelections;
+                                        if (currentSelections.length == 1) {
+                                          _gridData[day]![index]['mainSubject'] =
+                                              currentSelections[0]['subject'];
+                                        } else {
+                                          _gridData[day]![index]['mainSubject'] =
+                                              mainSubjectController.text.trim();
+                                        }
+                                      }
+                                    });
+                                    Navigator.pop(dialogContext);
+                                  },
+                                  child: const Text("Apply Assignment",
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
+                                ),
                               ),
                             ),
                           ],
@@ -909,15 +1147,20 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
             final sourceIndex = draggedData['sourceIndex'];
 
             if (isAssigned) {
-              var temp = List<Map<String, dynamic>>.from(
+              var tempTeachers = List<Map<String, dynamic>>.from(
                 slot['assignedTeachers'],
               );
-              _gridData[sourceDay]![sourceIndex]['assignedTeachers'] = temp;
+              var tempMainSubject = slot['mainSubject'];
+              _gridData[sourceDay]![sourceIndex]['assignedTeachers'] = tempTeachers;
+              _gridData[sourceDay]![sourceIndex]['mainSubject'] = tempMainSubject;
             } else {
               _gridData[sourceDay]![sourceIndex].remove('assignedTeachers');
+              _gridData[sourceDay]![sourceIndex].remove('mainSubject');
             }
             _gridData[day]![index]['assignedTeachers'] =
                 draggedData['teachersData'];
+            _gridData[day]![index]['mainSubject'] =
+                draggedData['mainSubject'];
           } else {
             _gridData[day]![index]['assignedTeachers'] = [
               {
@@ -927,6 +1170,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                 'color': draggedData['color'],
               },
             ];
+            _gridData[day]![index]['mainSubject'] = draggedData['subject'];
           }
         });
       },
@@ -962,9 +1206,10 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
     String sourceDay,
     int sourceIndex,
   ) {
-    String displaySubject = assignedTeachers
-        .map((t) => t['subject'])
-        .join(' / ');
+    final mainSubject = _gridData[sourceDay]![sourceIndex]['mainSubject'] as String?;
+    String displaySubject = (mainSubject != null && mainSubject.isNotEmpty)
+        ? mainSubject
+        : assignedTeachers.map((t) => t['subject']).join(' / ');
     String displayTeacher = assignedTeachers.map((t) => t['name']).join(', ');
     Color displayColor = assignedTeachers.first['color'] as Color;
 
@@ -972,6 +1217,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
       'teachersData': assignedTeachers,
       'sourceDay': sourceDay,
       'sourceIndex': sourceIndex,
+      'mainSubject': _gridData[sourceDay]![sourceIndex]['mainSubject'],
     };
 
     Widget cardContent = Container(
@@ -1375,6 +1621,364 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
     );
   }
 
+  Widget _rowInfoTeacher(
+    String title,
+    String value, {
+    Color valueColor = Colors.black,
+    bool isBold = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTeacherBottomSheet(
+    TeacherModel mainTeacher, {
+    OtherTeacherModel? editTeacher,
+    bool isEditingClassTeacher = false,
+  }) async {
+    TeacherModel? selectedTeacher;
+    final subjectController = TextEditingController(
+      text: isEditingClassTeacher
+          ? mainTeacher.subject
+          : (editTeacher?.subject ?? ""),
+    );
+
+    // Fetch Teachers List
+    final snapshot = await FirebaseFirestore.instance
+        .schoolCollection(FirebaseConstant.teacher)
+        .where("delete", isEqualTo: false)
+        .get();
+
+    final allTeachers = snapshot.docs
+        .map((e) => TeacherModel.fromMap(e.data()))
+        .toList();
+
+    if (isEditingClassTeacher) {
+      selectedTeacher = mainTeacher;
+    } else if (editTeacher != null) {
+      final matches = allTeachers.where((t) => t.id == editTeacher.teacherId);
+      if (matches.isNotEmpty) {
+        selectedTeacher = matches.first;
+      }
+    }
+
+    // Already added teacher IDs
+    final existingIds =
+        mainTeacher.otherTeachers?.map((e) => e.teacherId).toList() ?? [];
+
+    // Filter teachers
+    final teacherList = isEditingClassTeacher
+        ? [mainTeacher]
+        : allTeachers.where((t) {
+            if (editTeacher != null && t.id == editTeacher.teacherId) {
+              return true;
+            }
+            return t.id != widget.teacherId && !existingIds.contains(t.id);
+          }).toList();
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Center(
+              child: Container(
+                width: 480,
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        (editTeacher == null && !isEditingClassTeacher)
+                            ? "Add Other Teacher"
+                            : isEditingClassTeacher
+                                ? "Edit Class Teacher"
+                                : "Edit Other Teacher",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Teacher Dropdown
+                      DropdownButtonFormField<TeacherModel>(
+                        initialValue: selectedTeacher,
+                        decoration: InputDecoration(
+                          labelText: "Select Teacher",
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        items: teacherList.map((teacher) {
+                          return DropdownMenuItem(
+                            value: teacher,
+                            child: Text(teacher.teacherName),
+                          );
+                        }).toList(),
+                        onChanged: (editTeacher != null || isEditingClassTeacher)
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  selectedTeacher = value;
+                                  if (subjectController.text.isEmpty) {
+                                    subjectController.text = selectedTeacher?.subject ?? "";
+                                  }
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 15),
+
+                      // Subject Field
+                      SizedBox(
+                        height: 65,
+                        width: double.infinity,
+                        child: TextFormField(
+                          controller: subjectController,
+                          onChanged: (txt) {
+                            setState(() {});
+                          },
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            color: Colors.black,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: "Enter Subject",
+                            floatingLabelBehavior: FloatingLabelBehavior.auto,
+                            labelStyle: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                              color: Color(0xFF5E6777),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 14,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+
+                      // Info Card
+                      if (selectedTeacher != null)
+                        Container(
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            children: [
+                              _rowInfoTeacher(
+                                "Teacher:",
+                                selectedTeacher!.teacherName,
+                              ),
+                              _rowInfoTeacher(
+                                "Employee ID:",
+                                selectedTeacher!.employeeId,
+                              ),
+                              _rowInfoTeacher(
+                                "Mobile No:",
+                                selectedTeacher!.mobileNo,
+                              ),
+                              _rowInfoTeacher(
+                                "Subject:",
+                                subjectController.text,
+                                valueColor: Colors.blue,
+                                isBold: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 25),
+
+                      // Submit Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xff1193D4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () async {
+                            if (subjectController.text.isEmpty ||
+                                selectedTeacher == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Fill all fields"),
+                                ),
+                              );
+                              return;
+                            }
+
+                            try {
+                              final docRef = FirebaseFirestore.instance
+                                  .schoolCollection(FirebaseConstant.teacher)
+                                  .doc(widget.teacherId);
+
+                              if (isEditingClassTeacher) {
+                                await docRef.update({
+                                  "subject": subjectController.text.trim(),
+                                });
+
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        "${subjectController.text.trim()} Teacher Updated Successfully",
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return;
+                              }
+
+                              final snap = await docRef.get();
+                              if (!snap.exists) return;
+
+                              final teacherData = TeacherModel.fromMap(
+                                snap.data()!,
+                              );
+
+                              final list = teacherData.otherTeachers ?? [];
+
+                              final updatedOtherTeacher = OtherTeacherModel(
+                                email: selectedTeacher!.email,
+                                imageUrl: selectedTeacher!.imageUrl,
+                                teacherName: selectedTeacher!.teacherName,
+                                teacherId: selectedTeacher!.id,
+                                subject: subjectController.text.trim(),
+                                employeeId: selectedTeacher!.employeeId,
+                                mobileNo: int.tryParse(selectedTeacher!.mobileNo) ?? 0,
+                                isPermanent: true,
+                              );
+
+                              List<OtherTeacherModel> updatedList = [];
+                              if (editTeacher == null) {
+                                updatedList = [...list, updatedOtherTeacher];
+                              } else {
+                                updatedList = list.map((t) {
+                                  if (t.teacherId == editTeacher.teacherId) {
+                                    return updatedOtherTeacher;
+                                  }
+                                  return t;
+                                }).toList();
+                              }
+
+                              await docRef.update({
+                                "otherTeachers": updatedList
+                                    .map((e) => e.toMap())
+                                    .toList(),
+                              });
+
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      editTeacher == null
+                                          ? "New ${subjectController.text.trim()} Teacher Added Successfully"
+                                          : "${subjectController.text.trim()} Teacher Updated Successfully",
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Error adding teacher: $e"),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Text(
+                            (editTeacher == null && !isEditingClassTeacher)
+                                ? "Add Teacher"
+                                : "Update Teacher",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFacultyCard() {
     // Use the refactored stream provider
     final teacherAsync = ref.watch(teacherStreamProvider(widget.teacherId));
@@ -1468,6 +2072,20 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                     const Color(0xFF2563EB),
                     isHeadTeacher: true,
                     periodCount: getTeacherPeriodCount(widget.teacherId),
+                    onEdit: () => _showAddTeacherBottomSheet(
+                      teacher,
+                      isEditingClassTeacher: true,
+                    ),
+                  ),
+                  _facultyItemUi(
+                    teacher.teacherName,
+                    teacher.subject,
+                    teacher.imageUrl,
+                    const Color(0xFF2563EB),
+                    isHeadTeacher: true,
+                    periodCount: getTeacherPeriodCount(widget.teacherId),
+                    onEdit: null,
+                    showCount: false,
                   ),
                 ),
               );
@@ -1503,12 +2121,66 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                           ot.imageUrl,
                           tColor,
                           periodCount: getTeacherPeriodCount(ot.teacherId),
+                          onEdit: () => _showAddTeacherBottomSheet(
+                            teacher,
+                            editTeacher: ot,
+                          ),
+                        ),
+                        _facultyItemUi(
+                          ot.teacherName,
+                          ot.subject,
+                          ot.imageUrl,
+                          tColor,
+                          periodCount: getTeacherPeriodCount(ot.teacherId),
+                          onEdit: null,
+                          showCount: false,
                         ),
                       ),
                     ),
                   );
                 }
               }
+
+              // 3. Add "add Teacher " button tile
+              teacherWidgets.add(
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Divider(color: Colors.grey.shade200),
+                ),
+              );
+              teacherWidgets.add(
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showAddTeacherBottomSheet(teacher),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add, color: Color(0xFF2563EB), size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            "add Teacher ",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+
               return Column(children: teacherWidgets);
             },
           ),
@@ -1520,6 +2192,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
   Widget _draggableFacultyItem(
     Map<String, dynamic> teacherData,
     Widget uiChild,
+    Widget feedbackChild,
   ) {
     return Draggable<Map<String, dynamic>>(
       data: teacherData,
@@ -1527,7 +2200,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
         color: Colors.transparent,
         child: Opacity(
           opacity: 0.9,
-          child: SizedBox(width: 280, child: uiChild),
+          child: SizedBox(width: 280, child: feedbackChild),
         ),
       ),
       childWhenDragging: Opacity(opacity: 0.4, child: uiChild),
@@ -1542,6 +2215,8 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
     Color statusColor, {
     bool isHeadTeacher = false,
     int periodCount = 0,
+    VoidCallback? onEdit,
+    bool showCount = true,
   }) {
     return Container(
       padding: isHeadTeacher ? const EdgeInsets.all(12) : EdgeInsets.zero,
@@ -1599,12 +2274,6 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (isHeadTeacher)
-                            const Icon(
-                              Icons.star,
-                              size: 14,
-                              color: Color(0xFFF59E0B),
-                            ),
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -1625,26 +2294,37 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
           ),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isHeadTeacher
-                      ? Colors.blue.shade200
-                      : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
+              if (onEdit != null) ...[
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 16, color: Color(0xFF3B82F6)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: onEdit,
                 ),
-                child: Text(
-                  periodCount.toString().padLeft(2, '0'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 8),
+              ],
+              if (showCount) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
                     color: isHeadTeacher
+                        ? Colors.blue.shade200
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    periodCount.toString().padLeft(2, '0'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isHeadTeacher
                         ? Colors.blue.shade900
                         : const Color(0xFF64748B),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ],
               const Icon(
                 Icons.drag_indicator,
                 size: 18,

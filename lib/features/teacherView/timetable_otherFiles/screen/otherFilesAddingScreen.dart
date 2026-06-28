@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dotted_border/dotted_border.dart';
@@ -27,7 +28,7 @@ class _OtherFileAddingScreenState
     extends ConsumerState<OtherFilesAddingScreen> {
   final TextEditingController titleController = TextEditingController();
 
-  String? selectedFilePath;
+  Uint8List? selectedFileBytes;
   String? selectedFileName;
 
   @override
@@ -124,7 +125,7 @@ class _OtherFileAddingScreenState
                       final file = result.files.single;
 
                       setState(() {
-                        selectedFilePath = file.path; // mobile
+                        selectedFileBytes = file.bytes;
                         selectedFileName = file.name;
                       });
 
@@ -152,7 +153,7 @@ class _OtherFileAddingScreenState
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            selectedFilePath == null
+                            selectedFileBytes == null
                                 ? "Click to upload your PDF here"
                                 : '$selectedFileName',
                             style: const TextStyle(
@@ -195,7 +196,7 @@ class _OtherFileAddingScreenState
                                 return;
                               }
 
-                              if (selectedFilePath == null) {
+                              if (selectedFileBytes == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text("Please select a PDF file"),
@@ -212,8 +213,8 @@ class _OtherFileAddingScreenState
                                   .uploadFile(
                                     teacherId: widget.teacherId,
                                     title: titleController.text.trim(),
-                                    subtitle: "OTHER FILE",
-                                    filePath: selectedFilePath!,
+                                    subtitle: "Notes",
+                                    fileBytes: selectedFileBytes!,
                                     fileName: selectedFileName!,
                                     classNo: widget.classNo,
                                     division: widget.division,

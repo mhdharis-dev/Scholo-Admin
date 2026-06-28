@@ -40,32 +40,58 @@ class ExamFolderRepository {
   /// 🔹 FIREBASE EXAMS
   /// ================================
 
-  Stream<List<QueryDocumentSnapshot>> getFirebaseExams(String teacherId) {
+  Stream<List<QueryDocumentSnapshot>> getFirebaseExams() {
     return _firestore
         .schoolCollection(FirebaseConstant.studentsMark)
-        .where("teacherId", isEqualTo: teacherId)
-        .where("delete", isEqualTo: false)
-        .orderBy("uploadedAt", descending: true) // ✅ added
         .snapshots()
         .map((e) => e.docs);
   }
 
-  Future<void> softDeleteExam(String docId) async {
-    await _firestore
+  Future<void> softDeleteExam({
+    required String examName,
+    required String classNo,
+    required String division,
+  }) async {
+    final docRef = _firestore
         .schoolCollection(FirebaseConstant.studentsMark)
-        .doc(docId)
-        .update({
-      "delete": true,
-      "deletedAt": FieldValue.serverTimestamp(),
+        .doc(examName);
+
+    final docSnap = await docRef.get();
+    String targetClassKey = classNo;
+    String targetDivKey = division;
+
+    if (docSnap.exists) {
+      final docData = docSnap.data();
+      if (docData != null) {
+        final matchedClassKey = docData.keys.firstWhere(
+          (k) => k.trim() == targetClassKey,
+          orElse: () => '',
+        );
+        if (matchedClassKey.isNotEmpty) {
+          targetClassKey = matchedClassKey;
+          final classMap = docData[targetClassKey];
+          if (classMap is Map<String, dynamic>) {
+            final matchedDivKey = classMap.keys.firstWhere(
+              (k) => k.trim().toLowerCase() == targetDivKey.trim().toLowerCase(),
+              orElse: () => '',
+            );
+            if (matchedDivKey.isNotEmpty) {
+              targetDivKey = matchedDivKey;
+            }
+          }
+        }
+      }
+    }
+
+    await docRef.update({
+      "$targetClassKey.$targetDivKey.delete": true,
+      "$targetClassKey.$targetDivKey.deletedAt": FieldValue.serverTimestamp(),
     });
   }
 
-  Future<List<String>> getExamNamesOnce(String teacherId) async {
+  Future<List<String>> getExamNamesOnce() async {
     final snap = await _firestore
         .schoolCollection(FirebaseConstant.studentsMark)
-        .where("teacherId", isEqualTo: teacherId)
-        .where("delete", isEqualTo: false)
-        .orderBy("uploadedAt", descending: true) // ✅ added
         .get();
 
     return snap.docs.map((e) => e.id).toList();

@@ -49,12 +49,12 @@ class TempExamController extends StateNotifier<List<String>> {
 final examFolderListProvider =
 StreamProvider.family<List<QueryDocumentSnapshot>, String>((ref, teacherId) {
   final repo = ref.watch(examFolderRepositoryProvider);
-  return repo.getFirebaseExams(teacherId);
+  return repo.getFirebaseExams();
 });
 
 /// 🔥 Exam name suggestions (like feeDescriptionsProvider)
 final examNameSuggestionsProvider =
-FutureProvider.family<List<String>, String>((ref, teacherId) {
+FutureProvider<List<String>>((ref) {
   final repo = ref.read(examFolderRepositoryProvider);
-  return repo.getExamNamesOnce(teacherId);
+  return repo.getExamNamesOnce();
 });

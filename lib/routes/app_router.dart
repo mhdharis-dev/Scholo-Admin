@@ -11,6 +11,7 @@ import '../features/events/screen/events_screen.dart';
 import '../features/teacherView/class_dashbord/screen/classWiseTeacherView_screen.dart';
 import '../features/trashbin/screen/trashBin_screen.dart';
 import '../features/notifications/screen/notifications _Page.dart';
+import '../features/settings/screen/settings_screen.dart';
 
 // Import newly routed detail and sub-pages
 import '../features/teacherView/class_dashbord/screen/teacherViewDashbord.dart';
@@ -21,6 +22,8 @@ import '../features/teacherView/mark/screen/folderPage_screen.dart';
 import '../features/teacherView/report/screen/year_wise_report.dart';
 import '../features/teacherView/fee/screen/fee_list.dart';
 import '../features/teacherView/fee/screen/fee_collection.dart';
+import '../features/teacherView/timetable_otherFiles/screen/timetableViewPage.dart';
+import '../models/timeTable_model.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
@@ -106,6 +109,18 @@ final router = GoRouter(
                   ),
                 ),
                 GoRoute(
+                  path: 'timetable-view/:classNo/:division',
+                  builder: (context, state) {
+                    final timetable = state.extra as TimetableModel;
+                    return TimetableViewPage(
+                      teacherId: state.pathParameters['teacherId']!,
+                      classNo: int.parse(state.pathParameters['classNo']!),
+                      division: state.pathParameters['division']!,
+                      timetable: timetable,
+                    );
+                  },
+                ),
+                GoRoute(
                   path: 'marks',
                   builder: (context, state) => ExamFolderPageScreen(
                     teacherId: state.pathParameters['teacherId']!,
@@ -141,6 +156,10 @@ final router = GoRouter(
         GoRoute(
           path: '/admin/notifications',
           builder: (_, __) => const NotificationsPage(),
+        ),
+        GoRoute(
+          path: '/admin/settings',
+          builder: (_, __) => const AdminSettingsScreen(),
         ),
       ],
     ),

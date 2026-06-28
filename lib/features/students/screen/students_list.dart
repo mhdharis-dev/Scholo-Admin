@@ -14,6 +14,7 @@ import 'package:scholo_admin/core/widgets/phone_field.dart';
 import '../../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../../core/constant/firebase_constant.dart';
 import '../../../core/constant/image_constant.dart';
+import 'package:alert_info/alert_info.dart';
 
 class StudentListScreen extends ConsumerStatefulWidget {
   const StudentListScreen({super.key});
@@ -515,7 +516,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     const SizedBox(height: 24),
                     _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10)
+                      LengthLimitingTextInputFormatter(6)
                     ]),
                     const SizedBox(height: 14),
                     _buildValidatedField(_nameController, "Name", inputFormatters: [
@@ -563,9 +564,154 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         onPressed: _isUploading
                             ? null
                             : () async {
+                          final admissionNo = _admissionController.text.trim();
+                          final rollNo = _rollController.text.trim();
+                          final name = _nameController.text.trim();
+                          final mobile = _mobileController.text.trim();
+                          final parent = _parentController.text.trim();
+                          final address = _addressController.text.trim();
+                          final email = _emailController.text.trim();
+                          final password = _passwordController.text.trim();
+                          final day = _dayController.text.trim();
+                          final month = _monthController.text.trim();
+                          final year = _yearController.text.trim();
+
+                          if (admissionNo.isEmpty || admissionNo.length != 6) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Admission number must be exactly 6 digits',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (name.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Name cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (rollNo.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Roll number cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          final phoneError = getPhoneValidationErrorMessage(mobile);
+                          if (phoneError.isNotEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: phoneError,
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (_selectedGender == null || _selectedGender!.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please select a gender',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
                           if (_classNo == null || _division == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Select Class and Division")));
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please select Class and Division',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          final dayVal = int.tryParse(day);
+                          final monthVal = int.tryParse(month);
+                          final yearVal = int.tryParse(year);
+                          if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                              monthVal == null || monthVal < 1 || monthVal > 12 ||
+                              yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (parent.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Parent name cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (address.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Address cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (!_isEmailValid(email)) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please enter a valid Email',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (!_isPasswordValid(password)) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Password must be at least 6 characters',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
                             return;
                           }
 
@@ -576,10 +722,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
                             }
 
-                            final dob = DateTime.tryParse(
-                              "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                            ) ??
-                                DateTime(2000, 1, 1);
+                            final dob = DateTime(
+                              int.parse(_yearController.text),
+                              int.parse(_monthController.text),
+                              int.parse(_dayController.text),
+                            );
 
                             final newStudent = StudentsModel(
                               studentId: editingStudent?.studentId ?? '',
@@ -636,11 +783,27 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                             if (context.mounted) {
                               Navigator.pop(context);
+                              AlertInfo.show(
+                                context: context,
+                                text: editingStudent != null ? "Student updated successfully" : "Student added successfully",
+                                typeInfo: TypeInfo.success,
+                                iconColor: Colors.white,
+                                backgroundColor: const Color(0xFF27AE60),
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(SnackBar(content: Text("Error: $e")));
+                              AlertInfo.show(
+                                context: context,
+                                text: "Error: $e",
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
                             }
                           } finally {
                             setSheetState(() => _isUploading = false);
@@ -1206,6 +1369,27 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                   label: const Text(
                     'Add Student',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 16),
+
+                // Refresh Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                      )
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                    onPressed: () {
+                      ref.invalidate(studentControllerProvider);
+                    },
                   ),
                 ),
               ],

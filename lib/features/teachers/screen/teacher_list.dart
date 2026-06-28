@@ -12,6 +12,7 @@ import '../../../../models/class_model.dart';
 import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import '../controller/teacher_controller.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
+import 'package:alert_info/alert_info.dart';
 
 class TeacherListScreen extends ConsumerStatefulWidget {
   const TeacherListScreen({super.key});
@@ -530,23 +531,140 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                             ? null
                             : () async {
                                 // Validate required fields
-                                if (_teacherIdController.text.isEmpty ||
-                                    _nameController.text.isEmpty ||
-                                    _mobileController.text.isEmpty ||
-                                    _selectedClass == null ||
-                                    _selectedDiv == null ||
-                                    _subjectController.text.isEmpty ||
-                                    !_isEmailValid(_emailController.text) ||
-                                    !_isPasswordValid(_passwordController.text) ||
-                                    _selectedGender == null ||
-                                    _addressController.text.isEmpty ||
-                                    _dayController.text.isEmpty ||
-                                    _monthController.text.isEmpty ||
-                                    _yearController.text.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Fill all fields correctly"),
-                                    ),
+                                final employeeId = _teacherIdController.text.trim();
+                                final name = _nameController.text.trim();
+                                final mobile = _mobileController.text.trim();
+                                final subject = _subjectController.text.trim();
+                                final address = _addressController.text.trim();
+                                final email = _emailController.text.trim();
+                                final password = _passwordController.text.trim();
+                                final dayStr = _dayController.text.trim();
+                                final monthStr = _monthController.text.trim();
+                                final yearStr = _yearController.text.trim();
+
+                                if (employeeId.isEmpty) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Employee ID cannot be empty',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (name.isEmpty) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Name cannot be empty',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (subject.isEmpty) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Subject cannot be empty',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (_selectedClass == null || _selectedDiv == null) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Please select Class and Division',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (_selectedGender == null) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Please select Gender',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                final phoneError = getPhoneValidationErrorMessage(mobile);
+                                if (phoneError.isNotEmpty) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: phoneError,
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (!_isEmailValid(email)) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Please enter a valid Email',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (!_isPasswordValid(password)) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Password must be at least 6 characters',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                if (address.isEmpty) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Address cannot be empty',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
+                                  );
+                                  return;
+                                }
+                                final dayVal = int.tryParse(dayStr);
+                                final monthVal = int.tryParse(monthStr);
+                                final yearVal = int.tryParse(yearStr);
+                                if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                                    monthVal == null || monthVal < 1 || monthVal > 12 ||
+                                    yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                                  AlertInfo.show(
+                                    context: context,
+                                    text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                                    typeInfo: TypeInfo.error,
+                                    iconColor: Colors.white,
+                                    backgroundColor: Colors.redAccent,
+                                    textColor: Colors.white,
+                                    position: MessagePosition.top,
                                   );
                                   return;
                                 }
@@ -640,12 +758,29 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
 
                                   if (context.mounted) {
                                     Navigator.pop(context);
+                                    AlertInfo.show(
+                                      context: context,
+                                      text: editingTeacher != null
+                                          ? 'Teacher updated successfully'
+                                          : 'Teacher added successfully',
+                                      typeInfo: TypeInfo.success,
+                                      iconColor: Colors.white,
+                                      backgroundColor: const Color(0xFF27AE60),
+                                      textColor: Colors.white,
+                                      position: MessagePosition.top,
+                                    );
                                   }
                                 } catch (e) {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                    AlertInfo.show(
+                                      context: context,
+                                      text: 'Error: $e',
+                                      typeInfo: TypeInfo.error,
+                                      iconColor: Colors.white,
+                                      backgroundColor: Colors.redAccent,
+                                      textColor: Colors.white,
+                                      position: MessagePosition.top,
+                                    );
                                   }
                                 } finally {
                                   setSheetState(() => _isUploading = false);
@@ -1188,6 +1323,27 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                   label: const Text(
                     'Add Teacher',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Refresh Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                      )
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                    onPressed: () {
+                      ref.invalidate(teacherControllerProvider);
+                    },
                   ),
                 ),
               ],

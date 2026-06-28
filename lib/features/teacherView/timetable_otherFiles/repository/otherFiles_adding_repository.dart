@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,37 +14,33 @@ class OtherFilesRepository {
     required String teacherId,
     required String title,
     required String subtitle,
-    required String filePath,
+    required Uint8List fileBytes,
     required String fileName,
     required String division,
     required int classNo,
   }) async {
 
     /// 1️⃣ Upload to Cloudinary
-    // Note: You might want to rename 'cloudinaryTimetable' to 'cloudinaryOtherFiles' in your CloudinaryService as well
     final cloudinaryResponse =
     await CloudinaryService.cloudinaryTimetable.uploadFile(
-      CloudinaryFile.fromFile(
-        filePath,
+      CloudinaryFile.fromBytesData(
+        fileBytes,
+        identifier: fileName,
         folder: "otherFile",
         resourceType: CloudinaryResourceType.Raw, // Supports PDFs, Docs, etc.
       ),
     );
 
     final fileUrl = cloudinaryResponse.secureUrl;
+    final idVal = DateTime.now().millisecondsSinceEpoch.toString();
 
-    /// 2️⃣ Create Firestore Document Reference
-    final doc = _firestore
-        .schoolCollection(FirebaseConstant.otherFile)
-        .doc();
-
-    /// 3️⃣ Create Model instance
+    /// 2️⃣ Create Model instance
     final model = OtherFilesModel(
-      id: doc.id,
+      id: idVal,
       fileName: fileName,
       fileUrl: fileUrl,
       tittle: title,
-      subtitle: subtitle,
+      subtitle: subtitle == "OTHER FILE" ? "Notes" : subtitle,
       uploadedAt: DateTime.now(),
       delete: false,
       teacherId: teacherId,
@@ -52,8 +49,16 @@ class OtherFilesRepository {
       division: division,
     );
 
-    /// 4️⃣ Save to Firestore
-    await doc.set(model.toMap());
+    /// 3️⃣ Save to Firestore (Nested Schema only)
+    final nestedDoc = _firestore
+        .schoolCollection(FirebaseConstant.notes)
+        .doc(classNo.toString());
+
+    await nestedDoc.set({
+      division: {
+        title: model.toMap(),
+      }
+    }, SetOptions(merge: true));
   }
 }
 

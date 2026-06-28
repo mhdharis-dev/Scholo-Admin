@@ -23,6 +23,7 @@ import '../../../core/constant/image_constant.dart';
 import '../../../models/event_model.dart';
 import '../../../models/fees_model.dart';
 import '../../../models/teacher_model.dart';
+import 'package:alert_info/alert_info.dart';
 
 // -----------------------------------------------------------------------------
 // RIVERPOD PROVIDERS
@@ -389,13 +390,26 @@ final unmarkedClassesProvider =
       "${now.month.toString().padLeft(2, '0')}-"
       "${now.year}";
 
-  log("🔍 unmarkedClassesProvider: Fetching teachers and attendance for dateKey => '$dateKey'");
+  log("🔍 unmarkedClassesProvider: Fetching teachers, students and attendance for dateKey => '$dateKey'");
 
   final teachersSnap = await firestore
       .schoolCollection(FirebaseConstant.teacher)
       .where('delete', isEqualTo: false)
       .where('classNo', isNotEqualTo: 0)
       .get();
+
+  final studentsSnap = await firestore
+      .schoolCollection(FirebaseConstant.student)
+      .where('delete', isEqualTo: false)
+      .get();
+
+  final activeClasses = studentsSnap.docs.map((doc) {
+    final data = doc.data();
+    final classNoRaw = data['classNo'];
+    final int classNoInt = classNoRaw is int ? classNoRaw : (int.tryParse(classNoRaw?.toString() ?? '') ?? 0);
+    final division = data['division']?.toString().toUpperCase().trim() ?? '';
+    return "$classNoInt-$division";
+  }).toSet();
 
   final attendanceDoc = await firestore
       .schoolCollection(FirebaseConstant.attendance)
@@ -404,21 +418,37 @@ final unmarkedClassesProvider =
 
   log("🔍 unmarkedClassesProvider: attendanceDoc exists today => ${attendanceDoc.exists}");
 
-  // If no attendance document exists today, ALL valid classes are unmarked
+  // If no attendance document exists today, ALL valid classes with students are unmarked
   if (!attendanceDoc.exists) {
-    log("📋 No attendance document today - all valid classes are unmarked");
+    log("📋 No attendance document today - all valid classes with students are unmarked");
     final unmarkedList = <Map<String, dynamic>>[];
     for (final t in teachersSnap.docs) {
       final data = t.data();
-      final classNo = data['classNo']?.toString() ?? '0';
-      final division = data['division']?.toString().trim() ?? '';
+      final classNoRaw = data['classNo'];
+      final int classNoInt = classNoRaw is int ? classNoRaw : (int.tryParse(classNoRaw?.toString() ?? '') ?? 0);
+      final divisionRaw = data['division']?.toString().trim() ?? '';
+      final division = divisionRaw.toUpperCase();
       
-      if (division.toLowerCase() == 'nil' || division.isEmpty || classNo == '0') {
+      if (division.toLowerCase() == 'nil' || division.isEmpty || classNoInt == 0) {
         continue;
       }
       
+      final key = "$classNoInt-$division";
+      if (!activeClasses.contains(key)) {
+        continue;
+      }
+
+      final String classLabel;
+      if (classNoInt == -2) {
+        classLabel = 'LKG';
+      } else if (classNoInt == -1) {
+        classLabel = 'UKG';
+      } else {
+        classLabel = classNoInt.toString();
+      }
+      
       unmarkedList.add({
-        'label': 'Class $classNo-$division',
+        'label': 'Class $classLabel-$divisionRaw',
         'teacherId': t.id,
       });
     }
@@ -434,15 +464,21 @@ final unmarkedClassesProvider =
   for (final t in teachersSnap.docs) {
     final data = t.data();
 
-    final classNo = data['classNo']?.toString() ?? '0';
+    final classNoRaw = data['classNo'];
+    final int classNoInt = classNoRaw is int ? classNoRaw : (int.tryParse(classNoRaw?.toString() ?? '') ?? 0);
     final divisionRaw = data['division']?.toString().trim() ?? '';
+    final division = divisionRaw.toUpperCase();
 
-    if (divisionRaw.toLowerCase() == 'nil' || divisionRaw.isEmpty || classNo == '0') {
+    if (division.toLowerCase() == 'nil' || division.isEmpty || classNoInt == 0) {
       continue;
     }
 
-    final division = divisionRaw.toUpperCase();
-    final classMap = attendanceData[classNo];
+    final key = "$classNoInt-$division";
+    if (!activeClasses.contains(key)) {
+      continue;
+    }
+
+    final classMap = attendanceData[classNoInt.toString()];
     
     // Check if there is list of students recorded under classMap[division] and it's not empty
     bool isMarked = false;
@@ -453,11 +489,20 @@ final unmarkedClassesProvider =
       }
     }
 
-    log("🔍 unmarkedClassesProvider: Class $classNo-$division => isMarked: $isMarked");
+    log("🔍 unmarkedClassesProvider: Class $classNoInt-$division => isMarked: $isMarked");
 
     if (!isMarked) {
+      final String classLabel;
+      if (classNoInt == -2) {
+        classLabel = 'LKG';
+      } else if (classNoInt == -1) {
+        classLabel = 'UKG';
+      } else {
+        classLabel = classNoInt.toString();
+      }
+
       unmarked.add({
-        'label': 'Class $classNo-$divisionRaw',
+        'label': 'Class $classLabel-$divisionRaw',
         'teacherId': t.id,
       });
     }
@@ -597,15 +642,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _showSnack(String message, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: success ? Colors.green : Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(20),
-        duration: const Duration(seconds: 2),
-      ),
+    AlertInfo.show(
+      context: context,
+      text: message,
+      typeInfo: success ? TypeInfo.success : TypeInfo.error,
+      iconColor: Colors.white,
+      backgroundColor: success ? const Color(0xFF27AE60) : Colors.redAccent,
+      textColor: Colors.white,
+      position: MessagePosition.top,
     );
   }
 
@@ -2035,20 +2079,141 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     onPressed: _isUploading
                         ? null
                         : () async {
-                            if (_teacherIdController.text.isEmpty ||
-                                _nameController.text.isEmpty ||
-                                _mobileController.text.isEmpty ||
-                                _subjectController.text.isEmpty ||
-                                _selectedClass == null ||
-                                _selectedDiv == null ||
-                                _selectedGender == null ||
-                                !_isEmailValid(_emailController.text) ||
-                                !_isPasswordValid(_passwordController.text)) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Fill all fields correctly"),
-                                ),
+                            final employeeId = _teacherIdController.text.trim();
+                            final name = _nameController.text.trim();
+                            final mobile = _mobileController.text.trim();
+                            final subject = _subjectController.text.trim();
+                            final address = _addressController.text.trim();
+                            final email = _emailController.text.trim();
+                            final password = _passwordController.text.trim();
+                            final dayStr = _dayController.text.trim();
+                            final monthStr = _monthController.text.trim();
+                            final yearStr = _yearController.text.trim();
+
+                            if (employeeId.isEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Employee ID cannot be empty',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
                               );
+                              return;
+                            }
+                            if (name.isEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Name cannot be empty',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (subject.isEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Subject cannot be empty',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (_selectedClass == null || _selectedDiv == null) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Please select Class and Division',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (_selectedGender == null) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Please select Gender',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            final phoneError = getPhoneValidationErrorMessage(mobile);
+                            if (phoneError.isNotEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: phoneError,
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (!_isEmailValid(email)) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Please enter a valid Email',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (!_isPasswordValid(password)) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Password must be at least 6 characters',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            if (address.isEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Address cannot be empty',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                            final dayVal = int.tryParse(dayStr);
+                            final monthVal = int.tryParse(monthStr);
+                            final yearVal = int.tryParse(yearStr);
+                            if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                                monthVal == null || monthVal < 1 || monthVal > 12 ||
+                                yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                               );
                               return;
                             }
 
@@ -2086,9 +2251,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                               await addTeacher(teacher);
 
-                              Navigator.pop(context);
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                AlertInfo.show(
+                                  context: context,
+                                  text: 'Teacher added successfully',
+                                  typeInfo: TypeInfo.success,
+                                  iconColor: Colors.white,
+                                  backgroundColor: const Color(0xFF27AE60),
+                                  textColor: Colors.white,
+                                  position: MessagePosition.top,
+                                );
+                              }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                              if (context.mounted) {
+                                AlertInfo.show(
+                                  context: context,
+                                  text: "Error: $e",
+                                  typeInfo: TypeInfo.error,
+                                  iconColor: Colors.white,
+                                  backgroundColor: Colors.redAccent,
+                                  textColor: Colors.white,
+                                  position: MessagePosition.top,
+                                );
+                              }
                             } finally {
                               setState(() => _isUploading = false);
                             }
@@ -2357,14 +2543,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 24),
                     _buildTextFieldWithValidation(_admissionController, "Admission No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
+                      LengthLimitingTextInputFormatter(6),
                     ]),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_nameController, "Name"),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_rollController, "Roll No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(5),
+                      LengthLimitingTextInputFormatter(2),
                     ]),
                     const SizedBox(height: 14),
                     _buildPhoneField(),
@@ -2407,76 +2593,239 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         onPressed: _isUploading
                             ? null
                             : () async {
-                                if (_classNo == null || _division == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Select Class and Division"),
-                                    ),
-                                  );
-                                  return;
-                                }
+                          final admissionNo = _admissionController.text.trim();
+                          final rollNo = _rollController.text.trim();
+                          final name = _nameController.text.trim();
+                          final mobile = _mobileController.text.trim();
+                          final parent = _parentController.text.trim();
+                          final address = _addressController.text.trim();
+                          final email = _emailController.text.trim();
+                          final password = _passwordController.text.trim();
+                          final day = _dayController.text.trim();
+                          final month = _monthController.text.trim();
+                          final year = _yearController.text.trim();
 
-                                setSheetState(() => _isUploading = true);
-                                setState(() => _isUploading = true);
+                          if (admissionNo.isEmpty || admissionNo.length != 6) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Admission number must be exactly 6 digits',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (name.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Name cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (rollNo.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Roll number cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          final phoneError = getPhoneValidationErrorMessage(mobile);
+                          if (phoneError.isNotEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: phoneError,
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (_selectedGender == null || _selectedGender!.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please select a gender',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (_classNo == null || _division == null) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please select Class and Division',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          final dayVal = int.tryParse(day);
+                          final monthVal = int.tryParse(month);
+                          final yearVal = int.tryParse(year);
+                          if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                              monthVal == null || monthVal < 1 || monthVal > 12 ||
+                              yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (parent.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Parent name cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (address.isEmpty) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Address cannot be empty',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (!_isEmailValid(email)) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Please enter a valid Email',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          if (!_isPasswordValid(password)) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Password must be at least 6 characters',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
 
-                                try {
-                                  if (_selectedFile != null) {
-                                    _uploadedImageUrl = await _uploadToCloudinary(
-                                      _selectedFile!,
-                                    );
-                                  }
+                          setSheetState(() => _isUploading = true);
+                          setState(() => _isUploading = true);
 
-                                  final dob =
-                                      DateTime.tryParse(
-                                        "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                                      ) ??
-                                      DateTime(2000, 1, 1);
+                          try {
+                            if (_selectedFile != null) {
+                              _uploadedImageUrl = await _uploadToCloudinary(
+                                _selectedFile!,
+                              );
+                            }
 
-                                  final student = StudentsModel(
-                                    studentId: '',
-                                    admissionNo: int.parse(_admissionController.text),
-                                    rollNo: int.parse(_rollController.text),
-                                    studentName: _nameController.text,
-                                    mobileNo: _mobileController.text,
-                                    email: _emailController.text,
-                                    password: _passwordController.text,
-                                    address: _addressController.text,
-                                    parentName: _parentController.text,
-                                    classNo: _classNoToInt(_classNo!),
-                                    division: _division!,
-                                    teacherName: _selectedTeacherName ?? '',
-                                    teacherId: _selectedTeacherId ?? '',
-                                    gender: _selectedGender ?? '',
-                                    delete: false,
-                                    imageUrl: _uploadedImageUrl ?? '',
-                                    dateOfBirth: dob,
-                                    createdDate: DateTime.now(),
-                                  );
+                            final dob = DateTime(
+                              int.parse(_yearController.text),
+                              int.parse(_monthController.text),
+                              int.parse(_dayController.text),
+                            );
 
-                                  final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(
-                                    FirebaseConstant.student,
-                                  );
-                                  final classRepo = ref.read(classWiseTeacherRepoProvider);
-                                  final doc = await studentCollectionRef.add(student.toMap());
-                                  final studentId = doc.id;
-                                  await doc.update({'studentId': studentId});
+                            final student = StudentsModel(
+                              studentId: '',
+                              admissionNo: int.parse(_admissionController.text),
+                              rollNo: int.parse(_rollController.text),
+                              studentName: _nameController.text,
+                              mobileNo: _mobileController.text,
+                              email: _emailController.text,
+                              password: _passwordController.text,
+                              address: _addressController.text,
+                              parentName: _parentController.text,
+                              classNo: _classNoToInt(_classNo!),
+                              division: _division!,
+                              teacherName: _selectedTeacherName ?? '',
+                              teacherId: _selectedTeacherId ?? '',
+                              gender: _selectedGender ?? '',
+                              delete: false,
+                              imageUrl: _uploadedImageUrl ?? '',
+                              dateOfBirth: dob,
+                              createdDate: DateTime.now(),
+                            );
 
-                                  await classRepo.syncStudentToClass(
-                                    newClassNo: _classNoToString(student.classNo),
-                                    newDivision: student.division,
-                                    studentId: studentId,
-                                    studentName: student.studentName,
-                                    imageUrl: student.imageUrl,
-                                    rollNo: student.rollNo,
-                                  );
+                            final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(
+                              FirebaseConstant.student,
+                            );
+                            final classRepo = ref.read(classWiseTeacherRepoProvider);
+                            final doc = await studentCollectionRef.add(student.toMap());
+                            final studentId = doc.id;
+                            await doc.update({'studentId': studentId});
 
-                                  Navigator.pop(context);
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-                                } finally {
-                                  setSheetState(() => _isUploading = false);
-                                  setState(() => _isUploading = false);
-                                }
+                            await classRepo.syncStudentToClass(
+                              newClassNo: _classNoToString(student.classNo),
+                              newDivision: student.division,
+                              studentId: studentId,
+                              studentName: student.studentName,
+                              imageUrl: student.imageUrl,
+                              rollNo: student.rollNo,
+                            );
+
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Student added successfully',
+                                typeInfo: TypeInfo.success,
+                                iconColor: Colors.white,
+                                backgroundColor: const Color(0xFF27AE60),
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              AlertInfo.show(
+                                context: context,
+                                text: "Error: $e",
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                            }
+                          } finally {
+                            setSheetState(() => _isUploading = false);
+                            setState(() => _isUploading = false);
+                          }
                               },
                         child: _isUploading
                             ? const CircularProgressIndicator(color: Colors.white)
@@ -2517,7 +2866,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header Row (Title, Subtitle, Refresh Button)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Admin Dashboard',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Overview of key school metrics and performance.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                      )
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                    onPressed: () {
+                      ref.invalidate(classesStreamProvider);
+                      ref.invalidate(cleanExpiredSubstitutionsProvider);
+                      ref.invalidate(totalStudentsProvider);
+                      ref.invalidate(feesCollectedProvider);
+                      ref.invalidate(pendingFeesProvider);
+                      ref.invalidate(teachersProvider);
+                      ref.invalidate(studentsProvider);
+                      ref.invalidate(unmarkedClassesProvider);
+                      ref.invalidate(upcomingEventsProvider);
+                      ref.invalidate(activeTeachersProvider);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
             // TOP CARDS
             Row(
               children: [
@@ -2863,17 +3269,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         letterSpacing: 0.5,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        _showUnmarkedClassesSheet(context);
+                    unmarkedAsync.maybeWhen(
+                      data: (unmarked) {
+                        if (unmarked.length > 4) {
+                          return TextButton(
+                            onPressed: () {
+                              _showUnmarkedClassesSheet(context);
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xff1193D4),
+                            ),
+                            child: const Text(
+                              "View All",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
                       },
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xff1193D4),
-                      ),
-                      child: const Text(
-                        "View All",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      orElse: () => const SizedBox.shrink(),
                     ),
                   ],
                 ),

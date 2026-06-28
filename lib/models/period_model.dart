@@ -6,6 +6,7 @@ class PeriodSlotModel {
   final String? teacherName;
   final String? teacherId;
   final String? subject;
+  final String? mainSubject;
   final int? colorValue; // Save Color as an integer
 
   const PeriodSlotModel({
@@ -16,6 +17,7 @@ class PeriodSlotModel {
     this.teacherName,
     this.teacherId,
     this.subject,
+    this.mainSubject,
     this.colorValue,
   });
 
@@ -27,6 +29,7 @@ class PeriodSlotModel {
     String? teacherName,
     String? teacherId,
     String? subject,
+    String? mainSubject,
     int? colorValue,
   }) {
     return PeriodSlotModel(
@@ -37,6 +40,7 @@ class PeriodSlotModel {
       teacherName: teacherName ?? this.teacherName,
       teacherId: teacherId ?? this.teacherId,
       subject: subject ?? this.subject,
+      mainSubject: mainSubject ?? this.mainSubject,
       colorValue: colorValue ?? this.colorValue,
     );
   }
@@ -50,6 +54,7 @@ class PeriodSlotModel {
       'teacherName': teacherName,
       'teacherId': teacherId,
       'subject': subject,
+      'mainSubject': mainSubject,
       'colorValue': colorValue,
     };
   }
@@ -60,10 +65,10 @@ class PeriodSlotModel {
       type: map['type'] ?? 'period',
       startTime: map['startTime'] ?? '',
       endTime: map['endTime'] ?? '',
-      // FIX: Use 'as String?' so it doesn't crash if the value is null
       teacherName: map['teacherName'] as String?,
       teacherId: map['teacherId'] as String?,
       subject: map['subject'] as String?,
+      mainSubject: map['mainSubject'] as String?,
       colorValue: map['colorValue'] as int?,
     );
   }

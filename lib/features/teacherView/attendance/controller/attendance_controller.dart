@@ -73,16 +73,24 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         teacher: teacher,
       );
 
+      final isMorning = state.half == "Morning";
       final statusMap = <String, bool?>{};
       for (var s in students) {
         if (existing.containsKey(s.studentId)) {
           final att = existing[s.studentId]!;
-          if (att.status.contains("Morning") && att.status.contains("Evening")) {
-            statusMap[s.studentId] = true;
-          } else if (att.status.contains("Half")) {
-            statusMap[s.studentId] = true;
+          final status = att.status;
+          if (isMorning) {
+            if (status.contains("Morning")) {
+              statusMap[s.studentId] = true;
+            } else {
+              statusMap[s.studentId] = false;
+            }
           } else {
-            statusMap[s.studentId] = false;
+            if (status.contains("Evening")) {
+              statusMap[s.studentId] = true;
+            } else {
+              statusMap[s.studentId] = false;
+            }
           }
         } else {
           statusMap[s.studentId] = null;
@@ -105,8 +113,11 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   // -------------------------------------------------------
   // CHANGE HALF
   // -------------------------------------------------------
-  void setHalf(String half) {
+  Future<void> setHalf(String half) async {
     state = state.copyWith(half: half);
+    if (state.teacher != null) {
+      await init(state.teacher!.id);
+    }
   }
 
   // -------------------------------------------------------
@@ -175,8 +186,14 @@ class AttendanceController extends StateNotifier<AttendanceState> {
             presentDetail = "Half Day";
           }
         } else {
-          status = "Absent";
-          presentDetail = "Absent";
+          if (existingModel != null &&
+              existingModel.status.contains("Evening")) {
+            status = "Evening Half";
+            presentDetail = "Half Day";
+          } else {
+            status = "Absent";
+            presentDetail = "Absent";
+          }
         }
       } else {
         if (marked) {
@@ -189,8 +206,14 @@ class AttendanceController extends StateNotifier<AttendanceState> {
             presentDetail = "Half Day";
           }
         } else {
-          status = "Absent";
-          presentDetail = "Absent";
+          if (existingModel != null &&
+              existingModel.status.contains("Morning")) {
+            status = "Morning Half";
+            presentDetail = "Half Day";
+          } else {
+            status = "Absent";
+            presentDetail = "Absent";
+          }
         }
       }
 

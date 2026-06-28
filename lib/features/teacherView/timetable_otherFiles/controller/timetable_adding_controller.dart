@@ -32,6 +32,10 @@ class TimetableController extends StateNotifier<AsyncValue<void>> {
       if (currentDraftId != null) {
         await _repository.deleteDraft(currentDraftId);
       }
+      await _repository.deleteDraftByName(
+        teacherId: model.classTeacherId,
+        timetableName: timetableName,
+      );
     });
 
     if (result.hasError) {

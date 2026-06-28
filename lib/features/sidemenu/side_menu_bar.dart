@@ -25,6 +25,7 @@ import '../../models/class_model.dart';
 import '../../models/school_model.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 import '../../auth/controller/login_controller.dart';
+import 'package:alert_info/alert_info.dart';
 
 class AdminPanel extends ConsumerStatefulWidget {
   final Widget child;
@@ -196,8 +197,14 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No match found')),
+    AlertInfo.show(
+      context: context,
+      text: 'No match found',
+      typeInfo: TypeInfo.error,
+      iconColor: Colors.white,
+      backgroundColor: Colors.redAccent,
+      textColor: Colors.white,
+      position: MessagePosition.top,
     );
   }
 
@@ -782,24 +789,140 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
               onPressed: _isUploading
                   ? null
                   : () async {
-                // Validate required fields
-                if (_teacherIdController.text.isEmpty ||
-                    _nameController.text.isEmpty ||
-                    _mobileController.text.isEmpty ||
-                    _selectedClass == null ||
-                    _selectedDiv == null ||
-                    _subjectController.text.isEmpty ||
-                    !_isEmailValid(_emailController.text) ||
-                    !_isPasswordValid(_passwordController.text) ||
-                    _selectedGender == null ||
-                    _addressController.text.isEmpty ||
-                    _dayController.text.isEmpty ||
-                    _monthController.text.isEmpty ||
-                    _yearController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Fill all fields correctly"),
-                    ),
+                final employeeId = _teacherIdController.text.trim();
+                final name = _nameController.text.trim();
+                final mobile = _mobileController.text.trim();
+                final subject = _subjectController.text.trim();
+                final address = _addressController.text.trim();
+                final email = _emailController.text.trim();
+                final password = _passwordController.text.trim();
+                final dayStr = _dayController.text.trim();
+                final monthStr = _monthController.text.trim();
+                final yearStr = _yearController.text.trim();
+
+                if (employeeId.isEmpty) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Employee ID cannot be empty',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (name.isEmpty) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Name cannot be empty',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (subject.isEmpty) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Subject cannot be empty',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (_selectedClass == null || _selectedDiv == null) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Please select Class and Division',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (_selectedGender == null) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Please select Gender',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                final phoneError = getPhoneValidationErrorMessage(mobile);
+                if (phoneError.isNotEmpty) {
+                  AlertInfo.show(
+                    context: context,
+                    text: phoneError,
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (!_isEmailValid(email)) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Please enter a valid Email',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (!_isPasswordValid(password)) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Password must be at least 6 characters',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                if (address.isEmpty) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Address cannot be empty',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
+                  );
+                  return;
+                }
+                final dayVal = int.tryParse(dayStr);
+                final monthVal = int.tryParse(monthStr);
+                final yearVal = int.tryParse(yearStr);
+                if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                    monthVal == null || monthVal < 1 || monthVal > 12 ||
+                    yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                  AlertInfo.show(
+                    context: context,
+                    text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
                   );
                   return;
                 }
@@ -843,11 +966,30 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                     await repo.addTeacher(teacher);
                   }
 
-                  Navigator.pop(context);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    AlertInfo.show(
+                      context: context,
+                      text: editingTeacher != null ? 'Teacher updated successfully' : 'Teacher added successfully',
+                      typeInfo: TypeInfo.success,
+                      iconColor: Colors.white,
+                      backgroundColor: const Color(0xFF27AE60),
+                      textColor: Colors.white,
+                      position: MessagePosition.top,
+                    );
+                  }
                 } catch (e) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  if (context.mounted) {
+                    AlertInfo.show(
+                      context: context,
+                      text: "Error: $e",
+                      typeInfo: TypeInfo.error,
+                      iconColor: Colors.white,
+                      backgroundColor: Colors.redAccent,
+                      textColor: Colors.white,
+                      position: MessagePosition.top,
+                    );
+                  }
                 } finally {
                   setState(() => _isUploading = false);
                 }
@@ -972,7 +1114,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildValidatedField(_admissionController, "Admission No",inputFormatters: [FilteringTextInputFormatter.digitsOnly,LengthLimitingTextInputFormatter(10)]),
+                _buildValidatedField(_admissionController, "Admission No",inputFormatters: [FilteringTextInputFormatter.digitsOnly,LengthLimitingTextInputFormatter(6)]),
                 const SizedBox(height: 12),
                 _buildValidatedField(_nameController, "Name",inputFormatters: [
                   FilteringTextInputFormatter.allow(
@@ -1008,9 +1150,154 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                   onPressed: _isUploading
                       ? null
                       : () async {
+                    final admissionNo = _admissionController.text.trim();
+                    final rollNo = _rollController.text.trim();
+                    final name = _nameController.text.trim();
+                    final mobile = _mobileController.text.trim();
+                    final parent = _parentController.text.trim();
+                    final address = _addressController.text.trim();
+                    final email = _emailController.text.trim();
+                    final password = _passwordController.text.trim();
+                    final day = _dayController.text.trim();
+                    final month = _monthController.text.trim();
+                    final year = _yearController.text.trim();
+
+                    if (admissionNo.isEmpty || admissionNo.length != 6) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Admission number must be exactly 6 digits',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (name.isEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Name cannot be empty',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (rollNo.isEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Roll number cannot be empty',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    final phoneError = getPhoneValidationErrorMessage(mobile);
+                    if (phoneError.isNotEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: phoneError,
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (_selectedGender == null || _selectedGender!.isEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Please select a gender',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
                     if (_classNo == null || _division == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Select Class and Division")));
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Please select Class and Division',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    final dayVal = int.tryParse(day);
+                    final monthVal = int.tryParse(month);
+                    final yearVal = int.tryParse(year);
+                    if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                        monthVal == null || monthVal < 1 || monthVal > 12 ||
+                        yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (parent.isEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Parent name cannot be empty',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (address.isEmpty) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Address cannot be empty',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (!_isEmailValid(email)) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Please enter a valid Email',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
+                      return;
+                    }
+                    if (!_isPasswordValid(password)) {
+                      AlertInfo.show(
+                        context: context,
+                        text: 'Password must be at least 6 characters',
+                        typeInfo: TypeInfo.error,
+                        iconColor: Colors.white,
+                        backgroundColor: Colors.redAccent,
+                        textColor: Colors.white,
+                        position: MessagePosition.top,
+                      );
                       return;
                     }
 
@@ -1021,10 +1308,11 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
                       }
 
-                      final dob = DateTime.tryParse(
-                        "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                      ) ??
-                          DateTime(2000, 1, 1);
+                      final dob = DateTime(
+                        int.parse(_yearController.text),
+                        int.parse(_monthController.text),
+                        int.parse(_dayController.text),
+                      );
 
                       final newStudent = StudentsModel(
                         studentId: editingStudent?.studentId ?? '',
@@ -1080,10 +1368,30 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         );
                       }
 
-                      Navigator.pop(context);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        AlertInfo.show(
+                          context: context,
+                          text: editingStudent != null ? 'Student updated successfully' : 'Student added successfully',
+                          typeInfo: TypeInfo.success,
+                          iconColor: Colors.white,
+                          backgroundColor: const Color(0xFF27AE60),
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                      }
                     } catch (e) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text("Error: $e")));
+                      if (context.mounted) {
+                        AlertInfo.show(
+                          context: context,
+                          text: "Error: $e",
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                      }
                     } finally {
                       setSheetState(() => _isUploading = false);
                       setState(() => _isUploading = false);
@@ -1366,7 +1674,6 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   Widget build(BuildContext context) {
     ref.watch(classesStreamProvider);
     final school = ref.watch(schoolStreamProvider).asData?.value;
-    final theme = Theme.of(context);
 
     final String location = GoRouterState.of(context).matchedLocation;
     int activeIndex = 0;
@@ -1380,11 +1687,13 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       activeIndex = 4;
     } else if (location.startsWith('/admin/trash')) {
       activeIndex = 5;
-    } else if (location.startsWith('/admin/notifications')) {
+    } else if (location.startsWith('/admin/settings')) {
       activeIndex = 6;
+    } else if (location.startsWith('/admin/notifications')) {
+      activeIndex = -1;
     }
 
-    if (_sideMenuController.currentPage != activeIndex) {
+    if (activeIndex != -1 && _sideMenuController.currentPage != activeIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sideMenuController.changePage(activeIndex);
       });
@@ -1400,43 +1709,83 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
               controller: _sideMenuController,
               style: SideMenuStyle(
                 displayMode: SideMenuDisplayMode.auto,
-                openSideMenuWidth: 250,
+                openSideMenuWidth: 260,
                 selectedColor: Colors.white,
                 selectedIconColor: const Color(0xff1293d4),
                 selectedTitleTextStyle: const TextStyle(
                   color: Color(0xff1293d4),
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
                 ),
-                unselectedIconColor: Colors.white,
-                unselectedTitleTextStyle: const TextStyle(
-                  color: Colors.white,
+                unselectedIconColor: Colors.white.withValues(alpha: 0.85),
+                unselectedTitleTextStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
                   fontWeight: FontWeight.w500,
+                  fontSize: 14,
                 ),
                 backgroundColor: const Color(0xff1293d4),
-                iconSize: 20,
-                itemHeight: 48,
+                iconSize: 22,
+                itemHeight: 52,
+                itemBorderRadius: BorderRadius.circular(12),
+                itemOuterPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                hoverColor: Colors.white.withValues(alpha: 0.15),
               ),
-              title: Padding(
-                padding: const EdgeInsets.all(16.0),
+              title: Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(height: 10),
-                    Center(
-                      child: CircleAvatar(
-                        radius: 44,
-                        backgroundColor: Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Image.asset(
-                            ImageConstant.logoWithText,
-                            fit: BoxFit.contain,
-                            height: 115,
-                            width: 115,
-                          ),
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Image.asset(
+                          ImageConstant.logoWithText,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    Text(
+                      school?.schoolName ?? "Scholo Admin",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Administrator",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1463,22 +1812,53 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 ),
                 SideMenuItem(
                   title: 'Class Rooms',
-                  icon:  Icon(Icons.co_present),
+                  icon: const Icon(Icons.co_present),
                   onTap: (index, _) => context.go('/admin/classrooms'),
-                ),   SideMenuItem(
+                ),
+                SideMenuItem(
                   title: 'Trash Bin',
-                  icon:  Icon(Icons.delete,),
+                  icon: const Icon(Icons.delete),
                   onTap: (index, _) => context.go('/admin/trash'),
+                ),
+                SideMenuItem(
+                  title: 'Settings',
+                  icon: const Icon(Icons.settings),
+                  onTap: (index, _) => context.go('/admin/settings'),
                 ),
               ],
               footer: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: TextButton.icon(
-                  onPressed: () => _logout(context),
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  label: const Text(
-                    "Logout",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _logout(context),
+                      hoverColor: Colors.white.withValues(alpha: 0.1),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.logout, color: Colors.white, size: 20),
+                            SizedBox(width: 10),
+                            Text(
+                              "Logout",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1515,15 +1895,13 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         child: FutureBuilder<List<Map<String, String>>>(
                           future: _searchDataFuture,
                           builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator());
-                            } else if (snapshot.hasError) {
-                              return const Text('Error loading search data');
-                            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                              return const Text('No data available');
-                            }
+                            final items = snapshot.data ?? [];
+                            final isWaiting = snapshot.connectionState == ConnectionState.waiting;
+                            final hasError = snapshot.hasError;
 
-                            final items = snapshot.data!;
+                            if (hasError) {
+                              debugPrint('Error loading search data: ${snapshot.error}');
+                            }
 
                             return SearchField(
                               suggestions: items.map((e) {
@@ -1560,6 +1938,18 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                                 filled: true,
                                 fillColor: Colors.grey.shade100,
                                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                                suffixIcon: isWaiting
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(12.0),
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      )
+                                    : (hasError
+                                        ? const Icon(Icons.error_outline, color: Colors.red)
+                                        : null),
                                 contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
 
@@ -2179,11 +2569,14 @@ class _AdminProfileTooltipCardState extends ConsumerState<AdminProfileTooltipCar
                                       _isSaving = false;
                                     });
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Failed to update profile: $e'),
-                                          backgroundColor: Colors.red,
-                                        ),
+                                      AlertInfo.show(
+                                        context: context,
+                                        text: 'Failed to update profile: $e',
+                                        typeInfo: TypeInfo.error,
+                                        iconColor: Colors.white,
+                                        backgroundColor: Colors.redAccent,
+                                        textColor: Colors.white,
+                                        position: MessagePosition.top,
                                       );
                                     }
                                   }

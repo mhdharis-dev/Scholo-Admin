@@ -57,8 +57,11 @@ final teacherProvider = StreamProvider.family<TeacherModel, String>((
 final draftsProvider =
     StreamProvider.family<List<Map<String, dynamic>>, String>((ref, teacherId) {
       return FirebaseFirestore.instance
-          .schoolCollection(FirebaseConstant.draftTimetable) // Hardcoded per your model/logic
+          .schoolCollection(
+            FirebaseConstant.draftTimetable,
+          ) // Hardcoded per your model/logic
           .where('teacherId', isEqualTo: teacherId)
+          .where('delete', isEqualTo: false)   // exclude soft-deleted
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -98,173 +101,370 @@ class _TimeTableLayoutMakerPageState
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
+        bool isDeleteMode = false;
+        Set<String> selectedDraftIds = {};
+
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Consumer(
-            builder: (context, ref, child) {
-              final draftsAsync = ref.watch(draftsProvider(widget.teacherId));
+          child: StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              return Consumer(
+                builder: (context, ref, child) {
+                  final draftsAsync = ref.watch(
+                    draftsProvider(widget.teacherId),
+                  );
 
-              return Container(
-                padding: const EdgeInsets.all(24),
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.7,
-                  maxWidth: 500,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Center(
-                      child: Text(
-                        "Saved Drafts",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
+                  return Container(
+                    padding: const EdgeInsets.all(24),
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.7,
+                      maxWidth: 500,
                     ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: draftsAsync.when(
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (err, stack) =>
-                            Center(child: Text("Error: $err")),
-                        data: (drafts) {
-                          if (drafts.isEmpty) {
-                            return const Center(
-                              child: Text(
-                                "No drafts available.",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            );
-                          }
-                          return ListView.builder(
-                            itemCount: drafts.length,
-                            itemBuilder: (context, index) {
-                              final draft = drafts[index];
-
-                              String name =
-                                  draft['timetableName'] ??
-                                  'Untitled Timetable';
-                              String status = draft['status'] ?? 'layout';
-                              DateTime date = draft['createdDate'] != null
-                                  ? (draft['createdDate'] as Timestamp).toDate()
-                                  : DateTime.now();
-                              String formattedDate =
-                                  "${date.day}/${date.month}/${date.year}";
-
-                              return Card(
-                                elevation: 0,
-                                color: const Color(0xFFF8FAFC),
-                                margin: const EdgeInsets.only(bottom: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(color: Colors.grey.shade200),
-                                ),
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Center(
+                          child: Text(
+                            "Saved Drafts",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: draftsAsync.when(
+                            loading: () => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            error: (err, stack) =>
+                                Center(child: Text("Error: $err")),
+                            data: (drafts) {
+                              if (drafts.isEmpty) {
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (Navigator.canPop(dialogContext)) {
+                                    ref.invalidate(selectedDayProvider);
+                                    ref.invalidate(dayTypeProvider);
+                                    ref.invalidate(scheduleProvider);
+                                    Navigator.pop(dialogContext);
+                                  }
+                                });
+                                return const Center(
+                                  child: Text(
+                                    "No drafts available.",
+                                    style: TextStyle(color: Colors.grey),
                                   ),
-                                  title: Text(
-                                    name,
+                                );
+                              }
+
+                              return ListView.builder(
+                                itemCount: drafts.length,
+                                itemBuilder: (context, index) {
+                                  final draft = drafts[index];
+
+                                  String name =
+                                      draft['timetableName'] ??
+                                      'Untitled Timetable';
+                                  String status = draft['status'] ?? 'layout';
+                                  DateTime date = draft['createdDate'] != null
+                                      ? (draft['createdDate'] as Timestamp)
+                                            .toDate()
+                                      : DateTime.now();
+                                  String formattedDate =
+                                      "${date.day}/${date.month}/${date.year}";
+
+                                  final String draftId =
+                                      draft['id']?.toString() ?? '';
+                                  final isSelected = selectedDraftIds.contains(
+                                    draftId,
+                                  );
+
+                                  return Card(
+                                    elevation: 0,
+                                    color: const Color(0xFFF8FAFC),
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isDeleteMode && isSelected
+                                            ? Colors.red.shade300
+                                            : Colors.grey.shade200,
+                                        width: isDeleteMode && isSelected
+                                            ? 1.5
+                                            : 1,
+                                      ),
+                                    ),
+                                    child: ListTile(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                      title: Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      subtitle: Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 8.0,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: status == 'timetable'
+                                                    ? Colors.green.shade100
+                                                    : Colors.blue.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                status == 'timetable'
+                                                    ? 'Timetable Draft'
+                                                    : 'Layout Draft',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: status == 'timetable'
+                                                      ? Colors.green.shade800
+                                                      : Colors.blue.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              "Created: $formattedDate",
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      trailing: isDeleteMode
+                                          ? Icon(
+                                              isSelected
+                                                  ? Icons.check_box
+                                                  : Icons
+                                                        .check_box_outline_blank,
+                                              color: isSelected
+                                                  ? Colors.red
+                                                  : Colors.grey,
+                                            )
+                                          : const Icon(
+                                              Icons.arrow_forward_ios,
+                                              size: 14,
+                                              color: Colors.grey,
+                                            ),
+                                      onTap: () {
+                                        if (isDeleteMode) {
+                                          setDialogState(() {
+                                            if (isSelected) {
+                                              selectedDraftIds.remove(draftId);
+                                            } else {
+                                              selectedDraftIds.add(draftId);
+                                            }
+                                          });
+                                        } else {
+                                          Navigator.pop(dialogContext);
+                                          _loadDraft(draft);
+                                        }
+                                      },
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  fixedSize: Size.fromHeight(50),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  backgroundColor: isDeleteMode
+                                      ? const Color(0xFFDF1616)
+                                      : const Color(0xFF2563EB),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: isDeleteMode
+                                    ? (selectedDraftIds.isEmpty
+                                          ? null
+                                          : () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (confirmContext) => AlertDialog(
+                                                  title: const Text(
+                                                    "Delete Drafts?",
+                                                  ),
+                                                  content: Text(
+                                                    "Are you sure you want to delete ${selectedDraftIds.length} selected draft(s)? This action cannot be undone.",
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            confirmContext,
+                                                          ),
+                                                      child: const Text(
+                                                        "Cancel",
+                                                      ),
+                                                    ),
+                                                    ElevatedButton(
+                                                      style:
+                                                          ElevatedButton.styleFrom(
+                                                            backgroundColor:
+                                                                const Color(
+                                                                  0xFFDF1616,
+                                                                ),
+                                                          ),
+                                                      onPressed: () async {
+                                                        Navigator.pop(
+                                                          confirmContext,
+                                                        ); // Close alert
+
+                                                        // Show loading dialog
+                                                        showDialog(
+                                                          context: context,
+                                                          barrierDismissible:
+                                                              false,
+                                                          builder: (_) =>
+                                                              const Center(
+                                                                child:
+                                                                    CircularProgressIndicator(),
+                                                              ),
+                                                        );
+
+                                                        try {
+                                                          for (var id in selectedDraftIds) {
+                                                            await FirebaseFirestore.instance
+                                                                .schoolCollection(FirebaseConstant.draftTimetable)
+                                                                .doc(id)
+                                                                .update({
+                                                              'delete': true,
+                                                              'deletedAt': Timestamp.fromDate(DateTime.now()),
+                                                            });
+                                                          }
+                                                        } catch (e) {
+                                                          debugPrint(
+                                                            "Error deleting drafts: $e",
+                                                          );
+                                                        }
+
+                                                        if (context.mounted) {
+                                                          Navigator.pop(
+                                                            context,
+                                                          ); // Close loading dialog
+                                                        }
+
+                                                        setDialogState(() {
+                                                          isDeleteMode = false;
+                                                          selectedDraftIds
+                                                              .clear();
+                                                        });
+                                                      },
+                                                      child: const Text(
+                                                        "Delete",
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            })
+                                    : () {
+                                        ref.invalidate(selectedDayProvider);
+                                        ref.invalidate(dayTypeProvider);
+                                        ref.invalidate(scheduleProvider);
+                                        Navigator.pop(dialogContext);
+                                      },
+                                child: draftsAsync.maybeWhen(
+                                  data: (drafts) {
+                                    final label = isDeleteMode
+                                        ? (selectedDraftIds.length ==
+                                                  drafts.length
+                                              ? "Delete All"
+                                              : "Delete Selected")
+                                        : "Start New Layout";
+                                    return Text(
+                                      label,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    );
+                                  },
+                                  orElse: () => Text(
+                                    isDeleteMode
+                                        ? "Delete Selected"
+                                        : "Start New Layout",
                                     style: const TextStyle(
+                                      color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 15,
                                     ),
                                   ),
-                                  subtitle: Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: status == 'timetable'
-                                                ? Colors.green.shade100
-                                                : Colors.blue.shade100,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            status == 'timetable'
-                                                ? 'Timetable Draft'
-                                                : 'Layout Draft',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: status == 'timetable'
-                                                  ? Colors.green.shade800
-                                                  : Colors.blue.shade800,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          "Created: $formattedDate",
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  trailing: const Icon(
-                                    Icons.arrow_forward_ios,
-                                    size: 14,
-                                    color: Colors.grey,
-                                  ),
-                                  onTap: () {
-                                    Navigator.pop(dialogContext);
-                                    _loadDraft(draft);
-                                  },
                                 ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: const Color(0xFF2563EB),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: isDeleteMode
+                                    ? Colors.grey.shade100
+                                    : const Color(0xFFFEE2E2),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.all(14),
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  isDeleteMode = !isDeleteMode;
+                                  selectedDraftIds.clear();
+                                });
+                              },
+                              icon: Icon(
+                                isDeleteMode ? Icons.close : Icons.delete,
+                                color: isDeleteMode
+                                    ? Colors.grey.shade700
+                                    : const Color(0xFFEF4444),
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: () {
-                          ref.invalidate(selectedDayProvider);
-                          ref.invalidate(dayTypeProvider);
-                          ref.invalidate(scheduleProvider);
-                          Navigator.pop(dialogContext);
-                        },
-                        child: const Text(
-                          "Start New Layout",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -275,6 +475,14 @@ class _TimeTableLayoutMakerPageState
 
   void _loadDraft(Map<String, dynamic> draft) {
     try {
+
+      if (draft['delete'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("This draft is no longer available.")),
+        );
+        return;
+      }
+
       // 1. Store the Draft ID so we can Update or Delete it later
       currentDraftId = draft['id'];
 
@@ -315,6 +523,7 @@ class _TimeTableLayoutMakerPageState
             'type': slot['type'] ?? 'period',
             'start': slot['startTime'] ?? '',
             'end': slot['endTime'] ?? '',
+            'mainSubject': slot['mainSubject'],
             'color': slot['colorValue'] != null
                 ? Color(slot['colorValue'])
                 : (slot['type'] == 'period'
@@ -341,6 +550,7 @@ class _TimeTableLayoutMakerPageState
               timetableName: name,
               scheduleData: rebuiltSchedule,
               dayTypes: dayTypes,
+              draftId: draft['id'],
             ),
           ),
         );
@@ -527,21 +737,20 @@ class _TimeTableLayoutMakerPageState
   void _handleCancel(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Discard Changes?"),
         content: const Text(
           "Are you sure you want to cancel? All progress on this timetable layout will be lost.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("No, Keep Editing"),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
               _saveDraft();
-              Navigator.pop(context);
             },
             child: const Text("Save Draft"),
           ),
@@ -554,8 +763,8 @@ class _TimeTableLayoutMakerPageState
               ref.invalidate(dayTypeProvider);
               ref.invalidate(scheduleProvider);
 
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // Close dialog
+              Navigator.pop(context); // Close page
             },
             child: const Text("Discard", style: TextStyle(color: Colors.white)),
           ),
@@ -635,28 +844,35 @@ class _TimeTableLayoutMakerPageState
     }
 
     final String finalTimetableName = _timeTableNameController.text.trim();
-    final Map<String, List<Map<String, dynamic>>> finalScheduleData = Map.from(
-      schedule,
-    );
+    final Map<String, List<Map<String, dynamic>>> finalScheduleData = Map.from(schedule);
     final Map<String, String> finalDayTypes = Map.from(dayTypes);
 
+    // Soft delete the draft BEFORE showing the dialog
+    if (currentDraftId != null) {
+      FirebaseFirestore.instance
+          .schoolCollection(FirebaseConstant.draftTimetable)
+          .doc(currentDraftId)
+          .update({
+        'delete': true,
+        'deletedAt': Timestamp.fromDate(DateTime.now()),
+      });
+      currentDraftId = null;
+    }
+
     Timer? timer;
+    BuildContext? dialogCtx; // capture dialog context
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
+        dialogCtx = dialogContext;
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.only(
-              top: 16.0,
-              bottom: 40.0,
-              left: 32.0,
-              right: 32.0,
-            ),
+          child: Container(
+            width: 280,
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -666,7 +882,7 @@ class _TimeTableLayoutMakerPageState
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      icon: const Icon(Icons.clear, color: Colors.grey, size: 18),
                       onPressed: () {
                         timer?.cancel();
                         Navigator.of(dialogContext).pop();
@@ -674,32 +890,30 @@ class _TimeTableLayoutMakerPageState
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 const SizedBox(
-                  width: 50,
-                  height: 50,
+                  width: 36,
+                  height: 36,
                   child: CircularProgressIndicator(
-                    strokeWidth: 5,
+                    strokeWidth: 3.5,
                     backgroundColor: Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF3B82F6),
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 const Text(
                   "Creating Timetable...",
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   "Finalizing configurations and checking conflicts.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -708,44 +922,34 @@ class _TimeTableLayoutMakerPageState
       },
     );
 
-    // FIX: Use FirebaseConstant.draftTimetable here
-    if (currentDraftId != null) {
-      FirebaseFirestore.instance
-          .schoolCollection(FirebaseConstant.draftTimetable)
-          .doc(currentDraftId)
-          .delete();
-      currentDraftId = null; // Clear it so it doesn't accidentally trigger again
-    }
-
     timer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).pop();
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => TimeTableCreatingPage(
-              teacherId: widget.teacherId,
-              timetableName: finalTimetableName,
-              scheduleData: finalScheduleData,
-              dayTypes: finalDayTypes,
-            ),
-          ),
-        );
+      if (!mounted) return;
+
+      // Close dialog using the captured dialogCtx
+      if (dialogCtx != null && Navigator.canPop(dialogCtx!)) {
+        Navigator.of(dialogCtx!).pop();
       }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => TimeTableCreatingPage(
+            teacherId: widget.teacherId,
+            timetableName: finalTimetableName,
+            scheduleData: finalScheduleData,
+            dayTypes: finalDayTypes,
+            draftId: currentDraftId,
+          ),
+        ),
+      );
     });
   }
 
-// --- UPDATED: SAVE DRAFT ---
+  // --- UPDATED: SAVE DRAFT ---
   Future<void> _saveDraft() async {
     String name = _timeTableNameController.text.trim();
     if (name.isEmpty) name = 'Untitled Layout'; // Default name if empty
 
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
       final dayTypes = ref.read(dayTypeProvider);
       final schedule = ref.read(scheduleProvider);
 
@@ -780,6 +984,7 @@ class _TimeTableLayoutMakerPageState
         createdDate: DateTime.now(),
         dayTypes: dayTypes,
         scheduleData: processedSchedule,
+        delete: false,
       );
 
       if (currentDraftId != null) {
@@ -797,7 +1002,7 @@ class _TimeTableLayoutMakerPageState
       }
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); // Close page
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Layout draft saved successfully!"),
@@ -821,24 +1026,28 @@ class _TimeTableLayoutMakerPageState
   void _showSaveDraftConfirmation() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Save as Draft?"),
         content: const Text(
           "Do you want to save your progress as a draft? You can resume editing later.",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3B82F6)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+            ),
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context);
-              _saveDraft();         // Save the draft with existing data
+              Navigator.pop(dialogContext); // Close dialog
+              _saveDraft(); // Save the draft with existing data
             },
-            child: const Text("Save Draft", style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Save Draft",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -979,8 +1188,7 @@ class _TimeTableLayoutMakerPageState
               CircleAvatar(
                 radius: 12,
                 backgroundColor: const Color(0xFFD1C4E9),
-                backgroundImage:
-                    (teacher.imageUrl.isNotEmpty)
+                backgroundImage: (teacher.imageUrl.isNotEmpty)
                     ? NetworkImage(teacher.imageUrl)
                     : null,
                 child: (teacher.imageUrl.isEmpty)
@@ -1581,7 +1789,7 @@ class _TimeTableLayoutMakerPageState
                   // ref.invalidate(scheduleProvider);
                   // Navigator.of(context).pop();
                   _showSaveDraftConfirmation();
-                }
+                },
               ),
               const SizedBox(height: 12),
               Row(

@@ -741,6 +741,25 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         ),
         Row(
           children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 8,
+                  )
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                onPressed: () {
+                  ref.invalidate(eventControllerProvider);
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
             _arrowButton(Icons.chevron_left, () {
               ref.read(selectedMonthProvider.notifier).state =
                   DateTime(currentMonth.year, currentMonth.month - 1);

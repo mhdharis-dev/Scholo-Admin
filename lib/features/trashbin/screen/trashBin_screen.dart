@@ -90,7 +90,12 @@ class RecycleMark {
   final String className;
   final String deletedDate;
   final String createdDate;
-  final String type;
+  final String type; // 'Folder' or 'Student-wise'
+  final String docId;
+  final String classNo;
+  final String division;
+  final String? studentId;
+  final String? studentName;
 
   RecycleMark({
     required this.title,
@@ -98,6 +103,33 @@ class RecycleMark {
     required this.deletedDate,
     required this.createdDate,
     required this.type,
+    required this.docId,
+    required this.classNo,
+    required this.division,
+    this.studentId,
+    this.studentName,
+  });
+}
+
+class RecycleTimetable {
+  final String title;
+  final String className;
+  final String deletedDate;
+  final String createdDate;
+  final String type; // 'Real' or 'Draft'
+  final String docId;
+  final String? division;
+  final String? timetableKey;
+
+  RecycleTimetable({
+    required this.title,
+    required this.className,
+    required this.deletedDate,
+    required this.createdDate,
+    required this.type,
+    required this.docId,
+    this.division,
+    this.timetableKey,
   });
 }
 
@@ -224,28 +256,74 @@ final recycleEventsProvider = StreamProvider<List<RecycleEvent>>((ref) {
       });
 });
 
-final recycleOtherFilesProvider = StreamProvider<List<RecycleOtherFiles>>((ref,) {
+final recycleOtherFilesProvider = StreamProvider<List<RecycleOtherFiles>>((ref) {
   return FirebaseFirestore.instance
-      .schoolCollection(FirebaseConstant.otherFile)
-      .where('delete', isEqualTo: true)
+      .schoolCollection(FirebaseConstant.notes)
       .snapshots()
-      .map((snap) {
-        return snap.docs.map((doc) {
+      .map((snapshot) {
+        final List<RecycleOtherFiles> list = [];
+        for (var doc in snapshot.docs) {
           final data = doc.data();
-          final String className='${data['classNo']}-${data['division']}';
-          print(data);
-
-          return RecycleOtherFiles(
-            title: data['tittle'] ?? '',
-            createdDate: _formatDate(data['uploadedAt']),
-            className: className,
-            deletedDate: data['deletedDate'] != null
-                ? _formatDate(data['deletedDate'])
-                : "—",
-            fileUrl: data['fileUrl'] ?? '',
-            id: doc.id,
-          );
-        }).toList();
+          if (data.containsKey('teacherId')) {
+            final isDeleted = data['delete'] == true;
+            if (isDeleted) {
+              final classNoVal = data['classNo'] ?? '';
+              final divVal = data['division'] ?? '';
+              final String className = '$classNoVal-$divVal';
+              list.add(RecycleOtherFiles(
+                title: data['tittle'] ?? data['title'] ?? '',
+                createdDate: _formatDate(data['uploadedAt']),
+                className: className,
+                deletedDate: data['deletedDate'] != null
+                    ? _formatDate(data['deletedDate'])
+                    : "—",
+                fileUrl: data['fileUrl'] ?? '',
+                id: data['id'] ?? doc.id,
+              ));
+            }
+          } else {
+            // Nested structure
+            data.forEach((divisionKey, divisionVal) {
+              if (divisionVal is Map<String, dynamic>) {
+                divisionVal.forEach((noteTitle, noteData) {
+                  if (noteData is Map<String, dynamic>) {
+                    final isDeleted = noteData['delete'] == true;
+                    if (isDeleted) {
+                      final classNoVal = noteData['classNo'] ?? doc.id;
+                      final divVal = noteData['division'] ?? divisionKey;
+                      final String className = '$classNoVal-$divVal';
+                      final idStr = noteData['id']?.toString() ?? '';
+                      Timestamp? uploadedAt;
+                      final ms = int.tryParse(idStr);
+                      if (ms != null && ms > 1000000000000) {
+                        uploadedAt = Timestamp.fromDate(DateTime.fromMillisecondsSinceEpoch(ms));
+                      }
+                      list.add(RecycleOtherFiles(
+                        title: noteData['tittle'] ?? noteData['title'] ?? noteTitle,
+                        createdDate: uploadedAt != null ? _formatDate(uploadedAt) : "—",
+                        className: className,
+                        deletedDate: noteData['deletedDate'] != null
+                            ? _formatDate(noteData['deletedDate'])
+                            : "—",
+                        fileUrl: noteData['fileUrl'] ?? '',
+                        id: noteData['id'] ?? doc.id,
+                      ));
+                    }
+                  }
+                });
+              }
+            });
+          }
+        }
+        final seenIds = <String>{};
+        final List<RecycleOtherFiles> uniqueList = [];
+        for (var note in list) {
+          if (note.id.isNotEmpty && !seenIds.contains(note.id)) {
+            seenIds.add(note.id);
+            uniqueList.add(note);
+          }
+        }
+        return uniqueList;
       });
 });
 
@@ -385,148 +463,147 @@ final recycleMarksProvider = StreamProvider<List<RecycleMark>>((ref) {
     for (final doc in snap.docs) {
       final root = doc.data();
 
-      Map<int, List<String>> classMap = {};
-      Timestamp? latestDeletedAt;
-      Timestamp? createdAt;
-      String type = "";
-      bool hasDeleted = false;
-
-      /// 🔥 HELPER FUNCTION
-      void handleMarkData(dynamic markData, dynamic classNo, String division) {
-        if (markData is Map) {
-          final isDeleted = markData['delete'] ?? false;
-
-          /// ✅ created date (safe)
-          createdAt ??= markData['uploadedAt'] ?? markData['createdDate'];
-
-          if (isDeleted) {
-            hasDeleted = true;
-
-            final deletedAt = markData['deletedAt'];
-
-            if (deletedAt != null && deletedAt is Timestamp) {
-              if (latestDeletedAt == null ||
-                  deletedAt.toDate().isAfter(latestDeletedAt!.toDate())) {
-                latestDeletedAt = deletedAt;
-              }
-            }
-
-            int cNo = int.tryParse(classNo.toString()) ?? 0;
-            classMap.putIfAbsent(cNo, () => []);
-            classMap[cNo]!.add(division);
-          }
-        }
-      }
-
-      /// 🔥 MAIN LOOP
       root.forEach((classNo, classData) {
         if (classData is Map) {
           classData.forEach((division, divData) {
             if (divData is Map) {
-
-              /// type
-              type = divData['markType'] ?? type;
-
-              /// -------------------------
-              /// studentsMark
-              /// -------------------------
-              final studentsMark = divData['studentsMark'];
-
-              if (studentsMark != null) {
-                if (studentsMark is Map) {
-                  studentsMark.forEach((_, markData) {
-                    handleMarkData(markData, classNo, division);
-                  });
-                } else if (studentsMark is List) {
-                  for (var markData in studentsMark) {
-                    handleMarkData(markData, classNo, division);
-                  }
-                }
+              // 1. Check Folder-level deletion
+              if (divData['delete'] == true) {
+                list.add(RecycleMark(
+                  title: "${doc.id} (Folder)",
+                  className: "$classNo-$division",
+                  type: "Folder",
+                  createdDate: divData['uploadedAt'] != null
+                      ? _formatDate(divData['uploadedAt'])
+                      : (divData['createdDate'] != null ? _formatDate(divData['createdDate']) : "—"),
+                  deletedDate: divData['deletedAt'] != null
+                      ? _formatDate(divData['deletedAt'])
+                      : "—",
+                  docId: doc.id,
+                  classNo: classNo.toString(),
+                  division: division.toString(),
+                ));
               }
 
-              /// -------------------------
-              /// marks
-              /// -------------------------
-              final marks = divData['marks'];
-
-              if (marks != null) {
-                if (marks is Map) {
-                  marks.forEach((_, markData) {
-                    handleMarkData(markData, classNo, division);
-                  });
-                } else if (marks is List) {
-                  for (var markData in marks) {
-                    handleMarkData(markData, classNo, division);
+              // 2. Check Student-wise deletion (only if folder itself is not deleted)
+              if (divData['delete'] != true) {
+                final studentsMark = divData['studentsMark'];
+                if (studentsMark is List) {
+                  for (var markData in studentsMark) {
+                    if (markData is Map && markData['delete'] == true) {
+                      final studentName = markData['studentName'] ?? '';
+                      list.add(RecycleMark(
+                        title: "$studentName - ${doc.id}",
+                        className: "$classNo-$division",
+                        type: "Student-wise",
+                        createdDate: markData['uploadedAt'] != null
+                            ? _formatDate(markData['uploadedAt'])
+                            : (markData['createdDate'] != null ? _formatDate(markData['createdDate']) : "—"),
+                        deletedDate: markData['deletedAt'] != null
+                            ? _formatDate(markData['deletedAt'])
+                            : "—",
+                        docId: doc.id,
+                        classNo: classNo.toString(),
+                        division: division.toString(),
+                        studentId: markData['studentId']?.toString() ?? '',
+                        studentName: studentName,
+                      ));
+                    }
                   }
+                } else if (studentsMark is Map) {
+                  studentsMark.forEach((studentId, markData) {
+                    if (markData is Map && markData['delete'] == true) {
+                      final studentName = markData['studentName'] ?? '';
+                      list.add(RecycleMark(
+                        title: "$studentName - ${doc.id}",
+                        className: "$classNo-$division",
+                        type: "Student-wise",
+                        createdDate: markData['uploadedAt'] != null
+                            ? _formatDate(markData['uploadedAt'])
+                            : (markData['createdDate'] != null ? _formatDate(markData['createdDate']) : "—"),
+                        deletedDate: markData['deletedAt'] != null
+                            ? _formatDate(markData['deletedAt'])
+                            : "—",
+                        docId: doc.id,
+                        classNo: classNo.toString(),
+                        division: division.toString(),
+                        studentId: studentId.toString(),
+                        studentName: studentName,
+                      ));
+                    }
+                  });
                 }
               }
             }
           });
         }
       });
-
-      /// ❌ skip if no deleted items
-      if (!hasDeleted) continue;
-
-      /// -------------------------
-      /// CLASS LOGIC (UNCHANGED)
-      /// -------------------------
-      List<int> classes = classMap.keys.toList()..sort();
-      List<int> full = List.generate(8, (i) => i + 5);
-
-      String classText = "";
-      String tooltip = "";
-
-      bool isAll =
-          classes.length == full.length &&
-              classes.every((e) => full.contains(e));
-
-      if (isAll) {
-        classText = "ALL";
-      } else if (classes.length == 1) {
-        classText = classes.first.toString();
-        tooltip = "${classes.first} : ${classMap[classes.first]!.join(",")}";
-      } else {
-        bool isContinuous = true;
-
-        for (int i = 0; i < classes.length - 1; i++) {
-          if (classes[i] + 1 != classes[i + 1]) {
-            isContinuous = false;
-            break;
-          }
-        }
-
-        if (isContinuous) {
-          classText = "${classes.first} to ${classes.last}";
-        } else if (classes.length == 2) {
-          classText = "${classes[0]} & ${classes[1]}";
-        } else {
-          classText = "${classes.length} Classes";
-        }
-
-        tooltip = classMap.entries
-            .map((e) => "${e.key} : ${e.value.join(",")}")
-            .join("\n");
-      }
-
-      /// -------------------------
-      /// ADD TO LIST
-      /// -------------------------
-      list.add(
-        RecycleMark(
-          title: doc.id,
-          className: classText,
-          type: type,
-          createdDate:
-          createdAt != null ? _formatDate(createdAt) : "—",
-          deletedDate:
-          latestDeletedAt != null ? _formatDate(latestDeletedAt) : "—",
-        ),
-      );
     }
 
     return list;
   });
+});
+
+final timetablesStreamProvider = StreamProvider<QuerySnapshot>((ref) {
+  return FirebaseFirestore.instance
+      .schoolCollection(FirebaseConstant.timetable)
+      .snapshots();
+});
+
+final draftsStreamProvider = StreamProvider<QuerySnapshot>((ref) {
+  return FirebaseFirestore.instance
+      .schoolCollection(FirebaseConstant.draftTimetable)
+      .where('delete', isEqualTo: true)
+      .snapshots();
+});
+
+final recycleTimetablesProvider = Provider<List<RecycleTimetable>>((ref) {
+  final timetablesSnap = ref.watch(timetablesStreamProvider).value;
+  final draftsSnap = ref.watch(draftsStreamProvider).value;
+
+  final List<RecycleTimetable> list = [];
+
+  if (timetablesSnap != null) {
+    for (var doc in timetablesSnap.docs) {
+      final data = doc.data() as Map<String, dynamic>?;
+      final divisions = data?['divisions'] as Map?;
+      divisions?.forEach((divKey, divVal) {
+        if (divVal is Map) {
+          final timetables = divVal['timetables'] as Map?;
+          timetables?.forEach((ttName, ttData) {
+            if (ttData is Map && ttData['delete'] == true) {
+              list.add(RecycleTimetable(
+                title: ttData['timetableName'] ?? ttName,
+                className: "${ttData['classNo'] ?? doc.id}-${ttData['division'] ?? divKey}",
+                deletedDate: ttData['deletedDate'] != null ? _formatDate(ttData['deletedDate']) : "—",
+                createdDate: ttData['createdDate'] != null ? _formatDate(ttData['createdDate']) : "—",
+                type: 'Real',
+                docId: doc.id,
+                division: divKey,
+                timetableKey: ttName,
+              ));
+            }
+          });
+        }
+      });
+    }
+  }
+
+  if (draftsSnap != null) {
+    for (var doc in draftsSnap.docs) {
+      final data = doc.data() as Map<String, dynamic>?;
+      list.add(RecycleTimetable(
+        title: data?['timetableName'] ?? 'Untitled Draft',
+        className: "Draft",
+        deletedDate: data?['deletedAt'] != null ? _formatDate(data?['deletedAt']) : "—",
+        createdDate: data?['createdDate'] != null ? _formatDate(data?['createdDate']) : "—",
+        type: 'Draft',
+        docId: doc.id,
+      ));
+    }
+  }
+
+  return list;
 });
 
 /// ------------------------------------------------
@@ -606,6 +683,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     final events = ref.watch(recycleEventsProvider);
     final marks = ref.watch(recycleMarksProvider);
     final otherFiles = ref.watch(recycleOtherFilesProvider);
+    final timetables = ref.watch(recycleTimetablesProvider);
 
     int total =
         (students.value?.length ?? 0) +
@@ -613,7 +691,8 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
         (fees.value?.length ?? 0) +
         (events.value?.length ?? 0) +
         (marks.value?.length ?? 0) +
-        (otherFiles.value?.length ?? 0);
+        (otherFiles.value?.length ?? 0) +
+        timetables.length;
 
     String formatSize(double bytes) {
       const suffixes = ["B", "KB", "MB", "GB", "TB"];
@@ -661,14 +740,43 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade50,
-                    foregroundColor: Colors.red,
-                    elevation: 0,
-                  ), onPressed: () => showEmptyTrashDialog(),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text("Empty Trash"),
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                        onPressed: () {
+                          ref.invalidate(recycleStudentsProvider);
+                          ref.invalidate(recycleTeachersProvider);
+                          ref.invalidate(recycleFeesProvider);
+                          ref.invalidate(recycleEventsProvider);
+                          ref.invalidate(recycleMarksProvider);
+                          ref.invalidate(recycleOtherFilesProvider);
+                          ref.invalidate(recycleTimetablesProvider);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade50,
+                        foregroundColor: Colors.red,
+                        elevation: 0,
+                      ), onPressed: () => showEmptyTrashDialog(),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text("Empty Trash"),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -764,11 +872,20 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                       )
                           : 0,
                     ),
-                    _tab(5, Icons.calendar_month_outlined, "Class Timetable",count: 5),
+                    _tab(
+                      5,
+                      Icons.calendar_month_outlined,
+                      "Class Timetable",
+                      count: getNewCount(
+                        timetables,
+                        5,
+                        (e) => e.deletedDate,
+                      ),
+                    ),
                     _tab(
                       6,
                       Icons.file_copy,
-                      "Other Files",
+                      "Notes",
                       count: otherFiles.hasValue
                           ? getNewCount(
                         otherFiles.value!,
@@ -888,6 +1005,9 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
           error: (e, _) => Text("Error: $e"),
           data: (list) => _marksTable(list),
         );
+      case 5:
+        final timetables = ref.watch(recycleTimetablesProvider);
+        return _timetableTable(timetables);
       case 6:
         final data = ref.watch(recycleOtherFilesProvider);
         return data.when(
@@ -961,6 +1081,319 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
     });
   }
 
+  Future<void> _restoreOrDeleteMarkItem(RecycleMark mark, {required bool restore}) async {
+    final firestore = FirebaseFirestore.instance;
+    final docRef = firestore
+        .schoolCollection(FirebaseConstant.studentsMark)
+        .doc(mark.docId);
+
+    final docSnap = await docRef.get();
+    if (!docSnap.exists) return;
+    final docData = docSnap.data();
+    if (docData == null) return;
+
+    // Find classKey with case-insensitive and trimmed lookup
+    final classKey = docData.keys.firstWhere(
+      (k) => k.trim() == mark.classNo.trim(),
+      orElse: () => '',
+    );
+    if (classKey.isEmpty) return;
+
+    final classMap = docData[classKey];
+    if (classMap is! Map<String, dynamic>) return;
+
+    final divKey = classMap.keys.firstWhere(
+      (k) => k.trim().toLowerCase() == mark.division.trim().toLowerCase(),
+      orElse: () => '',
+    );
+    if (divKey.isEmpty) return;
+
+    if (mark.type == 'Folder') {
+      if (restore) {
+        await docRef.update({
+          '$classKey.$divKey.delete': false,
+          '$classKey.$divKey.deletedAt': null,
+        });
+      } else {
+        await docRef.update({
+          '$classKey.$divKey': FieldValue.delete(),
+        });
+      }
+    } else {
+      // Student-wise deletion
+      final divisionMap = classMap[divKey];
+      if (divisionMap is! Map<String, dynamic>) return;
+
+      final studentsMark = divisionMap['studentsMark'];
+      if (studentsMark is List) {
+        final list = List<Map<String, dynamic>>.from(
+          studentsMark.map((e) => Map<String, dynamic>.from(e as Map)),
+        );
+
+        for (int i = 0; i < list.length; i++) {
+          if (list[i]['studentId']?.toString() == mark.studentId) {
+            if (restore) {
+              list[i]['delete'] = false;
+              list[i]['deletedAt'] = null;
+            } else {
+              list.removeAt(i);
+            }
+            break;
+          }
+        }
+        await docRef.update({
+          '$classKey.$divKey.studentsMark': list,
+        });
+      } else if (studentsMark is Map) {
+        final matchedStudentId = studentsMark.keys.firstWhere(
+          (k) => k.trim() == mark.studentId?.trim(),
+          orElse: () => '',
+        );
+        if (matchedStudentId.isNotEmpty) {
+          if (restore) {
+            await docRef.update({
+              '$classKey.$divKey.studentsMark.$matchedStudentId.delete': false,
+              '$classKey.$divKey.studentsMark.$matchedStudentId.deletedAt': null,
+            });
+          } else {
+            await docRef.update({
+              '$classKey.$divKey.studentsMark.$matchedStudentId': FieldValue.delete(),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> showRestoreMarkDialog({
+    required BuildContext context,
+    required RecycleMark mark,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Restore Marks"),
+        content: Text("Do you want to restore the marks for '${mark.title}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _restoreOrDeleteMarkItem(mark, restore: true);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text("Restore"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> showDeleteMarkDialog({
+    required BuildContext context,
+    required RecycleMark mark,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Permanent Delete"),
+        content: Text(
+          "This action cannot be undone.\nDo you want to delete '${mark.title}' permanently?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await _restoreOrDeleteMarkItem(mark, restore: false);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _restoreOrDeleteTimetableItem(RecycleTimetable tt, {required bool restore}) async {
+    final firestore = FirebaseFirestore.instance;
+    if (tt.type == 'Draft') {
+      final docRef = firestore
+          .schoolCollection(FirebaseConstant.draftTimetable)
+          .doc(tt.docId);
+      if (restore) {
+        await docRef.update({
+          'delete': false,
+          'deletedAt': null,
+        });
+      } else {
+        await docRef.delete();
+      }
+    } else {
+      // Real timetable
+      final docRef = firestore
+          .schoolCollection(FirebaseConstant.timetable)
+          .doc(tt.docId);
+      final docSnap = await docRef.get();
+      if (!docSnap.exists) return;
+      final docData = docSnap.data();
+      if (docData == null) return;
+
+      final divisions = docData['divisions'];
+      if (divisions is! Map<String, dynamic>) return;
+
+      final divKey = divisions.keys.firstWhere(
+        (k) => k.trim().toLowerCase() == (tt.division ?? '').trim().toLowerCase(),
+        orElse: () => '',
+      );
+      if (divKey.isEmpty) return;
+
+      final divVal = divisions[divKey];
+      if (divVal is! Map<String, dynamic>) return;
+
+      final timetables = divVal['timetables'];
+      if (timetables is! Map<String, dynamic>) return;
+
+      final ttKey = timetables.keys.firstWhere(
+        (k) => k.trim().toLowerCase() == (tt.timetableKey ?? '').trim().toLowerCase(),
+        orElse: () => '',
+      );
+      if (ttKey.isEmpty) return;
+
+      if (restore) {
+        await docRef.update({
+          'divisions.$divKey.timetables.$ttKey.delete': false,
+          'divisions.$divKey.timetables.$ttKey.deletedDate': null,
+        });
+      } else {
+        await docRef.update({
+          'divisions.$divKey.timetables.$ttKey': FieldValue.delete(),
+        });
+      }
+    }
+  }
+
+  Future<void> showRestoreTimetableDialog({
+    required BuildContext context,
+    required RecycleTimetable timetable,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Restore Timetable"),
+        content: Text("Do you want to restore the timetable '${timetable.title}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _restoreOrDeleteTimetableItem(timetable, restore: true);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text("Restore"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> showDeleteTimetableDialog({
+    required BuildContext context,
+    required RecycleTimetable timetable,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Permanent Delete"),
+        content: Text(
+          "This action cannot be undone.\nDo you want to delete '${timetable.title}' permanently?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await _restoreOrDeleteTimetableItem(timetable, restore: false);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _restoreOrDeleteNestedNote(String id, {required bool restore}) async {
+    final firestore = FirebaseFirestore.instance;
+    // 1. Try flat documents matching 'id' field
+    final flatQuery = await firestore
+        .schoolCollection(FirebaseConstant.notes)
+        .where('id', isEqualTo: id)
+        .get();
+    for (var doc in flatQuery.docs) {
+      if (restore) {
+        await doc.reference.update({
+          'delete': false,
+          'deletedDate': null,
+        });
+      } else {
+        await doc.reference.delete();
+      }
+    }
+
+    // 2. Search nested structures
+    final snapshot = await firestore.schoolCollection(FirebaseConstant.notes).get();
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (!data.containsKey('teacherId')) {
+        // It's a nested document
+        String? foundDivision;
+        String? foundTitle;
+        data.forEach((divisionKey, divisionVal) {
+          if (divisionVal is Map<String, dynamic>) {
+            divisionVal.forEach((noteTitle, noteData) {
+              if (noteData is Map<String, dynamic> && noteData['id'] == id) {
+                foundDivision = divisionKey;
+                foundTitle = noteTitle;
+              }
+            });
+          }
+        });
+
+        if (foundDivision != null && foundTitle != null) {
+          if (restore) {
+            await doc.reference.update({
+              '$foundDivision.$foundTitle.delete': false,
+              '$foundDivision.$foundTitle.deletedDate': null,
+            });
+          } else {
+            await doc.reference.update({
+              '$foundDivision.$foundTitle': FieldValue.delete(),
+            });
+          }
+        }
+      }
+    }
+  }
+
   Future<void> showRestoreDialog({
     required BuildContext context,
     required String collection,
@@ -968,24 +1401,30 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
   }) async {
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Restore Item"),
         content: const Text("Do you want to restore this item?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
             onPressed: () async {
-              await FirebaseFirestore.instance
-                  .schoolCollection(collection)
-                  .doc(docId)
-                  .update({
-                'delete': false,
-                'deletedAt': null,
-              });
-              Navigator.pop(context);
+              if (collection == FirebaseConstant.notes) {
+                await _restoreOrDeleteNestedNote(docId, restore: true);
+              } else {
+                await FirebaseFirestore.instance
+                    .schoolCollection(collection)
+                    .doc(docId)
+                    .update({
+                  'delete': false,
+                  'deletedAt': null,
+                });
+              }
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
             },
             child: const Text("Restore"),
           ),
@@ -997,28 +1436,34 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
   Future<void> showDeleteDialog({
     required BuildContext context,
     required String collection,
-    required String docId,}) async {
+    required String docId,
+  }) async {
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Permanent Delete"),
         content: const Text(
           "This action cannot be undone.\nDo you want to delete permanently?",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await FirebaseFirestore.instance
-                  .schoolCollection(collection)
-                  .doc(docId)
-                  .delete();
-
-              Navigator.pop(context);
+              if (collection == FirebaseConstant.notes) {
+                await _restoreOrDeleteNestedNote(docId, restore: false);
+              } else {
+                await FirebaseFirestore.instance
+                    .schoolCollection(collection)
+                    .doc(docId)
+                    .delete();
+              }
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
             },
             child: const Text("Delete"),
           ),
@@ -1030,14 +1475,14 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
   Future<void> showEmptyTrashDialog() async {
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Empty Trash"),
         content: const Text(
           "All deleted data will be permanently removed.\nContinue?",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Cancel"),
           ),
           ElevatedButton(
@@ -1049,21 +1494,130 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                 FirebaseConstant.student,
                 FirebaseConstant.teacher,
                 FirebaseConstant.events,
-                FirebaseConstant.otherFile,
+                FirebaseConstant.notes,
               ];
 
               for (String col in collections) {
-                final snapshot = await firestore
-                    .schoolCollection(col)
-                    .where('delete', isEqualTo: true)
-                    .get();
+                if (col == FirebaseConstant.notes) {
+                  final snapshot = await firestore.schoolCollection(col).get();
+                  for (var doc in snapshot.docs) {
+                    final data = doc.data();
+                    if (data.containsKey('teacherId')) {
+                      if (data['delete'] == true) {
+                        await doc.reference.delete();
+                      }
+                    } else {
+                      final Map<String, dynamic> deletes = {};
+                      data.forEach((divKey, divVal) {
+                        if (divVal is Map<String, dynamic>) {
+                          divVal.forEach((noteTitle, noteData) {
+                            if (noteData is Map<String, dynamic> && noteData['delete'] == true) {
+                              deletes['$divKey.$noteTitle'] = FieldValue.delete();
+                            }
+                          });
+                        }
+                      });
+                      if (deletes.isNotEmpty) {
+                        await doc.reference.update(deletes);
+                      }
+                    }
+                  }
+                } else {
+                  final snapshot = await firestore
+                      .schoolCollection(col)
+                      .where('delete', isEqualTo: true)
+                      .get();
 
-                for (var doc in snapshot.docs) {
-                  await doc.reference.delete();
+                  for (var doc in snapshot.docs) {
+                    await doc.reference.delete();
+                  }
                 }
               }
 
-              Navigator.pop(context);
+              // Permanent deletion of deleted draft timetables
+              final draftSnap = await firestore
+                  .schoolCollection(FirebaseConstant.draftTimetable)
+                  .where('delete', isEqualTo: true)
+                  .get();
+              for (var doc in draftSnap.docs) {
+                await doc.reference.delete();
+              }
+
+              // Permanent deletion of deleted real timetables keys
+              final timetableSnap = await firestore
+                  .schoolCollection(FirebaseConstant.timetable)
+                  .get();
+              for (var doc in timetableSnap.docs) {
+                final data = doc.data();
+                final divisions = data['divisions'] as Map?;
+                final Map<String, dynamic> deletes = {};
+                divisions?.forEach((divKey, divVal) {
+                  if (divVal is Map) {
+                    final timetables = divVal['timetables'] as Map?;
+                    timetables?.forEach((ttName, ttData) {
+                      if (ttData is Map && ttData['delete'] == true) {
+                        deletes['divisions.$divKey.timetables.$ttName'] = FieldValue.delete();
+                      }
+                    });
+                  }
+                });
+                if (deletes.isNotEmpty) {
+                  await doc.reference.update(deletes);
+                }
+              }
+
+              // Permanent deletion of deleted student marks (folder or studentwise)
+              final marksSnap = await firestore
+                  .schoolCollection(FirebaseConstant.studentsMark)
+                  .get();
+              for (var doc in marksSnap.docs) {
+                final data = doc.data();
+                final Map<String, dynamic> updates = {};
+                bool hasUpdates = false;
+
+                data.forEach((classKey, classVal) {
+                  if (classVal is Map) {
+                    classVal.forEach((divKey, divVal) {
+                      if (divVal is Map) {
+                        // 1. Folder level delete
+                        if (divVal['delete'] == true) {
+                          updates['$classKey.$divKey'] = FieldValue.delete();
+                          hasUpdates = true;
+                        } else {
+                          // 2. Student-wise delete
+                          final studentsMark = divVal['studentsMark'];
+                          if (studentsMark is List) {
+                            final list = List<Map<String, dynamic>>.from(
+                              studentsMark.map((e) => Map<String, dynamic>.from(e as Map)),
+                            );
+                            final originalLength = list.length;
+                            list.removeWhere((item) => item['delete'] == true);
+                            if (list.length != originalLength) {
+                              updates['$classKey.$divKey.studentsMark'] = list;
+                              hasUpdates = true;
+                            }
+                          } else if (studentsMark is Map) {
+                            studentsMark.forEach((studentId, markVal) {
+                              if (markVal is Map && markVal['delete'] == true) {
+                                updates['$classKey.$divKey.studentsMark.$studentId'] = FieldValue.delete();
+                                hasUpdates = true;
+                              }
+                            });
+                          }
+                        }
+                      }
+                    });
+                  }
+                });
+
+                if (hasUpdates) {
+                  await doc.reference.update(updates);
+                }
+              }
+
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
             },
             child: const Text("Empty"),
           ),
@@ -1874,20 +2428,187 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                             child: Row(
                               children: [
                                 _action("Restore", Colors.green, () {
-                                  showRestoreDialog(
+                                  showRestoreMarkDialog(
                                     context: context,
-                                    collection: FirebaseConstant.studentsMark,
-                                    docId: mark.title,
+                                    mark: mark,
                                   );
                                 }),
 
                                 const SizedBox(width: 8),
 
                                 _action("Delete", Colors.red, () {
-                                  showDeleteDialog(
+                                  showDeleteMarkDialog(
                                     context: context,
-                                    collection: FirebaseConstant.studentsMark,
-                                    docId: mark.title,
+                                    mark: mark,
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ],
+      ),
+    );
+  }
+
+   Widget _timetableTable(List<RecycleTimetable> timetables) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Expanded(
+                flex: 2,
+                child: Text("TITLE", style: TextStyle(color: Colors.grey)),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text("TYPE", style: TextStyle(color: Colors.grey)),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  "CREATED DATE",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text("CLASS", style: TextStyle(color: Colors.grey)),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  "DELETED DATE",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text("ACTIONS", style: TextStyle(color: Colors.grey)),
+              ),
+            ],
+          ),
+          const Divider(),
+
+          timetables.isEmpty
+              ? _empty("No records in recycle bin")
+              : Column(
+                  children: timetables.map((timetable) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 9),
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.contextMenu,
+                                  child: Tooltip(
+                                    waitDuration: const Duration(
+                                      milliseconds: 300,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black87,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    textStyle: const TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                    message: timetable.title,
+                                    child: Text(
+                                      limitText(timetable.title),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: timetable.type == 'Draft'
+                                      ? Colors.orange.shade50
+                                      : Colors.purple.shade50,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  timetable.type,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: timetable.type == 'Draft'
+                                        ? Colors.orange.shade700
+                                        : Colors.purple.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(flex: 2, child: Text(timetable.createdDate)),
+                          Expanded(
+                            flex: 2,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  timetable.className,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(flex: 2, child: Text(timetable.deletedDate)),
+                          Expanded(
+                            flex: 2,
+                            child: Row(
+                              children: [
+                                _action("Restore", Colors.green, () {
+                                  showRestoreTimetableDialog(
+                                    context: context,
+                                    timetable: timetable,
+                                  );
+                                }),
+
+                                const SizedBox(width: 8),
+
+                                _action("Delete", Colors.red, () {
+                                  showDeleteTimetableDialog(
+                                    context: context,
+                                    timetable: timetable,
                                   );
                                 }),
                               ],
@@ -2058,7 +2779,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                                 _action("Restore", Colors.green, () {
                                   showRestoreDialog(
                                     context: context,
-                                    collection: FirebaseConstant.otherFile,
+                                    collection: FirebaseConstant.notes,
                                     docId: otherFiles.id, // ⚠️ fix below
                                   );
                                 }),
@@ -2068,7 +2789,7 @@ class _RecycleBinPageState extends ConsumerState<RecycleBinPage> {
                                 _action("Delete", Colors.red, () {
                                   showDeleteDialog(
                                     context: context,
-                                    collection: FirebaseConstant.otherFile,
+                                    collection: FirebaseConstant.notes,
                                     docId: otherFiles.id,
                                   );
                                 }),

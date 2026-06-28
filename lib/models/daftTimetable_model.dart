@@ -11,6 +11,9 @@ class DraftTimetableModel {
   final Map<String, String> dayTypes; // e.g. {'Monday': 'Working Day'}
   final Map<String, List<PeriodSlotModel>> scheduleData; // The raw grid data
   final String schoolId;
+  final bool delete;
+  final DateTime? deletedAt;
+  
 
   const DraftTimetableModel({
     this.id,
@@ -19,8 +22,10 @@ class DraftTimetableModel {
     required this.status,
     required this.createdDate,
     required this.dayTypes,
-    required this.scheduleData,
+    required this.scheduleData, 
     this.schoolId = '',
+    required this.delete,
+    this.deletedAt,
   });
 
   DraftTimetableModel copyWith({
@@ -32,6 +37,8 @@ class DraftTimetableModel {
     Map<String, String>? dayTypes,
     Map<String, List<PeriodSlotModel>>? scheduleData,
     String? schoolId,
+    bool? delete,
+    DateTime? deletedAt,
   }) {
     return DraftTimetableModel(
       id: id ?? this.id,
@@ -42,6 +49,8 @@ class DraftTimetableModel {
       dayTypes: dayTypes ?? this.dayTypes,
       scheduleData: scheduleData ?? this.scheduleData,
       schoolId: schoolId ?? this.schoolId,
+      delete: delete ?? this.delete,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -57,6 +66,10 @@ class DraftTimetableModel {
             (key, value) => MapEntry(key, value.map((slot) => slot.toMap()).toList()),
       ),
       'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
+      'delete': delete,
+      'deletedAt': deletedAt == null
+          ? null
+          : Timestamp.fromDate(deletedAt!),
     };
   }
 
@@ -78,6 +91,10 @@ class DraftTimetableModel {
         ),
       ) ?? {},
       schoolId: map['schoolId'] ?? '',
+      delete: map['delete'] ?? false,
+      deletedAt: map['deletedAt'] != null
+          ? (map['deletedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 }

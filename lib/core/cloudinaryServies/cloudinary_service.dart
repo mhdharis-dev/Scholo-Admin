@@ -2,21 +2,21 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 
 class CloudinaryService {
   static final cloudinaryTimetable=CloudinaryPublic(
-      'dbou8qtak',
+      'dxqqnfxvj',
       'file_uploder',
       cache: false
   );
   static final cloudinaryMark=CloudinaryPublic(
-      'dbou8qtak',
+      'dxqqnfxvj',
       'mark_uploader',
       cache: false
   );
   static final studentProfile=CloudinaryPublic(
-      'dbou8qtak',
+      'dxqqnfxvj',
       'student_image',
       cache: false
   );  static final teacherProfile=CloudinaryPublic(
-      'dbou8qtak',
+      'dxqqnfxvj',
       'teacher_image',
       cache: false
   );

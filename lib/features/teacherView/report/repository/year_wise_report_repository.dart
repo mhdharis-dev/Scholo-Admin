@@ -51,13 +51,13 @@ class YearWiseReportRepository {
 
       // Filter nested structure by teacherId
       raw.forEach((classKey, divisionMap) {
-        if (divisionMap is Map<String, dynamic>) {
+        if (divisionMap is Map) {
           final Map<String, dynamic> filteredDivisions = {};
 
           divisionMap.forEach((divisionKey, students) {
             if (students is List) {
               final filteredStudents = students.where((s) {
-                if (s is! Map<String, dynamic>) return false;
+                if (s is! Map) return false;
                 final tId = (s['teacherId'] ?? '').toString();
                 return tId == teacherId;
               }).toList();

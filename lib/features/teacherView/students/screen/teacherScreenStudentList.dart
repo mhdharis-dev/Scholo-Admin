@@ -18,6 +18,31 @@ import '../../../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../../../core/constant/firebase_constant.dart';
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/students_model.dart';
+import '../../../../models/teacher_model.dart';
+import 'package:alert_info/alert_info.dart';
+
+class AssignedClass {
+  final int classNo;
+  final String division;
+  final bool isClassTeacher;
+
+  AssignedClass({
+    required this.classNo,
+    required this.division,
+    required this.isClassTeacher,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AssignedClass &&
+          runtimeType == other.runtimeType &&
+          classNo == other.classNo &&
+          division == other.division;
+
+  @override
+  int get hashCode => classNo.hashCode ^ division.hashCode;
+}
 
 class TeacherScreenStudentList extends ConsumerStatefulWidget {
   final String teacherId; // ✅ TeacherId from previous page
@@ -50,9 +75,14 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
   String? _selectedGender;
   String? _selectedTeacherName;
-  String? _selectedTeacherId;
   String? _classNo;
   String? _division;
+
+  // Class Selection states
+  List<AssignedClass> _assignedClasses = [];
+  AssignedClass? _selectedClassItem;
+  bool _isClassTeacher = true;
+  final Map<String, String> _classTeacherNames = {};
 
   StudentsModel? editingStudent;
 
@@ -100,7 +130,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     super.dispose();
   }
 
-  /// 🔹 Fetch Teachers List
+  /// 🔹 Fetch Teachers List & Assigned Classes
   Future<void> _fetchTeachers() async {
     final doc = await FirebaseFirestore.instance
         .schoolCollection(FirebaseConstant.teacher)
@@ -109,12 +139,75 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
     if (doc.exists) {
       final data = doc.data()!;
+      final mainTeacher = TeacherModel.fromMap(data);
+
+      final List<AssignedClass> classesList = [];
+
+      // 1. Add Class Teacher class if assigned
+      if (mainTeacher.classNo != 0 &&
+          mainTeacher.division.isNotEmpty &&
+          mainTeacher.division != 'Nil' &&
+          mainTeacher.division != 'Not') {
+        classesList.add(AssignedClass(
+          classNo: mainTeacher.classNo,
+          division: mainTeacher.division,
+          isClassTeacher: true,
+        ));
+      }
+
+      // 2. Fetch all teachers to check otherTeachers lists for subject classes
+      final allTeachersSnapshot = await FirebaseFirestore.instance
+          .schoolCollection(FirebaseConstant.teacher)
+          .where("delete", isEqualTo: false)
+          .get();
+
+      final Map<String, String> classTeacherMap = {};
+      for (var teacherDoc in allTeachersSnapshot.docs) {
+        final tData = teacherDoc.data();
+        final cNo = tData['classNo'] as int? ?? 0;
+        final div = tData['division'] as String? ?? '';
+        final tName = tData['teacherName'] as String? ?? '';
+        if (cNo != 0 && div.isNotEmpty) {
+          classTeacherMap["$cNo-$div"] = tName;
+        }
+
+        final otherTeachersRaw = tData['otherTeachers'] as List<dynamic>?;
+        if (otherTeachersRaw != null) {
+          final hasSubjectAssignment =
+              otherTeachersRaw.any((item) => item['teacherId'] == widget.teacherId);
+          if (hasSubjectAssignment) {
+            final classNo = tData['classNo'] as int? ?? 0;
+            final division = tData['division'] as String? ?? '';
+            if (classNo != 0 && division.isNotEmpty && division != 'Nil') {
+              final newClass = AssignedClass(
+                classNo: classNo,
+                division: division,
+                isClassTeacher: false,
+              );
+              if (!classesList.contains(newClass)) {
+                classesList.add(newClass);
+              }
+            }
+          }
+        }
+      }
 
       setState(() {
-        _selectedTeacherId = widget.teacherId;
-        _selectedTeacherName = data['teacherName'] ?? '';
-        _classNo = data['classNo']?.toString();
-        _division = data['division'];
+        _selectedTeacherName = mainTeacher.teacherName;
+        _assignedClasses = classesList;
+        _classTeacherNames.clear();
+        _classTeacherNames.addAll(classTeacherMap);
+        if (classesList.isNotEmpty) {
+          _selectedClassItem = classesList.first;
+          _classNo = _selectedClassItem!.classNo.toString();
+          _division = _selectedClassItem!.division;
+          _isClassTeacher = _selectedClassItem!.isClassTeacher;
+        } else {
+          _selectedClassItem = null;
+          _classNo = null;
+          _division = null;
+          _isClassTeacher = false;
+        }
       });
     }
   }
@@ -305,7 +398,6 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _classNo = student.classNo.toString();
       _division = student.division;
       _selectedTeacherName = student.teacherName;
-      _selectedTeacherId = student.teacherId;
       _uploadedImageUrl = student.imageUrl;
       _dayController.text = student.dateOfBirth.day.toString();
       _monthController.text = student.dateOfBirth.month.toString();
@@ -428,7 +520,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                 const SizedBox(height: 24),
                 _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10)
+                  LengthLimitingTextInputFormatter(6)
                 ]),
                 const SizedBox(height: 14),
                 _buildValidatedField(_nameController, "Name", inputFormatters: [
@@ -474,22 +566,168 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                     onPressed: _isUploading
                         ? null
                         : () async {
-                      if (_classNo == null || _division == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Teacher data not loaded")),
+                      final admissionNo = _admissionController.text.trim();
+                      final rollNo = _rollController.text.trim();
+                      final name = _nameController.text.trim();
+                      final mobile = _mobileController.text.trim();
+                      final parent = _parentController.text.trim();
+                      final address = _addressController.text.trim();
+                      final email = _emailController.text.trim();
+                      final password = _passwordController.text.trim();
+                      final day = _dayController.text.trim();
+                      final month = _monthController.text.trim();
+                      final year = _yearController.text.trim();
+
+                      if (admissionNo.isEmpty || admissionNo.length != 6) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Admission number must be exactly 6 digits',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
                         );
                         return;
                       }
+                      if (name.isEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Name cannot be empty',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (rollNo.isEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Roll number cannot be empty',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      final phoneError = getPhoneValidationErrorMessage(mobile);
+                      if (phoneError.isNotEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: phoneError,
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (_selectedGender == null || _selectedGender!.isEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Please select a gender',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (_classNo == null || _division == null) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Teacher data not loaded',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      final dayVal = int.tryParse(day);
+                      final monthVal = int.tryParse(month);
+                      final yearVal = int.tryParse(year);
+                      if (dayVal == null || dayVal < 1 || dayVal > 31 ||
+                          monthVal == null || monthVal < 1 || monthVal > 12 ||
+                          yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (parent.isEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Parent name cannot be empty',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (address.isEmpty) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Address cannot be empty',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (!_isEmailValid(email)) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Please enter a valid Email',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+                      if (!_isPasswordValid(password)) {
+                        AlertInfo.show(
+                          context: context,
+                          text: 'Password must be at least 6 characters',
+                          typeInfo: TypeInfo.error,
+                          iconColor: Colors.white,
+                          backgroundColor: Colors.redAccent,
+                          textColor: Colors.white,
+                          position: MessagePosition.top,
+                        );
+                        return;
+                      }
+
                       setState(() => _isUploading = true);
                       try {
                         if (_selectedFile != null) {
                           _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
                         }
 
-                        final dob = DateTime.tryParse(
-                          "${_yearController.text}-${_monthController.text}-${_dayController.text}",
-                        ) ??
-                            DateTime(2000, 1, 1);
+                        final dob = DateTime(
+                          int.parse(_yearController.text),
+                          int.parse(_monthController.text),
+                          int.parse(_dayController.text),
+                        );
 
                         final newStudent = StudentsModel(
                           studentId: editingStudent?.studentId ?? '',
@@ -546,11 +784,27 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
                         if (context.mounted) {
                           Navigator.pop(context);
+                          AlertInfo.show(
+                            context: context,
+                            text: editingStudent != null ? 'Student updated successfully' : 'Student added successfully',
+                            typeInfo: TypeInfo.success,
+                            iconColor: Colors.white,
+                            backgroundColor: const Color(0xFF27AE60),
+                            textColor: Colors.white,
+                            position: MessagePosition.top,
+                          );
                         }
                       } catch (e) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text("Error: $e")));
+                          AlertInfo.show(
+                            context: context,
+                            text: "Error: $e",
+                            typeInfo: TypeInfo.error,
+                            iconColor: Colors.white,
+                            backgroundColor: Colors.redAccent,
+                            textColor: Colors.white,
+                            position: MessagePosition.top,
+                          );
                         }
                       } finally {
                         setState(() => _isUploading = false);
@@ -658,22 +912,24 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              InkWell(
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  Future.delayed(Duration.zero, () {
-                                    _openStudentDialog(student);
-                                  });
-                                },
-                                child: SvgPicture.asset(
-                                  ImageConstant.editIcon,
-                                  fit: BoxFit.contain,
-                                  color: const Color(0xff1193D4),
-                                  height: 18,
-                                  width: 18,
+                              if (_isClassTeacher) ...[
+                                const SizedBox(width: 10),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    Future.delayed(Duration.zero, () {
+                                      _openStudentDialog(student);
+                                    });
+                                  },
+                                  child: SvgPicture.asset(
+                                    ImageConstant.editIcon,
+                                    fit: BoxFit.contain,
+                                    color: const Color(0xff1193D4),
+                                    height: 18,
+                                    width: 18,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ],
@@ -797,14 +1053,26 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                 );
 
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Student deleted successfully")),
+                  AlertInfo.show(
+                    context: context,
+                    text: "Student deleted successfully",
+                    typeInfo: TypeInfo.success,
+                    iconColor: Colors.white,
+                    backgroundColor: const Color(0xFF27AE60),
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error deleting student: $e")),
+                  AlertInfo.show(
+                    context: context,
+                    text: "Error deleting student: $e",
+                    typeInfo: TypeInfo.error,
+                    iconColor: Colors.white,
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    position: MessagePosition.top,
                   );
                 }
               }
@@ -938,176 +1206,230 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       backgroundColor: const Color(0xffF6F8FC),
 
       /// Floating Add Button
-      floatingActionButton: FloatingActionButton(
-        shape: const CircleBorder(),
-        backgroundColor: const Color(0xff1193D4),
-        onPressed: () {
-          _openStudentDialog(); // ✅ Add Student
-        },
-        child: const Icon(Icons.person_add_alt_1, color: Colors.white),
-      ),
+      floatingActionButton: _isClassTeacher
+          ? FloatingActionButton(
+              shape: const CircleBorder(),
+              backgroundColor: const Color(0xff1193D4),
+              onPressed: () {
+                _openStudentDialog(); // ✅ Add Student
+              },
+              child: const Icon(Icons.person_add_alt_1, color: Colors.white),
+            )
+          : null,
 
-      body: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Navigation Title Bar
-            Row(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                      )
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
-                    onPressed: () => context.pop(),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Text(
-                  "Students & Class View",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Class Teacher & Dropdowns Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Navigation Title Bar
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Class Teacher:${_selectedTeacherName ?? ''}",
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff1193D4),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "Class Overview",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      // CLASS SELECTOR/DISPLAY
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xffF8FAFC),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.grey.shade100),
-                          ),
-                          child: Row(
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("CLASS", style: TextStyle(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    "Class ${_classNo != null ? _classNoToString(int.tryParse(_classNo!) ?? 0) : ''}-${_division ?? ''}",
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              const Icon(Icons.keyboard_arrow_down, color: Colors.blue),
-                            ],
-                          ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                            )
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black),
+                          onPressed: () => context.pop(),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // DATE PICKER
-                      Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _selectedDate,
-                              firstDate: DateTime(2000),
-                              lastDate: DateTime(2100),
-                            );
-                            if (picked != null) {
-                              setState(() {
-                                _selectedDate = picked;
-                              });
-                            }
-                          },
+                      const SizedBox(width: 16),
+                      const Text(
+                        "Students & Class View",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Refresh Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                        )
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                      onPressed: () {
+                        _fetchTeachers();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Class Teacher & Dropdowns Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}",
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xff1193D4),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      "Class Overview",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        // CLASS SELECTOR/DISPLAY (Dropdown)
+                        Expanded(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xffF8FAFC),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: Colors.grey.shade100),
                             ),
-                            child: Row(
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text("DATE", style: TextStyle(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      DateFormat("MMM dd, yyyy").format(_selectedDate),
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<AssignedClass>(
+                                value: _selectedClassItem,
+                                isExpanded: true,
+                                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.blue),
+                                onChanged: (AssignedClass? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedClassItem = newValue;
+                                      _classNo = newValue.classNo.toString();
+                                      _division = newValue.division;
+                                      _isClassTeacher = newValue.isClassTeacher;
+                                    });
+                                  }
+                                },
+                                items: _assignedClasses
+                                    .map<DropdownMenuItem<AssignedClass>>(
+                                        (AssignedClass value) {
+                                  return DropdownMenuItem<AssignedClass>(
+                                    value: value,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Text("CLASS",
+                                            style: TextStyle(
+                                                fontSize: 9,
+                                                color: Colors.blueAccent,
+                                                fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 1),
+                                        Text(
+                                          "Class ${_classNoToString(value.classNo)}-${value.division}${value.isClassTeacher ? ' (Class Teacher)' : ' (Subject Teacher)'}",
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                const Spacer(),
-                                const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.blue),
-                              ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 12),
+                        // DATE PICKER
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _selectedDate,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setState(() {
+                                  _selectedDate = picked;
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xffF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: Row(
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text("DATE", style: TextStyle(fontSize: 10, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        DateFormat("MMM dd, yyyy").format(_selectedDate),
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const Spacer(),
+                                    const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.blue),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // Nested Streams for Attendance Document and Students
-            Expanded(
-              child: StreamBuilder<DocumentSnapshot>(
+              // Nested Streams for Attendance Document and Students
+              StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .schoolCollection(FirebaseConstant.attendance)
                     .doc(dateId)
                     .snapshots(),
                 builder: (context, attendanceSnapshot) {
+                  if (attendanceSnapshot.hasError) {
+                    return Center(child: Text("Error: ${attendanceSnapshot.error}"));
+                  }
                   // Map of studentId -> status
                   final attendanceMap = <String, String>{};
                   if (attendanceSnapshot.hasData && attendanceSnapshot.data!.exists) {
@@ -1129,11 +1451,14 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                   return StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .schoolCollection(FirebaseConstant.student)
-                        .where("teacherId", isEqualTo: widget.teacherId)
+                        .where("classNo", isEqualTo: int.tryParse(_classNo ?? '0') ?? 0)
+                        .where("division", isEqualTo: _division ?? '')
                         .where("delete", isEqualTo: false)
-                        .orderBy("rollNo")
                         .snapshots(),
                     builder: (context, studentSnapshot) {
+                      if (studentSnapshot.hasError) {
+                        return Center(child: Text("Error: ${studentSnapshot.error}"));
+                      }
                       if (!studentSnapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
@@ -1155,6 +1480,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                         }
                         return s;
                       }).toList();
+
+                      // Client-side sorting by rollNo
+                      allStudents.sort((a, b) => a.rollNo.compareTo(b.rollNo));
 
                       final attendancePercentage = totalStudents > 0
                           ? ((presentCount / totalStudents) * 100).round()
@@ -1233,7 +1561,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                                       ),
                                     ),
                                   ],
-                                ),
+                                ) ,
                                 const SizedBox(height: 16),
                                 // Split Progress Bar
                                 ClipRRect(
@@ -1347,42 +1675,48 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           const SizedBox(height: 12),
 
                           // List View
-                          Expanded(
-                            child: filteredStudents.isEmpty
-                                ? const Center(child: Text("No Students Found"))
-                                : ListView.builder(
-                                    itemCount: filteredStudents.length,
-                                    itemBuilder: (context, index) {
-                                      final student = filteredStudents[index];
-                                      final attStatus = attendanceMap[student.studentId];
-
-                                      return studentCard(
-                                        student: student,
-                                        attendanceStatus: attStatus,
-                                        onView: () {
-                                          showStudentDetailsModal(context, student);
-                                        },
-                                        onEdit: () {
-                                          _openStudentDialog(student);
-                                        },
-                                        onDelete: () {
-                                          _deleteStudent(context, student);
-                                        },
-                                        onToggleAttendance: () {
-                                          _toggleStudentAttendance(student.studentId, student, attStatus);
-                                        },
-                                      );
-                                    },
+                          filteredStudents.isEmpty
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 40),
+                                    child: Text("No Students Found"),
                                   ),
-                          ),
+                                )
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: filteredStudents.length,
+                                  itemBuilder: (context, index) {
+                                    final student = filteredStudents[index];
+                                    final attStatus = attendanceMap[student.studentId];
+
+                                    return studentCard(
+                                      student: student,
+                                      attendanceStatus: attStatus,
+                                      onView: () {
+                                        showStudentDetailsModal(context, student);
+                                      },
+                                      onEdit: () {
+                                        _openStudentDialog(student);
+                                      },
+                                      onDelete: () {
+                                        _deleteStudent(context, student);
+                                      },
+                                      onToggleAttendance: () {
+                                        _toggleStudentAttendance(student.studentId, student, attStatus);
+                                      },
+                                      isClassTeacher: _isClassTeacher,
+                                    );
+                                  },
+                                ),
                         ],
                       );
                     },
                   );
                 },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1396,6 +1730,7 @@ Widget studentCard({
   required VoidCallback onEdit,
   required VoidCallback onDelete,
   required VoidCallback onToggleAttendance,
+  required bool isClassTeacher,
 }) {
   return Container(
     margin: const EdgeInsets.only(bottom: 16),
@@ -1431,7 +1766,7 @@ Widget studentCard({
               clipBehavior: Clip.none,
               children: [
                 GestureDetector(
-                  onTap: onToggleAttendance,
+                  onTap: isClassTeacher ? onToggleAttendance : null,
                   child: CircleAvatar(
                     radius: 28,
                     backgroundColor: Colors.grey.shade200,
@@ -1499,13 +1834,43 @@ Widget studentCard({
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    "Roll No. #${student.rollNo.toString().padLeft(3, '0')}",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade500,
-                    ),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        "Roll No. #${student.rollNo.toString().padLeft(3, '0')}",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: attendanceStatus == null
+                              ? Colors.grey.shade100
+                              : (attendanceStatus == "Absent"
+                                  ? const Color(0xffFEE2E2)
+                                  : const Color(0xffDCFCE7)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          attendanceStatus ?? "Unmarked",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: attendanceStatus == null
+                                ? Colors.grey.shade600
+                                : (attendanceStatus == "Absent"
+                                    ? Colors.red.shade700
+                                    : Colors.green.shade700),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1528,36 +1893,38 @@ Widget studentCard({
                     onPressed: onView,
                   ),
                 ),
-                const SizedBox(width: 8),
+                if (isClassTeacher) ...[
+                  const SizedBox(width: 8),
 
-                // Edit Icon
-                Container(
-                  height: 36,
-                  width: 36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xffEEF3FF),
-                    shape: BoxShape.circle,
+                  // Edit Icon
+                  Container(
+                    height: 36,
+                    width: 36,
+                    decoration: const BoxDecoration(
+                      color: Color(0xffEEF3FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.edit, size: 16, color: Color(0xff1193D4)),
+                      onPressed: onEdit,
+                    ),
                   ),
-                  child: IconButton(
-                    icon: const Icon(Icons.edit, size: 16, color: Color(0xff1193D4)),
-                    onPressed: onEdit,
-                  ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
 
-                // Delete Icon
-                Container(
-                  height: 36,
-                  width: 36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xffFEE2E2),
-                    shape: BoxShape.circle,
+                  // Delete Icon
+                  Container(
+                    height: 36,
+                    width: 36,
+                    decoration: const BoxDecoration(
+                      color: Color(0xffFEE2E2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                      onPressed: onDelete,
+                    ),
                   ),
-                  child: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                    onPressed: onDelete,
-                  ),
-                ),
+                ],
               ],
             ),
           ],

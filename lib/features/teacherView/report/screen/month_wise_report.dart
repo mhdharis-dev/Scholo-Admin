@@ -15,6 +15,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../models/teacher_model.dart';
 import '../controller/month_wise_report_controller.dart';
+import '../helper/attendance_pdf_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/config/session_manager.dart';
 
 class MonthWiseReport extends ConsumerWidget {
   final String teacherId;
@@ -83,6 +86,25 @@ class MonthWiseReport extends ConsumerWidget {
 
                 Row(
                   children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, size: 20, color: Color(0xff1193D4)),
+                        onPressed: () {
+                          ref.invalidate(monthWiseReportControllerProvider(params));
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
@@ -385,116 +407,19 @@ class MonthWiseReport extends ConsumerWidget {
     required String monthLabel,
     required List<DayReportModel> dates,
   }) async {
-    final pdf = pw.Document();
+    final standardized = dates.map((d) => {
+      'date': d.label,
+      'data': d.data,
+    }).toList();
 
-    final teacherName = teacher.teacherName;
-    final classNo = teacher.classNo;
-    final division = teacher.division;
-
-    final Map<int, Map<int, String>> matrix = {};
-    final Map<int, String> studentNames = {};
-
-    for (final dayReport in dates) {
-      final data = dayReport.data;
-      final day = dayReport.date.day;
-
-      data.forEach((classKey, divisions) {
-        if (divisions is Map<String, dynamic>) {
-          divisions.forEach((divKey, students) {
-            if (students is List) {
-              for (final s in students) {
-                if (s is! Map<String, dynamic>) continue;
-
-                final roll = (s['rollNo'] ?? 0) as int;
-                final name = (s['studentName'] ?? '').toString();
-                final status =
-                (s['presentDetail'] ?? s['status'] ?? '').toString();
-
-                studentNames[roll] = name;
-
-                matrix.putIfAbsent(roll, () => {});
-                matrix[roll]![day] = status;
-              }
-            }
-          });
-        }
-      });
-    }
-
-    final sortedRolls = studentNames.keys.toList()..sort();
-    final stats = _calculateMonthStats(dates);
-    final totalStudents = sortedRolls.length;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(20),
-        build: (_) => [
-          pw.Center(
-            child: pw.Text(
-              '$monthLabel Attendance Report',
-              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Divider(),
-          pw.SizedBox(height: 10),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text('Teacher: $teacherName'),
-              pw.Text('Class: $classNo'),
-              pw.Text('Division: $division'),
-            ],
-          ),
-          pw.SizedBox(height: 12),
-          pw.Text('Summary:', style: pw.TextStyle(fontSize: 12)),
-          pw.Table(
-            border: pw.TableBorder.all(),
-            children: [
-              pw.TableRow(children: [
-                _summaryCell('Total Students: $totalStudents'),
-                _summaryCell('Attendance: ${stats.attendancePercentage.toStringAsFixed(1)}%'),
-                _summaryCell('Working Days: ${dates.length}'),
-              ])
-            ],
-          ),
-          pw.SizedBox(height: 10),
-
-          pw.Table(
-            border: pw.TableBorder.all(),
-            children: [
-              pw.TableRow(
-                decoration: pw.BoxDecoration(color: PdfColors.grey300),
-                children: [
-                  _headerCell('Roll'),
-                  _headerCell('Student Name'),
-                  ...List.generate(31, (i) => _headerCell('${i + 1}')),
-                ],
-              ),
-              ...sortedRolls.map((roll) {
-                final daysMap = matrix[roll] ?? {};
-                return pw.TableRow(
-                  children: [
-                    _dataCell(roll.toString()),
-                    _dataCell(studentNames[roll] ?? ''),
-                    ...List.generate(31, (i) {
-                      final d = i + 1;
-                      final status = daysMap[d] ?? '';
-                      final color = _statusToColor(status);
-                      return _circleCell(color);
-                    }),
-                  ],
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
+    return AttendancePdfHelper.generateMonthlyReportPdf(
+      teacher: teacher,
+      monthLabel: monthLabel,
+      rawDates: standardized,
     );
-
-    return pdf.save();
   }
+
+
 
   // ---------------------------------------------------------------------------
   //                           DAY PDF  (ROW BUTTONS)
@@ -559,20 +484,41 @@ class MonthWiseReport extends ConsumerWidget {
     final dateLabel = report.label;
     final teacherName = teacher.teacherName;
     final classNo = teacher.classNo;
-    final division = teacher.division;
+    final division = teacher.division.toUpperCase();
+
+    // --- FETCH REAL SCHOOL DETAILS ---
+    String schoolName = "SCHOLO PUBLIC SCHOOL";
+    String schoolAddress = "Thootha, Malappuram, Kerala";
+    try {
+      final schoolId = teacher.schoolId.isNotEmpty ? teacher.schoolId : SessionManager.schoolId;
+      if (schoolId.isNotEmpty) {
+        final doc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null) {
+            if (data['schoolName'] != null) {
+              schoolName = data['schoolName'].toString().toUpperCase();
+            }
+            if (data['schoolAddress'] != null) {
+              schoolAddress = data['schoolAddress'].toString();
+            }
+          }
+        }
+      }
+    } catch (_) {}
 
     final Map<String, dynamic> data = report.data;
     final List<_DayRow> rows = [];
 
     data.forEach((classKey, divisions) {
-      if (divisions is Map<String, dynamic>) {
+      if (divisions is Map) {
         divisions.forEach((divKey, students) {
           if (students is List) {
             for (final s in students) {
-              if (s is! Map<String, dynamic>) continue;
+              if (s is! Map) continue;
               rows.add(
                 _DayRow(
-                  roll: (s['rollNo'] ?? 0) as int,
+                  roll: int.tryParse(s['rollNo'].toString()) ?? 0,
                   name: (s['studentName'] ?? '').toString(),
                   presentDetail:
                   (s['presentDetail'] ?? s['status'] ?? '').toString(),
@@ -587,62 +533,270 @@ class MonthWiseReport extends ConsumerWidget {
 
     rows.sort((a, b) => a.roll.compareTo(b.roll));
 
-    final totalStudents = rows.length;
-    final totalPresent = rows.where((r) => r.presentDetail != 'Absent').length;
-    final totalAbsent = totalStudents - totalPresent;
+    final primaryColor = PdfColor.fromHex("#1293D4");
+    final successColor = PdfColor.fromHex("#4CAF50");
+    final warningColor = PdfColor.fromHex("#FF9800");
+    final dangerColor = PdfColor.fromHex("#F44336");
+    final initial = schoolName.isNotEmpty ? schoolName.substring(0, 1) : "S";
+
+    int totalStudents = rows.length;
+    int totalPresent = 0;
+    int totalAbsent = 0;
+    int totalLeave = 0;
+
+    for (final r in rows) {
+      final statusStr = _formatStatus(r.status);
+      if (statusStr == 'Absent') {
+        totalAbsent++;
+      } else if (statusStr == 'Leave') {
+        totalLeave++;
+      } else {
+        totalPresent++;
+      }
+    }
+
+    pw.Widget dayHeaderCell(String text, {bool alignLeft = false}) {
+      return pw.Container(
+        alignment: alignLeft ? pw.Alignment.centerLeft : pw.Alignment.center,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 9,
+            color: PdfColors.black,
+          ),
+        ),
+      );
+    }
+
+    pw.Widget dayDataCell(String text, {bool alignLeft = false, PdfColor? valColor, bool isBold = false}) {
+      return pw.Container(
+        alignment: alignLeft ? pw.Alignment.centerLeft : pw.Alignment.center,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: 8.5,
+            fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: valColor ?? PdfColors.black,
+          ),
+        ),
+      );
+    }
+
+    pw.Widget summaryBox(String label, String val, PdfColor textColor) {
+      return pw.Container(
+        alignment: pw.Alignment.center,
+        padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        child: pw.RichText(
+          text: pw.TextSpan(
+            children: [
+              pw.TextSpan(
+                text: "$label: ",
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey800,
+                ),
+              ),
+              pw.TextSpan(
+                text: val,
+                style: pw.TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(15),
+        margin: const pw.EdgeInsets.all(24),
         build: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Center(
-              child: pw.Text(
-                'Attendance Report - $dateLabel',
-                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-              ),
-            ),
-            pw.SizedBox(height: 10),
+            // Header Section
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Teacher: $teacherName'),
-                pw.Text('Class: $classNo'),
-                pw.Text('Division: $division'),
-              ],
-            ),
-            pw.SizedBox(height: 10),
-            pw.Table(
-              border: pw.TableBorder.all(),
-              children: [
-                pw.TableRow(children: [
-                  _summaryCell('Total: $totalStudents'),
-                  _summaryCell('Present: $totalPresent'),
-                  _summaryCell('Absent: $totalAbsent'),
-                ])
-              ],
-            ),
-            pw.SizedBox(height: 10),
-            pw.Table(
-              border: pw.TableBorder.all(),
-              children: [
-                pw.TableRow(
-                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                pw.Row(
                   children: [
-                    _headerCell('Roll'),
-                    _headerCell('Name'),
-                    _headerCell('Detail'),
-                    _headerCell('Status'),
+                    pw.Container(
+                      width: 38,
+                      height: 38,
+                      alignment: pw.Alignment.center,
+                      decoration: pw.BoxDecoration(
+                        color: primaryColor,
+                        shape: pw.BoxShape.circle,
+                      ),
+                      child: pw.Text(
+                        initial,
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(width: 12),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          schoolName,
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                            color: primaryColor,
+                          ),
+                        ),
+                        pw.SizedBox(height: 1),
+                        pw.Text(schoolAddress, style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                        pw.SizedBox(height: 1),
+                        pw.Text(
+                          "DAILY ATTENDANCE REPORT",
+                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-                ...rows.map((r) => pw.TableRow(children: [
-                  _dataCell(r.roll.toString()),
-                  _dataCell(r.name),
-                  _dataCell(r.presentDetail),
-                  _dataCell(r.status),
-                ])),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  children: [
+                    pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(
+                            text: "Date: ",
+                            style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600),
+                          ),
+                          pw.TextSpan(
+                            text: dateLabel,
+                            style: pw.TextStyle(
+                              fontSize: 7.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(
+                            text: "Class: ",
+                            style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600),
+                          ),
+                          pw.TextSpan(
+                            text: "$classNo - $division",
+                            style: pw.TextStyle(
+                              fontSize: 7.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(
+                            text: "Teacher: ",
+                            style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey600),
+                          ),
+                          pw.TextSpan(
+                            text: teacherName,
+                            style: pw.TextStyle(
+                              fontSize: 7.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+            pw.Divider(color: PdfColors.grey300, thickness: 0.5),
+            pw.SizedBox(height: 10),
+
+            // Summary row (Premium KPI design)
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey50),
+                  children: [
+                    summaryBox('Total Students', '$totalStudents', PdfColors.black),
+                    summaryBox('Present', '$totalPresent', successColor),
+                    summaryBox('Absent', '$totalAbsent', dangerColor),
+                    summaryBox('Leave', '$totalLeave', warningColor),
+                  ],
+                )
+              ],
+            ),
+            pw.SizedBox(height: 12),
+
+            // Detail table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              columnWidths: const {
+                0: pw.FixedColumnWidth(40),  // Roll
+                1: pw.FlexColumnWidth(3),    // Name
+                2: pw.FixedColumnWidth(100), // Session
+                3: pw.FixedColumnWidth(100), // Status
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    dayHeaderCell('Roll'),
+                    dayHeaderCell('Name', alignLeft: true),
+                    dayHeaderCell('Session'),
+                    dayHeaderCell('Status'),
+                  ],
+                ),
+                ...rows.map((r) {
+                  final session = _formatSession(r.status);
+                  final statusStr = _formatStatus(r.status);
+                  final isAbsent = statusStr == 'Absent';
+                  final isLeave = statusStr == 'Leave';
+                  final isHalf = statusStr == 'Half Day';
+
+                  final statusColor = isAbsent
+                      ? dangerColor
+                      : (isLeave
+                      ? warningColor
+                      : (isHalf ? primaryColor : successColor));
+
+                  return pw.TableRow(
+                    children: [
+                      dayDataCell(r.roll.toString()),
+                      dayDataCell(r.name, alignLeft: true),
+                      dayDataCell(session),
+                      dayDataCell(
+                        statusStr.toUpperCase(),
+                        valColor: statusColor,
+                        isBold: true,
+                      ),
+                    ],
+                  );
+                }),
               ],
             ),
           ],
@@ -653,135 +807,25 @@ class MonthWiseReport extends ConsumerWidget {
     return pdf.save();
   }
 
-  // ---------------------------------------------------------------------------
-  //                           COMMON PDF HELPERS
-  // ---------------------------------------------------------------------------
-
-  PdfColor _statusToColor(String status) {
+  String _formatSession(String status) {
     final s = status.toLowerCase();
-    if (s.contains('absent')) return PdfColors.red;
-
-    if (s.contains('morning & evening') || s.contains('full day')) {
-      return PdfColors.green;
-    }
-
-    if (s.contains('half day') ||
-        s.contains('morning half') ||
-        s.contains('evening half')) {
-      return PdfColors.blue;
-    }
-
-    return PdfColors.white;
+    if (s.contains('morning & evening')) return 'Full Day';
+    if (s.contains('morning half')) return 'Morning Half';
+    if (s.contains('evening half')) return 'Evening Half';
+    if (s.contains('half day')) return 'Half Day';
+    if (s.contains('absent') || s.contains('leave')) return '-';
+    return 'Full Day';
   }
 
-  pw.Widget _summaryCell(String text) => pw.Padding(
-    padding: const pw.EdgeInsets.all(6),
-    child: pw.Text(text, style: const pw.TextStyle(fontSize: 10)),
-  );
-
-  pw.Widget _legendCircle(PdfColor color, String label) => pw.Row(
-    children: [
-      pw.Container(
-        width: 10,
-        height: 10,
-        decoration: pw.BoxDecoration(
-          color: color,
-          shape: pw.BoxShape.circle,
-        ),
-      ),
-      pw.SizedBox(width: 4),
-      pw.Text(label, style: const pw.TextStyle(fontSize: 9)),
-    ],
-  );
-
-  pw.Widget _headerCell(String text) => pw.Padding(
-    padding: const pw.EdgeInsets.all(4),
-    child: pw.Center(
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(
-          fontWeight: pw.FontWeight.bold,
-          fontSize: 9,
-        ),
-      ),
-    ),
-  );
-
-  pw.Widget _dataCell(String text) => pw.Padding(
-    padding: const pw.EdgeInsets.all(3),
-    child: pw.Center(
-      child: pw.Text(
-        text,
-        style: const pw.TextStyle(fontSize: 8),
-      ),
-    ),
-  );
-
-  pw.Widget _circleCell(PdfColor color) => pw.Center(
-    child: pw.Container(
-      width: 8,
-      height: 8,
-      decoration: pw.BoxDecoration(
-        color: color,
-        shape: pw.BoxShape.circle,
-      ),
-    ),
-  );
-
-  MonthStats _calculateMonthStats(List<DayReportModel> dates) {
-    final Map<int, Map<int, double>> studentDayUnits = {};
-    final Set<int> workingDays = {};
-
-    for (final day in dates) {
-      final dayNo = day.date.day;
-      workingDays.add(dayNo);
-
-      day.data.forEach((classKey, divisions) {
-        if (divisions is Map<String, dynamic>) {
-          divisions.forEach((divKey, students) {
-            if (students is List) {
-              for (final s in students) {
-                if (s is! Map<String, dynamic>) continue;
-
-                final roll = (s['rollNo'] ?? 0) as int;
-                final detail = (s['presentDetail'] ?? s['status'] ?? '')
-                    .toString()
-                    .toLowerCase();
-
-                double unit = 0;
-                if (detail.contains('full') ||
-                    detail.contains('morning & evening')) {
-                  unit = 1;
-                } else if (detail.contains('half')) {
-                  unit = 0.5;
-                }
-
-                studentDayUnits.putIfAbsent(roll, () => {});
-                studentDayUnits[roll]![dayNo] = unit;
-              }
-            }
-          });
-        }
-      });
-    }
-
-    final totalStudents = studentDayUnits.length;
-    final totalDays = workingDays.length;
-
-    double presentUnits = 0;
-    for (var days in studentDayUnits.values) {
-      presentUnits += days.values.fold(0, (a, b) => a + b);
-    }
-
-    final totalPossible = totalStudents * totalDays;
-    final percentage =
-    totalPossible == 0 ? 0 : (presentUnits / totalPossible) * 100;
-
-    return MonthStats(
-      attendancePercentage: percentage.toDouble(),
-      leaveDays: 0,
-    );
+  String _formatStatus(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('absent')) return 'Absent';
+    if (s.contains('leave')) return 'Leave';
+    if (s.contains('half')) return 'Half Day';
+    return 'Present';
   }
+
+
 }
 
 // small helper for day pdf rows

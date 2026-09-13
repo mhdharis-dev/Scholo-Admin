@@ -47,6 +47,7 @@ class _ClassWiseTeacherViewScreenState
   String? _selectedClass;
   String? _selectedDiv;
   String? _selectedGender;
+  bool _isLanguageTeacher = false;
   TeacherModel? editingTeacher;
 
   @override
@@ -1982,24 +1983,168 @@ class _ClassWiseTeacherViewScreenState
   }
 
   /// Date of Birth Field
-  Widget _buildDateOfBirthField() {
-    return Row(
-      children: [
-        Expanded(child: _buildTextFieldWithValidation(_dayController, "DD", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildTextFieldWithValidation(_monthController, "MM", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildTextFieldWithValidation(_yearController, "YYYY", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(4),
-        ],)),
-      ],
+  Widget _buildDateOfBirthField({
+    BuildContext? context,
+    void Function(void Function())? setSheetState,
+  }) {
+    final days = List.generate(31, (i) => (i + 1).toString().padLeft(2, '0'));
+    final months = [
+      {'val': '01', 'name': '01 - Jan'},
+      {'val': '02', 'name': '02 - Feb'},
+      {'val': '03', 'name': '03 - Mar'},
+      {'val': '04', 'name': '04 - Apr'},
+      {'val': '05', 'name': '05 - May'},
+      {'val': '06', 'name': '06 - Jun'},
+      {'val': '07', 'name': '07 - Jul'},
+      {'val': '08', 'name': '08 - Aug'},
+      {'val': '09', 'name': '09 - Sep'},
+      {'val': '10', 'name': '10 - Oct'},
+      {'val': '11', 'name': '11 - Nov'},
+      {'val': '12', 'name': '12 - Dec'},
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(80, (i) => (currentYear - i).toString());
+
+    String? currentDay = days.contains(_dayController.text.padLeft(2, '0'))
+        ? _dayController.text.padLeft(2, '0')
+        : null;
+    String? currentMonth = months.any((m) => m['val'] == _monthController.text.padLeft(2, '0'))
+        ? _monthController.text.padLeft(2, '0')
+        : null;
+    String? currentYearVal = years.contains(_yearController.text)
+        ? _yearController.text
+        : null;
+
+    void updateState() {
+      if (setSheetState != null) {
+        setSheetState(() {});
+      } else {
+        setState(() {});
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          // Day Dropdown
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentDay,
+                hint: const Text("DD", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: days.map((d) {
+                  return DropdownMenuItem<String>(
+                    value: d,
+                    child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _dayController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Month Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentMonth,
+                hint: const Text("MM", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: months.map((m) {
+                  return DropdownMenuItem<String>(
+                    value: m['val'],
+                    child: Text(m['name']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _monthController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Year Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentYearVal,
+                hint: const Text("YYYY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: years.map((y) {
+                  return DropdownMenuItem<String>(
+                    value: y,
+                    child: Text(y, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _yearController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (context != null) ...[
+            const SizedBox(width: 8),
+            // Calendar Icon DatePicker Button
+            InkWell(
+              onTap: () async {
+                int initYear = int.tryParse(_yearController.text) ?? (currentYear - 10);
+                int initMonth = int.tryParse(_monthController.text) ?? 1;
+                int initDay = int.tryParse(_dayController.text) ?? 1;
+                if (initYear < 1950 || initYear > currentYear) initYear = currentYear - 10;
+                if (initMonth < 1 || initMonth > 12) initMonth = 1;
+                if (initDay < 1 || initDay > 31) initDay = 1;
+
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(initYear, initMonth, initDay),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                );
+
+                if (picked != null) {
+                  _dayController.text = picked.day.toString().padLeft(2, '0');
+                  _monthController.text = picked.month.toString().padLeft(2, '0');
+                  _yearController.text = picked.year.toString();
+                  updateState();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded, color: Color(0xff1193D4), size: 18),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -2023,6 +2168,7 @@ class _ClassWiseTeacherViewScreenState
       _monthController.text = teacher.dateOfBirth.month.toString();
       _yearController.text = teacher.dateOfBirth.year.toString();
       _uploadedImageUrl = teacher.imageUrl;
+      _isLanguageTeacher = teacher.isLanguageTeacher;
     } else {
       editingTeacher = null;
       _teacherIdController.clear();
@@ -2040,6 +2186,7 @@ class _ClassWiseTeacherViewScreenState
       _yearController.clear();
       _uploadedImageUrl = null;
       _selectedFile = null;
+      _isLanguageTeacher = false;
     }
 
     showModalBottomSheet(
@@ -2207,7 +2354,26 @@ class _ClassWiseTeacherViewScreenState
                   style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
                 ),
                 const SizedBox(height: 8),
-                _buildDateOfBirthField(),
+                _buildDateOfBirthField(context: context),
+                const SizedBox(height: 14),
+                StatefulBuilder(
+                  builder: (context, setStateSB) {
+                    return CheckboxListTile(
+                      title: const Text(
+                        "Is Language Teacher?",
+                        style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                      ),
+                      value: _isLanguageTeacher,
+                      activeColor: const Color(0xff1193D4),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (val) {
+                        setStateSB(() => _isLanguageTeacher = val ?? false);
+                        setState(() => _isLanguageTeacher = val ?? false);
+                      },
+                    );
+                  },
+                ),
                 const SizedBox(height: 28),
 
                 SizedBox(
@@ -2275,6 +2441,7 @@ class _ClassWiseTeacherViewScreenState
                           gender: _selectedGender!,
                           imageUrl: _uploadedImageUrl ?? '',
                           delete: false,
+                          isLanguageTeacher: _isLanguageTeacher,
                           createdDate:
                           editingTeacher?.createdDate ?? DateTime.now(),
                           dateOfBirth: dob,

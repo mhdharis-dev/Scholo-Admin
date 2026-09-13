@@ -19,6 +19,8 @@ class StudentsModel {
   final String address;
   final String gender;
   final String schoolId;
+  final String language;
+  final String clubs_nss_ncc;
 
   final bool delete;
 
@@ -47,6 +49,8 @@ class StudentsModel {
     required this.gender,
     required this.dateOfBirth,
     required this.parentName,
+    this.language = '',
+    this.clubs_nss_ncc = '',
     this.schoolId = '',
     this.deletedDate,
   });
@@ -71,6 +75,8 @@ class StudentsModel {
     String? address,
     String? gender,
     String? schoolId,
+    String? language,
+    String? clubs_nss_ncc,
     bool? delete,
     DateTime? createdDate,
     DateTime? dateOfBirth,
@@ -96,6 +102,8 @@ class StudentsModel {
       parentName: parentName ?? this.parentName,
       gender: gender ?? this.gender,
       schoolId: schoolId ?? this.schoolId,
+      language: language ?? this.language,
+      clubs_nss_ncc: clubs_nss_ncc ?? this.clubs_nss_ncc,
       deletedDate: deletedDate ?? this.deletedDate,
     );
   }
@@ -104,6 +112,7 @@ class StudentsModel {
   // TO MAP (Firestore)
   // --------------------------------------------------
   Map<String, dynamic> toMap() {
+    final effectiveSchoolId = schoolId.isNotEmpty ? schoolId : SessionManager.schoolId;
     return {
       'admissionNo': admissionNo,
       'mobileNo': mobileNo,
@@ -117,7 +126,9 @@ class StudentsModel {
       'studentId': studentId,
       'teacherId': teacherId,
       'delete': delete,
-      'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
+      'schoolId': effectiveSchoolId,
+      'language': language,
+      'clubs_nss_ncc': clubs_nss_ncc,
 
       'createdDate': Timestamp.fromDate(createdDate),
 
@@ -154,17 +165,27 @@ class StudentsModel {
       address: map['address'] ?? '',
       parentName: map['parentName'] ?? '',
       delete: map['delete'] ?? false,
-      schoolId: map['schoolId'] ?? '',
+      schoolId: (map['schoolId'] != null && map['schoolId'].toString().isNotEmpty)
+          ? map['schoolId'].toString()
+          : SessionManager.schoolId,
+      language: map['language'] ?? '',
+      clubs_nss_ncc: map['clubs_nss_ncc'] ?? '',
 
-      createdDate:
-      (map['createdDate'] as Timestamp).toDate(),
+      createdDate: map['createdDate'] is Timestamp
+          ? (map['createdDate'] as Timestamp).toDate()
+          : (map['createdDate'] is String
+              ? (DateTime.tryParse(map['createdDate']) ?? DateTime.now())
+              : DateTime.now()),
 
-      deletedDate: map['deletedDate'] != null
+      deletedDate: map['deletedDate'] is Timestamp
           ? (map['deletedDate'] as Timestamp).toDate()
           : null,
 
-      dateOfBirth:
-      (map['dateOfBirth'] as Timestamp).toDate(),
+      dateOfBirth: map['dateOfBirth'] is Timestamp
+          ? (map['dateOfBirth'] as Timestamp).toDate()
+          : (map['dateOfBirth'] is String
+              ? (DateTime.tryParse(map['dateOfBirth']) ?? DateTime.now())
+              : DateTime.now()),
     );
   }
 }

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
+import 'package:scholo_admin/core/config/session_manager.dart';
 import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import 'package:scholo_admin/models/students_model.dart';
 import 'package:scholo_admin/models/class_model.dart';
@@ -593,6 +594,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   File? _selectedFile;
   String? _uploadedImageUrl;
   bool _isUploading = false;
+  bool _isLanguageTeacher = false;
 
   final _teacherIdController = TextEditingController();
   final _nameController = TextEditingController();
@@ -607,6 +609,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final _rollController = TextEditingController();
   final _admissionController = TextEditingController();
   final _parentController = TextEditingController();
+  final _languageController = TextEditingController();
+  final _clubsController = TextEditingController();
 
   String? _selectedClass;
   String? _selectedDiv;
@@ -1861,42 +1865,368 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildDateOfBirthField() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildTextFieldWithValidation(
-            _dayController,
-            "DD",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),
-            ],
+  Future<String?> _showAddNewDialog({
+    required BuildContext context,
+    required String title,
+    required String hint,
+  }) {
+    final textController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: textController,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff1193D4),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(context, textController.text),
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 🔹 Language Dropdown Field with '+ Add new'
+  Widget _buildLanguageDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseLanguages = ['Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
+    final dynamicLanguages = <String>[...baseLanguages];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicLanguages.contains(currentVal)) {
+      dynamicLanguages.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          value: lang,
+          child: Text(lang, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildTextFieldWithValidation(
-            _monthController,
-            "MM",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),
-            ],
+      ),
+    ];
+
+    String? selectedValue = dynamicLanguages.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Second / Third Language", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Second / Third Language',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customLang = await _showAddNewDialog(
+            context: context,
+            title: "Add New Language",
+            hint: "e.g. French, German, Spanish...",
+          );
+          if (customLang != null && customLang.trim().isNotEmpty) {
+            final trimmed = customLang.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
+  /// 🔹 Clubs / NSS / NCC Dropdown Field with '+ Add new'
+  Widget _buildClubsDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseClubs = ['NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
+    final dynamicClubs = <String>[...baseClubs];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicClubs.contains(currentVal)) {
+      dynamicClubs.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicClubs.map((club) {
+        return DropdownMenuItem<String>(
+          value: club,
+          child: Text(club, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
+        ),
+      ),
+    ];
+
+    String? selectedValue = dynamicClubs.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Clubs / NSS / NCC", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Clubs / NSS / NCC',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customClub = await _showAddNewDialog(
+            context: context,
+            title: "Add New Club / Activity",
+            hint: "e.g. Robotics Club, Arts Club...",
+          );
+          if (customClub != null && customClub.trim().isNotEmpty) {
+            final trimmed = customClub.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
+  Widget _buildDateOfBirthField({
+    BuildContext? context,
+    void Function(void Function())? setSheetState,
+  }) {
+    final days = List.generate(31, (i) => (i + 1).toString().padLeft(2, '0'));
+    final months = [
+      {'val': '01', 'name': '01 - Jan'},
+      {'val': '02', 'name': '02 - Feb'},
+      {'val': '03', 'name': '03 - Mar'},
+      {'val': '04', 'name': '04 - Apr'},
+      {'val': '05', 'name': '05 - May'},
+      {'val': '06', 'name': '06 - Jun'},
+      {'val': '07', 'name': '07 - Jul'},
+      {'val': '08', 'name': '08 - Aug'},
+      {'val': '09', 'name': '09 - Sep'},
+      {'val': '10', 'name': '10 - Oct'},
+      {'val': '11', 'name': '11 - Nov'},
+      {'val': '12', 'name': '12 - Dec'},
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(80, (i) => (currentYear - i).toString());
+
+    String? currentDay = days.contains(_dayController.text.padLeft(2, '0'))
+        ? _dayController.text.padLeft(2, '0')
+        : null;
+    String? currentMonth = months.any((m) => m['val'] == _monthController.text.padLeft(2, '0'))
+        ? _monthController.text.padLeft(2, '0')
+        : null;
+    String? currentYearVal = years.contains(_yearController.text)
+        ? _yearController.text
+        : null;
+
+    void updateState() {
+      if (setSheetState != null) {
+        setSheetState(() {});
+      } else {
+        setState(() {});
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          // Day Dropdown
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentDay,
+                hint: const Text("DD", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: days.map((d) {
+                  return DropdownMenuItem<String>(
+                    value: d,
+                    child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _dayController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildTextFieldWithValidation(
-            _yearController,
-            "YYYY",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(4),
-            ],
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Month Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentMonth,
+                hint: const Text("MM", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: months.map((m) {
+                  return DropdownMenuItem<String>(
+                    value: m['val'],
+                    child: Text(m['name']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _monthController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Year Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentYearVal,
+                hint: const Text("YYYY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: years.map((y) {
+                  return DropdownMenuItem<String>(
+                    value: y,
+                    child: Text(y, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _yearController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (context != null) ...[
+            const SizedBox(width: 8),
+            // Calendar Icon DatePicker Button
+            InkWell(
+              onTap: () async {
+                int initYear = int.tryParse(_yearController.text) ?? (currentYear - 10);
+                int initMonth = int.tryParse(_monthController.text) ?? 1;
+                int initDay = int.tryParse(_dayController.text) ?? 1;
+                if (initYear < 1950 || initYear > currentYear) initYear = currentYear - 10;
+                if (initMonth < 1 || initMonth > 12) initMonth = 1;
+                if (initDay < 1 || initDay > 31) initDay = 1;
+
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(initYear, initMonth, initDay),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                );
+
+                if (picked != null) {
+                  _dayController.text = picked.day.toString().padLeft(2, '0');
+                  _monthController.text = picked.month.toString().padLeft(2, '0');
+                  _yearController.text = picked.year.toString();
+                  updateState();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded, color: Color(0xff1193D4), size: 18),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1919,6 +2249,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _selectedGender = null;
     _uploadedImageUrl = null;
     _selectedFile = null;
+    _isLanguageTeacher = false;
 
     showModalBottomSheet(
       context: context,
@@ -2061,7 +2392,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
                 ),
                 const SizedBox(height: 8),
-                _buildDateOfBirthField(),
+                _buildDateOfBirthField(context: context),
+                const SizedBox(height: 14),
+                StatefulBuilder(
+                  builder: (context, setStateSB) {
+                    return CheckboxListTile(
+                      title: const Text(
+                        "Is Language Teacher?",
+                        style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                      ),
+                      value: _isLanguageTeacher,
+                      activeColor: const Color(0xff1193D4),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (val) {
+                        setStateSB(() => _isLanguageTeacher = val ?? false);
+                        setState(() => _isLanguageTeacher = val ?? false);
+                      },
+                    );
+                  },
+                ),
                 const SizedBox(height: 28),
 
                 SizedBox(
@@ -2213,7 +2563,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 backgroundColor: Colors.redAccent,
                                 textColor: Colors.white,
                                 position: MessagePosition.top,
-                               );
+                              );
                               return;
                             }
 
@@ -2245,6 +2595,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 gender: _selectedGender!,
                                 imageUrl: _uploadedImageUrl ?? '',
                                 delete: false,
+                                isLanguageTeacher: _isLanguageTeacher,
                                 createdDate: DateTime.now(),
                                 dateOfBirth: dob,
                               );
@@ -2427,6 +2778,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _mobileController.clear();
     _parentController.clear();
     _addressController.clear();
+    _languageController.clear();
+    _clubsController.clear();
     _dayController.clear();
     _monthController.clear();
     _yearController.clear();
@@ -2564,11 +2917,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
                     ),
                     const SizedBox(height: 8),
-                    _buildDateOfBirthField(),
+                    _buildDateOfBirthField(context: context, setSheetState: setSheetState),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_parentController, "Parent Name"),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_addressController, "Address"),
+                    const SizedBox(height: 14),
+                    _buildLanguageDropdownField(
+                      context: context,
+                      controller: _languageController,
+                      setSheetState: setSheetState,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildClubsDropdownField(
+                      context: context,
+                      controller: _clubsController,
+                      setSheetState: setSheetState,
+                    ),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_emailController, "Email",
                         isEmail: true, readOnly: true),
@@ -2779,6 +3144,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               imageUrl: _uploadedImageUrl ?? '',
                               dateOfBirth: dob,
                               createdDate: DateTime.now(),
+                              schoolId: SessionManager.schoolId,
+                              language: _languageController.text.trim(),
+                              clubs_nss_ncc: _clubsController.text.trim(),
                             );
 
                             final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(

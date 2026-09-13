@@ -225,7 +225,7 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 48),
                   // Bottom branding
                   Text(
-                    "Powered by Scholo Education",
+                    "Powered by ScholoMates",
                     style: TextStyle(
                       fontSize: 11,
                       color: Colors.white.withOpacity(0.4),

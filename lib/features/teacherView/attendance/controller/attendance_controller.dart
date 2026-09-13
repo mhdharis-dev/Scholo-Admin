@@ -93,7 +93,8 @@ class AttendanceController extends StateNotifier<AttendanceState> {
             }
           }
         } else {
-          statusMap[s.studentId] = null;
+          // Default status is Present (true)
+          statusMap[s.studentId] = true;
         }
       }
 
@@ -131,6 +132,20 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   }
 
   // -------------------------------------------------------
+  // TOGGLE ATTENDANCE (Default Present -> 1st tap Absent -> 2nd tap Present -> repeating)
+  // -------------------------------------------------------
+  void toggleAttendance(String studentId) {
+    final map = {...state.status};
+    final current = map[studentId];
+    if (current == false) {
+      map[studentId] = true;
+    } else {
+      map[studentId] = false;
+    }
+    state = state.copyWith(status: map);
+  }
+
+  // -------------------------------------------------------
   // MARK PRESENT
   // -------------------------------------------------------
   void markPresent(String studentId) {
@@ -145,6 +160,25 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   void markAbsent(String studentId) {
     final map = {...state.status};
     map[studentId] = false;
+    state = state.copyWith(status: map);
+  }
+
+  // -------------------------------------------------------
+  // MARK ALL PRESENT / ABSENT
+  // -------------------------------------------------------
+  void markAllPresent() {
+    final map = <String, bool?>{};
+    for (var s in state.students) {
+      map[s.studentId] = true;
+    }
+    state = state.copyWith(status: map);
+  }
+
+  void markAllAbsent() {
+    final map = <String, bool?>{};
+    for (var s in state.students) {
+      map[s.studentId] = false;
+    }
     state = state.copyWith(status: map);
   }
 

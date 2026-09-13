@@ -13,6 +13,8 @@ class FirebaseConstant {
   static const String events = 'events';
   static const String classes = "Classes";
   static const String draftTimetable = "draft-timetable";
+  static const String helpAndSupport = "help&support";
+  static const String notifications = "notifications";
 }
 
 extension SchoolFirestoreExtension on FirebaseFirestore {

@@ -426,13 +426,19 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
         .where("delete", isEqualTo: false)
         .get();
 
-    final allTeachers = snapshot.docs
-        .map((e) => TeacherModel.fromMap(e.data()))
-        .toList();
+    final allTeachers = snapshot.docs.map((e) {
+      final map = Map<String, dynamic>.from(e.data());
+      if (map['id'] == null || map['id'].toString().isEmpty) {
+        map['id'] = e.id;
+      }
+      return TeacherModel.fromMap(map);
+    }).toList();
 
     // Preselect substitute teacher if editing
-    if (editTeacher != null && editTeacher.substitutedId != null) {
-      final matches = allTeachers.where((t) => t.id == editTeacher.substitutedId);
+    if (editTeacher != null && editTeacher.substitutedId != null && editTeacher.substitutedId!.isNotEmpty) {
+      final matches = allTeachers.where((t) =>
+          (t.id.isNotEmpty && t.id == editTeacher.substitutedId) ||
+          (t.teacherName.isNotEmpty && t.teacherName.trim().toLowerCase() == editTeacher.substitutedBy?.trim().toLowerCase()));
       if (matches.isNotEmpty) {
         selectedSubstituteTeacher = matches.first;
       }
@@ -445,7 +451,9 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
     /// ✅ Filter teachers
     final teacherList = allTeachers.where((t) {
       // allow same teacher when editing
-      if (editTeacher != null && t.id == editTeacher.teacherId) {
+      if (editTeacher != null &&
+          ((t.id.isNotEmpty && t.id == editTeacher.teacherId) ||
+           (t.teacherName.isNotEmpty && t.teacherName.trim().toLowerCase() == editTeacher.teacherName.trim().toLowerCase()))) {
         return true;
       }
 
@@ -454,7 +462,9 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
     /// ✅ Preselect teacher when editing
     if (editTeacher != null) {
-      final matches = allTeachers.where((t) => t.id == editTeacher.teacherId);
+      final matches = allTeachers.where((t) =>
+          (t.id.isNotEmpty && t.id == editTeacher.teacherId) ||
+          (t.teacherName.isNotEmpty && t.teacherName.trim().toLowerCase() == editTeacher.teacherName.trim().toLowerCase()));
       if (matches.isNotEmpty) {
         selectedTeacher = matches.first;
       }
@@ -587,7 +597,9 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                       /// ✅ Teacher Dropdown
                       DropdownButtonFormField<TeacherModel>(
-                        initialValue: selectedTeacher,
+                        initialValue: teacherList.contains(selectedTeacher)
+                            ? selectedTeacher
+                            : teacherList.where((t) => t == selectedTeacher).firstOrNull,
                         decoration: InputDecoration(
                           labelText: "Select Teacher",
                           filled: true,
@@ -635,7 +647,9 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                         /// Substituted By
                         DropdownButtonFormField<TeacherModel>(
-                          initialValue: selectedSubstituteTeacher,
+                          initialValue: allTeachers.contains(selectedSubstituteTeacher)
+                              ? selectedSubstituteTeacher
+                              : allTeachers.where((t) => t == selectedSubstituteTeacher).firstOrNull,
                           decoration: InputDecoration(
                             labelText: "Substituted By",
                             filled: true,
@@ -820,6 +834,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                 employeeId: selectedTeacher!.employeeId,
                                 mobileNo: int.parse(selectedTeacher!.mobileNo),
                                 isPermanent: isPermanent,
+                                isLanguageTeacher: selectedTeacher!.isLanguageTeacher,
                                 substitutedBy: isPermanent
                                     ? null
                                     : substitutedByController.text.trim(),
@@ -846,7 +861,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                               }
                               /// ✅ EDIT MODE (Replace existing object)
                               else {
-                                updatedList = list.map((t) {
+                                updatedList = list.map<OtherTeacherModel>((t) {
                                   if (t.teacherId == editTeacher.teacherId) {
                                     return updatedOtherTeacher; // ✅ Replace full object
                                   }
@@ -1111,6 +1126,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
 
                           _infoRow("Email", teacher.email),
                           _infoRow("Password", teacher.password),
+                          _infoRow("Language Teacher", teacher.isLanguageTeacher ? "Yes" : "No"),
                         ],
                       ),
                     ),

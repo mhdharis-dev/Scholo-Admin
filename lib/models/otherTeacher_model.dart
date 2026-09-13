@@ -16,6 +16,7 @@ class OtherTeacherModel {
   final String? substitutedImageUrl;
   final int? substitutedMobileNo;
   final DateTime? substitutedDate;
+  final bool isLanguageTeacher;
 
   //<editor-fold desc="Data Methods">
   const OtherTeacherModel({
@@ -26,6 +27,7 @@ class OtherTeacherModel {
     required this.employeeId,
     required this.mobileNo,
     required this.isPermanent,
+    this.isLanguageTeacher = false,
     this.substitutedBy,
     this.substitutedDate,
     this.substitutedId,
@@ -42,6 +44,7 @@ class OtherTeacherModel {
     String? imageUrl,
     int? mobileNo,
     bool? isPermanent,
+    bool? isLanguageTeacher,
     String? substitutedBy,
     DateTime? substitutedDate,
     String? substitutedId,
@@ -57,6 +60,7 @@ class OtherTeacherModel {
       employeeId: employeeId ?? this.employeeId,
       mobileNo: mobileNo ?? this.mobileNo,
       isPermanent: isPermanent ?? this.isPermanent,
+      isLanguageTeacher: isLanguageTeacher ?? this.isLanguageTeacher,
       substitutedBy: substitutedBy ?? this.substitutedBy,
       substitutedDate: substitutedDate ?? this.substitutedDate,
       substitutedId: substitutedId ?? this.substitutedId,
@@ -75,6 +79,7 @@ class OtherTeacherModel {
       'employeeId': employeeId,
       'mobileNo': mobileNo,
       'isPermanent': isPermanent,
+      'isLanguageTeacher': isLanguageTeacher,
       'substitutedBy': substitutedBy,
       'substitutedDate': substitutedDate,
       'substitutedId': substitutedId,
@@ -96,6 +101,7 @@ class OtherTeacherModel {
 
       // ✅ FIX HERE
       isPermanent: map['isPermanent'] ?? true,
+      isLanguageTeacher: map['isLanguageTeacher'] ?? false,
 
       substitutedBy: map['substitutedBy'],
       substitutedDate: map['substitutedDate'] != null

@@ -27,6 +27,11 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   bool _isUploading = false;
   String _searchQuery = "";
 
+  String _selectedSubjectFilter = 'All';
+  String _selectedClassFilter = 'All';
+  String _selectedGenderFilter = 'All';
+  String _selectedLanguageTeacherFilter = 'All';
+
   final _searchController = TextEditingController();
   final _teacherIdController = TextEditingController();
   final _nameController = TextEditingController();
@@ -42,6 +47,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   String? _selectedClass;
   String? _selectedDiv;
   String? _selectedGender;
+  bool _isLanguageTeacher = false;
   TeacherModel? editingTeacher;
 
   @override
@@ -304,24 +310,168 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   }
 
   /// Date of Birth Field
-  Widget _buildDateOfBirthField() {
-    return Row(
-      children: [
-        Expanded(child: _buildTextFieldWithValidation(_dayController, "DD", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildTextFieldWithValidation(_monthController, "MM", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildTextFieldWithValidation(_yearController, "YYYY", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(4),
-        ],)),
-      ],
+  Widget _buildDateOfBirthField({
+    BuildContext? context,
+    void Function(void Function())? setSheetState,
+  }) {
+    final days = List.generate(31, (i) => (i + 1).toString().padLeft(2, '0'));
+    final months = [
+      {'val': '01', 'name': '01 - Jan'},
+      {'val': '02', 'name': '02 - Feb'},
+      {'val': '03', 'name': '03 - Mar'},
+      {'val': '04', 'name': '04 - Apr'},
+      {'val': '05', 'name': '05 - May'},
+      {'val': '06', 'name': '06 - Jun'},
+      {'val': '07', 'name': '07 - Jul'},
+      {'val': '08', 'name': '08 - Aug'},
+      {'val': '09', 'name': '09 - Sep'},
+      {'val': '10', 'name': '10 - Oct'},
+      {'val': '11', 'name': '11 - Nov'},
+      {'val': '12', 'name': '12 - Dec'},
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(80, (i) => (currentYear - i).toString());
+
+    String? currentDay = days.contains(_dayController.text.padLeft(2, '0'))
+        ? _dayController.text.padLeft(2, '0')
+        : null;
+    String? currentMonth = months.any((m) => m['val'] == _monthController.text.padLeft(2, '0'))
+        ? _monthController.text.padLeft(2, '0')
+        : null;
+    String? currentYearVal = years.contains(_yearController.text)
+        ? _yearController.text
+        : null;
+
+    void updateState() {
+      if (setSheetState != null) {
+        setSheetState(() {});
+      } else {
+        setState(() {});
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          // Day Dropdown
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentDay,
+                hint: const Text("DD", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: days.map((d) {
+                  return DropdownMenuItem<String>(
+                    value: d,
+                    child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _dayController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Month Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentMonth,
+                hint: const Text("MM", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: months.map((m) {
+                  return DropdownMenuItem<String>(
+                    value: m['val'],
+                    child: Text(m['name']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _monthController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Year Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentYearVal,
+                hint: const Text("YYYY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: years.map((y) {
+                  return DropdownMenuItem<String>(
+                    value: y,
+                    child: Text(y, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _yearController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (context != null) ...[
+            const SizedBox(width: 8),
+            // Calendar Icon DatePicker Button
+            InkWell(
+              onTap: () async {
+                int initYear = int.tryParse(_yearController.text) ?? (currentYear - 10);
+                int initMonth = int.tryParse(_monthController.text) ?? 1;
+                int initDay = int.tryParse(_dayController.text) ?? 1;
+                if (initYear < 1950 || initYear > currentYear) initYear = currentYear - 10;
+                if (initMonth < 1 || initMonth > 12) initMonth = 1;
+                if (initDay < 1 || initDay > 31) initDay = 1;
+
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(initYear, initMonth, initDay),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                );
+
+                if (picked != null) {
+                  _dayController.text = picked.day.toString().padLeft(2, '0');
+                  _monthController.text = picked.month.toString().padLeft(2, '0');
+                  _yearController.text = picked.year.toString();
+                  updateState();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded, color: Color(0xff1193D4), size: 18),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -345,6 +495,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       _monthController.text = teacher.dateOfBirth.month.toString();
       _yearController.text = teacher.dateOfBirth.year.toString();
       _uploadedImageUrl = teacher.imageUrl;
+      _isLanguageTeacher = teacher.isLanguageTeacher;
     } else {
       editingTeacher = null;
       _teacherIdController.clear();
@@ -362,6 +513,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       _yearController.clear();
       _uploadedImageUrl = null;
       _selectedFile = null;
+      _isLanguageTeacher = false;
     }
 
     showModalBottomSheet(
@@ -512,7 +664,22 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                       style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
                     ),
                     const SizedBox(height: 8),
-                    _buildDateOfBirthField(),
+                    _buildDateOfBirthField(context: context, setSheetState: setSheetState),
+                    const SizedBox(height: 14),
+                    CheckboxListTile(
+                      title: const Text(
+                        "Is Language Teacher?",
+                        style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14),
+                      ),
+                      value: _isLanguageTeacher,
+                      activeColor: const Color(0xff1193D4),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (val) {
+                        setSheetState(() => _isLanguageTeacher = val ?? false);
+                        setState(() => _isLanguageTeacher = val ?? false);
+                      },
+                    ),
                     const SizedBox(height: 28),
                     
                     SizedBox(
@@ -698,6 +865,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                                     gender: _selectedGender!,
                                     imageUrl: _uploadedImageUrl ?? '',
                                     delete: false,
+                                    isLanguageTeacher: _isLanguageTeacher,
                                     createdDate:
                                         editingTeacher?.createdDate ?? DateTime.now(),
                                     dateOfBirth: dob,
@@ -940,6 +1108,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                           ),
                           _infoRow("Email", teacher.email),
                           _infoRow("Password", teacher.password),
+                          _infoRow("Language Teacher", teacher.isLanguageTeacher ? "Yes" : "No"),
                         ],
                       ),
                     ),
@@ -1224,6 +1393,254 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
     );
   }
 
+  Widget _buildFilterBar(List<TeacherModel> allTeachers, List<ClassModel> activeClasses) {
+    int activeFilterCount = 0;
+    if (_selectedSubjectFilter != 'All') activeFilterCount++;
+    if (_selectedClassFilter != 'All') activeFilterCount++;
+    if (_selectedGenderFilter != 'All') activeFilterCount++;
+    if (_selectedLanguageTeacherFilter != 'All') activeFilterCount++;
+    bool hasActiveFilter = activeFilterCount > 0;
+
+    // Collect unique subjects dynamically
+    final subjectSet = <String>{'All'};
+    for (var t in allTeachers) {
+      final s = t.subject.trim();
+      if (s.isNotEmpty) subjectSet.add(s);
+    }
+
+    // Collect class options
+    final classSet = <String>{'All', 'Not Assigned'};
+    final uniqueClassNumbers = activeClasses
+        .where((c) => !c.delete)
+        .map((c) => c.classNo)
+        .toSet()
+        .toList();
+    uniqueClassNumbers.sort((a, b) => _compareClassNos(a, b));
+    classSet.addAll(uniqueClassNumbers);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: hasActiveFilter
+                      ? const Color(0xff1193D4).withValues(alpha: 0.1)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      color: hasActiveFilter ? const Color(0xff1193D4) : const Color(0xFF64748B),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Filter Directory",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: hasActiveFilter ? const Color(0xff1193D4) : const Color(0xFF334155),
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (hasActiveFilter) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xff1193D4),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "$activeFilterCount",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (hasActiveFilter)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedSubjectFilter = 'All';
+                      _selectedClassFilter = 'All';
+                      _selectedGenderFilter = 'All';
+                      _selectedLanguageTeacherFilter = 'All';
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.clear_all_rounded, size: 16, color: Colors.redAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          "Reset All Filters",
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Subject Filter
+              _buildFilterPillDropdown(
+                label: "Subject",
+                value: _selectedSubjectFilter,
+                items: subjectSet.toList(),
+                onChanged: (val) => setState(() => _selectedSubjectFilter = val ?? 'All'),
+                icon: Icons.book_outlined,
+              ),
+              // Class Filter
+              _buildFilterPillDropdown(
+                label: "Class",
+                value: _selectedClassFilter,
+                items: classSet.toList(),
+                onChanged: (val) => setState(() => _selectedClassFilter = val ?? 'All'),
+                icon: Icons.class_outlined,
+              ),
+              // Gender Filter
+              _buildFilterPillDropdown(
+                label: "Gender",
+                value: _selectedGenderFilter,
+                items: ['All', 'Male', 'Female'],
+                onChanged: (val) => setState(() => _selectedGenderFilter = val ?? 'All'),
+                icon: Icons.wc_rounded,
+              ),
+              // Role / Language Teacher Filter
+              _buildFilterPillDropdown(
+                label: "Role Type",
+                value: _selectedLanguageTeacherFilter,
+                items: ['All', 'Language Teacher', 'General Teacher'],
+                onChanged: (val) => setState(() => _selectedLanguageTeacherFilter = val ?? 'All'),
+                icon: Icons.translate_rounded,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterPillDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required IconData icon,
+  }) {
+    final isActive = value != 'All';
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xff1193D4).withValues(alpha: 0.08) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? const Color(0xff1193D4) : const Color(0xFFE2E8F0),
+          width: isActive ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            "$label: ",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+            ),
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : 'All',
+              icon: Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+                  size: 20,
+                ),
+              ),
+              isDense: true,
+              borderRadius: BorderRadius.circular(12),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isActive ? const Color(0xff1193D4) : const Color(0xFF0F172A),
+              ),
+              items: items.map((item) {
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(
+                    item,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: item == value ? FontWeight.bold : FontWeight.normal,
+                      color: item == value ? const Color(0xff1193D4) : const Color(0xFF1E293B),
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(classesStreamProvider);
@@ -1348,7 +1765,16 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Filter Toolbar Container
+            teachersAsync.when(
+              data: (teachers) => _buildFilterBar(teachers, ref.watch(classesStreamProvider).value ?? []),
+              loading: () => const SizedBox(),
+              error: (_, __) => const SizedBox(),
+            ),
+
+            const SizedBox(height: 16),
             
             // Table Container
             Expanded(
@@ -1356,12 +1782,50 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                 data: (teachers) {
                   // Filter first
                   final filteredTeachers = teachers.where((teacher) {
+                    // 1. Search Query
                     final query = _searchQuery.toLowerCase();
-                    return teacher.teacherName.toLowerCase().contains(query) ||
+                    final matchesQuery = query.isEmpty ||
+                        teacher.teacherName.toLowerCase().contains(query) ||
                         teacher.employeeId.toLowerCase().contains(query) ||
                         teacher.subject.toLowerCase().contains(query) ||
                         teacher.email.toLowerCase().contains(query) ||
                         teacher.mobileNo.contains(query);
+                    if (!matchesQuery) return false;
+
+                    // 2. Subject Filter
+                    if (_selectedSubjectFilter != 'All') {
+                      if (teacher.subject.trim().toLowerCase() != _selectedSubjectFilter.trim().toLowerCase()) {
+                        return false;
+                      }
+                    }
+
+                    // 3. Class Filter
+                    if (_selectedClassFilter != 'All') {
+                      if (_selectedClassFilter == 'Not Assigned') {
+                        if (teacher.classNo != 0) return false;
+                      } else {
+                        final targetClassNo = _classNoToInt(_selectedClassFilter);
+                        if (teacher.classNo != targetClassNo) return false;
+                      }
+                    }
+
+                    // 4. Gender Filter
+                    if (_selectedGenderFilter != 'All') {
+                      if (teacher.gender.trim().toLowerCase() != _selectedGenderFilter.trim().toLowerCase()) {
+                        return false;
+                      }
+                    }
+
+                    // 5. Language Teacher Filter
+                    if (_selectedLanguageTeacherFilter != 'All') {
+                      if (_selectedLanguageTeacherFilter == 'Language Teacher') {
+                        if (!teacher.isLanguageTeacher) return false;
+                      } else if (_selectedLanguageTeacherFilter == 'General Teacher') {
+                        if (teacher.isLanguageTeacher) return false;
+                      }
+                    }
+
+                    return true;
                   }).toList();
 
                   // Sort

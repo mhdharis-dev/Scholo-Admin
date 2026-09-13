@@ -16,6 +16,7 @@ import 'package:scholo_admin/core/widgets/phone_field.dart';
 
 import '../../../../core/cloudinaryServies/cloudinary_service.dart';
 import '../../../../core/constant/firebase_constant.dart';
+import '../../../../core/config/session_manager.dart';
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/students_model.dart';
 import '../../../../models/teacher_model.dart';
@@ -25,11 +26,13 @@ class AssignedClass {
   final int classNo;
   final String division;
   final bool isClassTeacher;
+  final String? label;
 
   AssignedClass({
     required this.classNo,
     required this.division,
     required this.isClassTeacher,
+    this.label,
   });
 
   @override
@@ -38,10 +41,11 @@ class AssignedClass {
       other is AssignedClass &&
           runtimeType == other.runtimeType &&
           classNo == other.classNo &&
-          division == other.division;
+          division == other.division &&
+          label == other.label;
 
   @override
-  int get hashCode => classNo.hashCode ^ division.hashCode;
+  int get hashCode => classNo.hashCode ^ division.hashCode ^ (label?.hashCode ?? 0);
 }
 
 class TeacherScreenStudentList extends ConsumerStatefulWidget {
@@ -64,6 +68,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
   final _parentController = TextEditingController();
   final _mobileController = TextEditingController();
   final _addressController = TextEditingController();
+  final _languageController = TextEditingController();
+  final _clubsController = TextEditingController();
   final _dayController = TextEditingController();
   final _monthController = TextEditingController();
   final _yearController = TextEditingController();
@@ -89,6 +95,12 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
   // New State variables for redesign
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'All'; // 'All', 'Present', 'Absent'
+  bool _isLanguageTeacher = false;
+  String _teacherSubject = '';
+  String _selectedClassFilter = 'All';
+  String _selectedLanguageFilter = 'All';
+  String _selectedClubFilter = 'All';
+  String _selectedGenderFilter = 'All';
 
   @override
   void initState() {
@@ -142,20 +154,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       final mainTeacher = TeacherModel.fromMap(data);
 
       final List<AssignedClass> classesList = [];
+      final isLang = mainTeacher.isLanguageTeacher;
+      final subj = mainTeacher.subject;
 
-      // 1. Add Class Teacher class if assigned
-      if (mainTeacher.classNo != 0 &&
-          mainTeacher.division.isNotEmpty &&
-          mainTeacher.division != 'Nil' &&
-          mainTeacher.division != 'Not') {
-        classesList.add(AssignedClass(
-          classNo: mainTeacher.classNo,
-          division: mainTeacher.division,
-          isClassTeacher: true,
-        ));
-      }
-
-      // 2. Fetch all teachers to check otherTeachers lists for subject classes
       final allTeachersSnapshot = await FirebaseFirestore.instance
           .schoolCollection(FirebaseConstant.teacher)
           .where("delete", isEqualTo: false)
@@ -170,22 +171,72 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
         if (cNo != 0 && div.isNotEmpty) {
           classTeacherMap["$cNo-$div"] = tName;
         }
+      }
 
-        final otherTeachersRaw = tData['otherTeachers'] as List<dynamic>?;
-        if (otherTeachersRaw != null) {
-          final hasSubjectAssignment =
-              otherTeachersRaw.any((item) => item['teacherId'] == widget.teacherId);
-          if (hasSubjectAssignment) {
-            final classNo = tData['classNo'] as int? ?? 0;
-            final division = tData['division'] as String? ?? '';
-            if (classNo != 0 && division.isNotEmpty && division != 'Nil') {
-              final newClass = AssignedClass(
-                classNo: classNo,
-                division: division,
-                isClassTeacher: false,
-              );
-              if (!classesList.contains(newClass)) {
-                classesList.add(newClass);
+      if (isLang) {
+        final langLabel = subj.isNotEmpty ? subj : "Language";
+        classesList.add(AssignedClass(
+          classNo: 999,
+          division: 'All',
+          isClassTeacher: mainTeacher.classNo != 0,
+          label: "All Classes ($langLabel)",
+        ));
+
+        for (int c = 1; c <= 12; c++) {
+          classesList.add(AssignedClass(
+            classNo: c,
+            division: 'All',
+            isClassTeacher: false,
+            label: "Class $c ($langLabel)",
+          ));
+        }
+
+        if (mainTeacher.classNo != 0 &&
+            mainTeacher.division.isNotEmpty &&
+            mainTeacher.division != 'Nil' &&
+            mainTeacher.division != 'Not') {
+          final ctClass = AssignedClass(
+            classNo: mainTeacher.classNo,
+            division: mainTeacher.division,
+            isClassTeacher: true,
+            label: "Class ${mainTeacher.classNo}-${mainTeacher.division} (Class Teacher)",
+          );
+          if (!classesList.contains(ctClass)) {
+            classesList.add(ctClass);
+          }
+        }
+      } else {
+        // 1. Add Class Teacher class if assigned
+        if (mainTeacher.classNo != 0 &&
+            mainTeacher.division.isNotEmpty &&
+            mainTeacher.division != 'Nil' &&
+            mainTeacher.division != 'Not') {
+          classesList.add(AssignedClass(
+            classNo: mainTeacher.classNo,
+            division: mainTeacher.division,
+            isClassTeacher: true,
+          ));
+        }
+
+        // 2. Fetch all teachers to check otherTeachers lists for subject classes
+        for (var teacherDoc in allTeachersSnapshot.docs) {
+          final tData = teacherDoc.data();
+          final otherTeachersRaw = tData['otherTeachers'] as List<dynamic>?;
+          if (otherTeachersRaw != null) {
+            final hasSubjectAssignment =
+                otherTeachersRaw.any((item) => item['teacherId'] == widget.teacherId);
+            if (hasSubjectAssignment) {
+              final classNo = tData['classNo'] as int? ?? 0;
+              final division = tData['division'] as String? ?? '';
+              if (classNo != 0 && division.isNotEmpty && division != 'Nil') {
+                final newClass = AssignedClass(
+                  classNo: classNo,
+                  division: division,
+                  isClassTeacher: false,
+                );
+                if (!classesList.contains(newClass)) {
+                  classesList.add(newClass);
+                }
               }
             }
           }
@@ -193,6 +244,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       }
 
       setState(() {
+        _isLanguageTeacher = isLang;
+        _teacherSubject = subj;
         _selectedTeacherName = mainTeacher.teacherName;
         _assignedClasses = classesList;
         _classTeacherNames.clear();
@@ -344,42 +397,368 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     );
   }
 
-  Widget _buildDateOfBirthField() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildValidatedField(
-            _dayController,
-            "DD",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),
-            ],
+  Future<String?> _showAddNewDialog({
+    required BuildContext context,
+    required String title,
+    required String hint,
+  }) {
+    final textController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: textController,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff1193D4),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(context, textController.text),
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 🔹 Language Dropdown Field with '+ Add new'
+  Widget _buildLanguageDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseLanguages = ['Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
+    final dynamicLanguages = <String>[...baseLanguages];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicLanguages.contains(currentVal)) {
+      dynamicLanguages.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          value: lang,
+          child: Text(lang, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildValidatedField(
-            _monthController,
-            "MM",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),
-            ],
+      ),
+    ];
+
+    String? selectedValue = dynamicLanguages.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Second / Third Language", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Second / Third Language',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customLang = await _showAddNewDialog(
+            context: context,
+            title: "Add New Language",
+            hint: "e.g. French, German, Spanish...",
+          );
+          if (customLang != null && customLang.trim().isNotEmpty) {
+            final trimmed = customLang.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
+  /// 🔹 Clubs / NSS / NCC Dropdown Field with '+ Add new'
+  Widget _buildClubsDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseClubs = ['NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
+    final dynamicClubs = <String>[...baseClubs];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicClubs.contains(currentVal)) {
+      dynamicClubs.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicClubs.map((club) {
+        return DropdownMenuItem<String>(
+          value: club,
+          child: Text(club, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
+        ),
+      ),
+    ];
+
+    String? selectedValue = dynamicClubs.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Clubs / NSS / NCC", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Clubs / NSS / NCC',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customClub = await _showAddNewDialog(
+            context: context,
+            title: "Add New Club / Activity",
+            hint: "e.g. Robotics Club, Arts Club...",
+          );
+          if (customClub != null && customClub.trim().isNotEmpty) {
+            final trimmed = customClub.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
+  Widget _buildDateOfBirthField({
+    BuildContext? context,
+    void Function(void Function())? setSheetState,
+  }) {
+    final days = List.generate(31, (i) => (i + 1).toString().padLeft(2, '0'));
+    final months = [
+      {'val': '01', 'name': '01 - Jan'},
+      {'val': '02', 'name': '02 - Feb'},
+      {'val': '03', 'name': '03 - Mar'},
+      {'val': '04', 'name': '04 - Apr'},
+      {'val': '05', 'name': '05 - May'},
+      {'val': '06', 'name': '06 - Jun'},
+      {'val': '07', 'name': '07 - Jul'},
+      {'val': '08', 'name': '08 - Aug'},
+      {'val': '09', 'name': '09 - Sep'},
+      {'val': '10', 'name': '10 - Oct'},
+      {'val': '11', 'name': '11 - Nov'},
+      {'val': '12', 'name': '12 - Dec'},
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(80, (i) => (currentYear - i).toString());
+
+    String? currentDay = days.contains(_dayController.text.padLeft(2, '0'))
+        ? _dayController.text.padLeft(2, '0')
+        : null;
+    String? currentMonth = months.any((m) => m['val'] == _monthController.text.padLeft(2, '0'))
+        ? _monthController.text.padLeft(2, '0')
+        : null;
+    String? currentYearVal = years.contains(_yearController.text)
+        ? _yearController.text
+        : null;
+
+    void updateState() {
+      if (setSheetState != null) {
+        setSheetState(() {});
+      } else {
+        setState(() {});
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          // Day Dropdown
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentDay,
+                hint: const Text("DD", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: days.map((d) {
+                  return DropdownMenuItem<String>(
+                    value: d,
+                    child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _dayController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _buildValidatedField(
-            _yearController,
-            "YYYY",
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(4),
-            ],
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Month Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentMonth,
+                hint: const Text("MM", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: months.map((m) {
+                  return DropdownMenuItem<String>(
+                    value: m['val'],
+                    child: Text(m['name']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _monthController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Year Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentYearVal,
+                hint: const Text("YYYY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: years.map((y) {
+                  return DropdownMenuItem<String>(
+                    value: y,
+                    child: Text(y, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _yearController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (context != null) ...[
+            const SizedBox(width: 8),
+            // Calendar Icon DatePicker Button
+            InkWell(
+              onTap: () async {
+                int initYear = int.tryParse(_yearController.text) ?? (currentYear - 10);
+                int initMonth = int.tryParse(_monthController.text) ?? 1;
+                int initDay = int.tryParse(_dayController.text) ?? 1;
+                if (initYear < 1950 || initYear > currentYear) initYear = currentYear - 10;
+                if (initMonth < 1 || initMonth > 12) initMonth = 1;
+                if (initDay < 1 || initDay > 31) initDay = 1;
+
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(initYear, initMonth, initDay),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                );
+
+                if (picked != null) {
+                  _dayController.text = picked.day.toString().padLeft(2, '0');
+                  _monthController.text = picked.month.toString().padLeft(2, '0');
+                  _yearController.text = picked.year.toString();
+                  updateState();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded, color: Color(0xff1193D4), size: 18),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -394,6 +773,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _mobileController.text = student.mobileNo;
       _parentController.text = student.parentName;
       _addressController.text = student.address;
+      _languageController.text = student.language;
+      _clubsController.text = student.clubs_nss_ncc;
       _selectedGender = student.gender;
       _classNo = student.classNo.toString();
       _division = student.division;
@@ -412,6 +793,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _mobileController.clear();
       _parentController.clear();
       _addressController.clear();
+      _languageController.clear();
+      _clubsController.clear();
       _dayController.clear();
       _monthController.clear();
       _yearController.clear();
@@ -536,7 +919,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                 const SizedBox(height: 14),
                 _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setState(() => _selectedGender = v)),
                 const SizedBox(height: 14),
-                _buildDateOfBirthField(),
+                _buildDateOfBirthField(context: context),
                 const SizedBox(height: 14),
                 _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
@@ -545,6 +928,19 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                 _buildValidatedField(_addressController, "Address", inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
                 ]),
+                const SizedBox(height: 14),
+                const SizedBox(height: 14),
+                _buildLanguageDropdownField(
+                  context: context,
+                  controller: _languageController,
+                  setSheetState: setState,
+                ),
+                const SizedBox(height: 14),
+                _buildClubsDropdownField(
+                  context: context,
+                  controller: _clubsController,
+                  setSheetState: setState,
+                ),
                 const SizedBox(height: 14),
                 _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
                 const SizedBox(height: 14),
@@ -748,6 +1144,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           imageUrl: _uploadedImageUrl ?? '',
                           dateOfBirth: dob,
                           createdDate: editingStudent?.createdDate ?? DateTime.now(),
+                          schoolId: SessionManager.schoolId,
+                          language: _languageController.text.trim(),
+                          clubs_nss_ncc: _clubsController.text.trim(),
                         );
 
                         final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
@@ -957,6 +1356,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           _infoRow("Mobile", student.mobileNo),
                           _infoRow("Parent Name", student.parentName),
                           _infoRow("Address", student.address),
+                          _infoRow("Language", student.language.isNotEmpty ? student.language : "-"),
+                          _infoRow("Clubs / NSS / NCC", student.clubs_nss_ncc.isNotEmpty ? student.clubs_nss_ncc : "-"),
                           _infoRow(
                             "Date of Birth",
                             "${student.dateOfBirth.day}/${student.dateOfBirth.month}/${student.dateOfBirth.year}",
@@ -1112,8 +1513,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
         docData = Map<String, dynamic>.from(docSnap.data()!);
       }
 
-      final classKey = _classNo ?? '0';
-      final classDiv = (_division ?? 'Not').toUpperCase();
+      final classKey = student.classNo.toString();
+      final classDiv = student.division.isNotEmpty ? student.division.toUpperCase() : 'A';
 
       if (docData[classKey] != null && docData[classKey][classDiv] != null) {
         attendanceList = List<dynamic>.from(docData[classKey][classDiv]);
@@ -1125,7 +1526,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       if (newStatus != "Unmarked") {
         // Add updated record
         final record = {
-          'classNo': int.parse(_classNo ?? '0'),
+          'classNo': student.classNo,
           'rollNo': student.rollNo,
           'studentId': student.studentId,
           'division': student.division,
@@ -1298,7 +1699,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}",
+                      _isLanguageTeacher
+                          ? "Language Teacher: ${_selectedTeacherName ?? ''}${_teacherSubject.isNotEmpty ? ' ($_teacherSubject)' : ''}"
+                          : "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}",
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -1356,7 +1759,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                                                 fontWeight: FontWeight.bold)),
                                         const SizedBox(height: 1),
                                         Text(
-                                          "Class ${_classNoToString(value.classNo)}-${value.division}${value.isClassTeacher ? ' (Class Teacher)' : ' (Subject Teacher)'}",
+                                          value.label ??
+                                              "Class ${_classNoToString(value.classNo)}-${value.division}${value.isClassTeacher ? ' (Class Teacher)' : ' (Subject Teacher)'}",
                                           style: const TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold),
@@ -1407,7 +1811,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                                     ],
                                   ),
                                   const Spacer(),
-                                    const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.blue),
+                                  const Icon(Icons.calendar_today_outlined, size: 16, color: Colors.blue),
                                 ],
                               ),
                             ),
@@ -1435,12 +1839,28 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                   if (attendanceSnapshot.hasData && attendanceSnapshot.data!.exists) {
                     try {
                       final docData = attendanceSnapshot.data!.data() as Map<String, dynamic>;
-                      final classKey = _classNo ?? '0';
-                      final classDiv = (_division ?? 'Not').toUpperCase();
-                      if (docData[classKey] != null && docData[classKey][classDiv] != null) {
-                        final list = docData[classKey][classDiv] as List<dynamic>;
-                        for (var item in list) {
-                          attendanceMap[item['studentId']] = item['status'] ?? 'Absent';
+                      if (_classNo == '999' || _division == 'All') {
+                        docData.forEach((cKey, cVal) {
+                          if (cVal is Map<String, dynamic>) {
+                            cVal.forEach((divKey, divVal) {
+                              if (divVal is List<dynamic>) {
+                                for (var item in divVal) {
+                                  if (item is Map && item['studentId'] != null) {
+                                    attendanceMap[item['studentId'].toString()] = item['status'] ?? 'Absent';
+                                  }
+                                }
+                              }
+                            });
+                          }
+                        });
+                      } else {
+                        final classKey = _classNo ?? '0';
+                        final classDiv = (_division ?? 'Not').toUpperCase();
+                        if (docData[classKey] != null && docData[classKey][classDiv] != null) {
+                          final list = docData[classKey][classDiv] as List<dynamic>;
+                          for (var item in list) {
+                            attendanceMap[item['studentId']] = item['status'] ?? 'Absent';
+                          }
                         }
                       }
                     } catch (e) {
@@ -1448,13 +1868,26 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                     }
                   }
 
-                  return StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
+                  final Query<Map<String, dynamic>> studentQuery;
+                  if (_classNo == '999') {
+                    studentQuery = FirebaseFirestore.instance
+                        .schoolCollection(FirebaseConstant.student)
+                        .where("delete", isEqualTo: false);
+                  } else if (_division == 'All') {
+                    studentQuery = FirebaseFirestore.instance
+                        .schoolCollection(FirebaseConstant.student)
+                        .where("classNo", isEqualTo: int.tryParse(_classNo ?? '0') ?? 0)
+                        .where("delete", isEqualTo: false);
+                  } else {
+                    studentQuery = FirebaseFirestore.instance
                         .schoolCollection(FirebaseConstant.student)
                         .where("classNo", isEqualTo: int.tryParse(_classNo ?? '0') ?? 0)
                         .where("division", isEqualTo: _division ?? '')
-                        .where("delete", isEqualTo: false)
-                        .snapshots(),
+                        .where("delete", isEqualTo: false);
+                  }
+
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: studentQuery.snapshots(),
                     builder: (context, studentSnapshot) {
                       if (studentSnapshot.hasError) {
                         return Center(child: Text("Error: ${studentSnapshot.error}"));
@@ -1464,38 +1897,94 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                       }
 
                       final docs = studentSnapshot.data!.docs;
-                      final totalStudents = docs.length;
+
+                      var allStudents = docs.map((doc) {
+                        return StudentsModel.fromMap(doc.data() as Map<String, dynamic>);
+                      }).toList();
+
+                      // 1. Filter by Language if Language Teacher & default filter
+                      if (_isLanguageTeacher && _teacherSubject.isNotEmpty && _selectedLanguageFilter == 'All') {
+                        allStudents = allStudents.where((s) {
+                          if (s.language.isEmpty) return true;
+                          return s.language.trim().toLowerCase() == _teacherSubject.trim().toLowerCase();
+                        }).toList();
+                      }
+
+                      // 2. Filter by Class Grade (if selected from class filter chips)
+                      if (_selectedClassFilter != 'All') {
+                        final classVal = int.tryParse(_selectedClassFilter);
+                        if (classVal != null) {
+                          allStudents = allStudents.where((s) => s.classNo == classVal).toList();
+                        }
+                      }
+
+                      // 3. Filter by Specific Language
+                      if (_selectedLanguageFilter != 'All') {
+                        allStudents = allStudents.where((s) {
+                          return s.language.trim().toLowerCase().contains(_selectedLanguageFilter.trim().toLowerCase());
+                        }).toList();
+                      }
+
+                      // 4. Filter by Club / Activity
+                      if (_selectedClubFilter != 'All') {
+                        final clubLower = _selectedClubFilter.toLowerCase();
+                        allStudents = allStudents.where((s) {
+                          final studentClub = s.clubs_nss_ncc.trim().toLowerCase();
+                          if (clubLower == 'nss') {
+                            return studentClub.contains('nss');
+                          } else if (clubLower == 'ncc') {
+                            return studentClub.contains('ncc');
+                          } else if (clubLower == 'clubs') {
+                            return studentClub.isNotEmpty;
+                          } else {
+                            return studentClub.contains(clubLower);
+                          }
+                        }).toList();
+                      }
+
+                      // 5. Filter by Gender
+                      if (_selectedGenderFilter != 'All') {
+                        allStudents = allStudents.where((s) {
+                          return s.gender.toLowerCase() == _selectedGenderFilter.toLowerCase();
+                        }).toList();
+                      }
+
+                      final totalStudents = allStudents.length;
 
                       // Count present and absent
                       int presentCount = 0;
                       int absentCount = 0;
                       
-                      final allStudents = docs.map((doc) {
-                        final s = StudentsModel.fromMap(doc.data() as Map<String, dynamic>);
+                      for (final s in allStudents) {
                         final status = attendanceMap[s.studentId];
                         if (status != null && status != 'Absent') {
                           presentCount++;
                         } else if (status == 'Absent') {
                           absentCount++;
                         }
-                        return s;
-                      }).toList();
+                      }
 
-                      // Client-side sorting by rollNo
-                      allStudents.sort((a, b) => a.rollNo.compareTo(b.rollNo));
+                      // Client-side sorting by Class then RollNo
+                      allStudents.sort((a, b) {
+                        final cComp = a.classNo.compareTo(b.classNo);
+                        if (cComp != 0) return cComp;
+                        return a.rollNo.compareTo(b.rollNo);
+                      });
 
                       final attendancePercentage = totalStudents > 0
                           ? ((presentCount / totalStudents) * 100).round()
                           : 0;
 
-                      // Apply search query and filter tab
+                      // Apply search query and attendance status filter tab
                       final query = _searchController.text.trim().toLowerCase();
                       var filteredStudents = allStudents;
 
                       if (query.isNotEmpty) {
                         filteredStudents = filteredStudents.where((s) {
                           return s.studentName.toLowerCase().contains(query) ||
-                              s.rollNo.toString().contains(query);
+                              s.rollNo.toString().contains(query) ||
+                              s.admissionNo.toString().contains(query) ||
+                              s.language.toLowerCase().contains(query);
                         }).toList();
                       }
 
@@ -1649,7 +2138,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           ),
                           const SizedBox(height: 16),
 
-                          // Filter Tabs
+                          // Filter Tabs (Attendance Status)
                           Row(
                             children: [
                               _filterTab("All", _selectedFilter == "All", Colors.blue, () {
@@ -1665,6 +2154,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                               }, icon: Icons.cancel_outlined),
                             ],
                           ),
+                          const SizedBox(height: 14),
+
+                          // Redesigned Filter Toolbar (Language & Activity/Club & Gender)
+                          _buildTeacherFilterBar(allStudents),
+                          const SizedBox(height: 16),
                           const SizedBox(height: 16),
 
                           // Students Title
@@ -1718,6 +2212,251 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTeacherFilterBar(List<StudentsModel> students) {
+    int activeFilterCount = 0;
+    if (_selectedLanguageFilter != 'All') activeFilterCount++;
+    if (_selectedClubFilter != 'All') activeFilterCount++;
+    if (_selectedGenderFilter != 'All') activeFilterCount++;
+    bool hasActiveFilter = activeFilterCount > 0;
+
+    // Collect unique languages
+    final langSet = <String>{'All', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'};
+    for (var s in students) {
+      if (s.language.isNotEmpty) langSet.add(s.language);
+    }
+
+    // Collect unique clubs / activities
+    final clubList = <String>['All', 'NSS', 'NCC', 'Clubs'];
+    for (var s in students) {
+      final cVal = s.clubs_nss_ncc.trim();
+      if (cVal.isNotEmpty) {
+        for (var part in cVal.split(RegExp(r'[,/|]'))) {
+          final trimmed = part.trim();
+          if (trimmed.isNotEmpty &&
+              trimmed.toUpperCase() != 'NSS' &&
+              trimmed.toUpperCase() != 'NCC' &&
+              trimmed.toLowerCase() != 'clubs' &&
+              !clubList.contains(trimmed)) {
+            clubList.add(trimmed);
+          }
+        }
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: hasActiveFilter
+                      ? const Color(0xff1193D4).withValues(alpha: 0.1)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      color: hasActiveFilter ? const Color(0xff1193D4) : const Color(0xFF64748B),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Filter Students",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: hasActiveFilter ? const Color(0xff1193D4) : const Color(0xFF334155),
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (hasActiveFilter) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xff1193D4),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "$activeFilterCount",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (hasActiveFilter)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedLanguageFilter = 'All';
+                      _selectedClubFilter = 'All';
+                      _selectedGenderFilter = 'All';
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.clear_all_rounded, size: 16, color: Colors.redAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          "Reset Filters",
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Language Filter Dropdown
+              _buildFilterPillDropdown(
+                label: "Language",
+                value: _selectedLanguageFilter,
+                items: langSet.toList(),
+                onChanged: (val) => setState(() => _selectedLanguageFilter = val ?? 'All'),
+                icon: Icons.translate_rounded,
+              ),
+              // Activity / Club Filter Dropdown
+              _buildFilterPillDropdown(
+                label: "Activity / Club",
+                value: _selectedClubFilter,
+                items: clubList,
+                onChanged: (val) => setState(() => _selectedClubFilter = val ?? 'All'),
+                icon: Icons.sports_soccer_rounded,
+              ),
+              // Gender Filter Dropdown
+              _buildFilterPillDropdown(
+                label: "Gender",
+                value: _selectedGenderFilter,
+                items: ['All', 'Male', 'Female'],
+                onChanged: (val) => setState(() => _selectedGenderFilter = val ?? 'All'),
+                icon: Icons.wc_rounded,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterPillDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required IconData icon,
+  }) {
+    final isActive = value != 'All';
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xff1193D4).withValues(alpha: 0.08) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? const Color(0xff1193D4) : const Color(0xFFE2E8F0),
+          width: isActive ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            "$label: ",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+            ),
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: items.contains(value) ? value : 'All',
+              icon: Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: isActive ? const Color(0xff1193D4) : const Color(0xFF64748B),
+                  size: 20,
+                ),
+              ),
+              isDense: true,
+              borderRadius: BorderRadius.circular(12),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: isActive ? const Color(0xff1193D4) : const Color(0xFF0F172A),
+              ),
+              items: items.map((item) {
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(
+                    item,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: item == value ? FontWeight.bold : FontWeight.normal,
+                      color: item == value ? const Color(0xff1193D4) : const Color(0xFF1E293B),
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
       ),
     );
   }

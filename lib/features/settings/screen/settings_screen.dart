@@ -11,7 +11,13 @@ import 'package:scholo_admin/core/constant/image_constant.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 import 'package:scholo_admin/auth/controller/login_controller.dart';
 import 'package:scholo_admin/models/school_model.dart';
+import 'package:scholo_admin/models/helpAndSupport_model.dart';
 import 'package:scholo_admin/core/config/session_manager.dart';
+import 'package:scholo_admin/core/constant/firebase_constant.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:scholo_admin/models/admin_device_model.dart';
+import 'package:scholo_admin/features/settings/repository/admin_device_repository.dart';
 
 class AdminSettingsScreen extends ConsumerStatefulWidget {
   const AdminSettingsScreen({super.key});
@@ -49,6 +55,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   void initState() {
     super.initState();
     _loadLanguagePreference();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (SessionManager.schoolId.isNotEmpty) {
+        ref.read(adminDeviceRepositoryProvider).registerOrUpdateCurrentDevice(
+          schoolId: SessionManager.schoolId,
+        );
+      }
+    });
   }
 
   @override
@@ -66,28 +79,10 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
 
   Future<void> _loadLanguagePreference() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('settings_language', 'en');
     setState(() {
-      _selectedLanguage = prefs.getString('settings_language') ?? 'en';
+      _selectedLanguage = 'en';
     });
-  }
-
-  Future<void> _saveLanguagePreference(String lang) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('settings_language', lang);
-    setState(() {
-      _selectedLanguage = lang;
-    });
-    if (mounted) {
-      AlertInfo.show(
-        context: context,
-        text: lang == 'ar' ? 'تم تغيير اللغة إلى العربية' : 'Language updated to English',
-        typeInfo: TypeInfo.success,
-        backgroundColor: const Color(0xFF27AE60),
-        iconColor: Colors.white,
-        textColor: Colors.white,
-        position: MessagePosition.top,
-      );
-    }
   }
 
   void _initializeFields(SchoolModel school) {
@@ -478,61 +473,124 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   }
 
   void _showLanguageDialog() {
-    final isAr = _selectedLanguage == 'ar';
     showDialog(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Directionality(
-              textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
-              child: Dialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                child: Container(
-                  width: 450,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            width: 460,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDialogHeader(title: _t('select_language'), context: context),
+                const SizedBox(height: 20),
+
+                // English Option Box (Default & Active)
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xff1293d4).withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xff1293d4), width: 1.5),
+                  ),
+                  child: RadioListTile<String>(
+                    title: Row(
+                      children: const [
+                        Text(
+                          'English (Default)',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.check_circle_rounded, size: 18, color: Color(0xff1293d4)),
+                      ],
+                    ),
+                    subtitle: const Text(
+                      'Primary system language for admin controls',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
+                    value: 'en',
+                    groupValue: 'en',
+                    activeColor: const Color(0xff1293d4),
+                    onChanged: (val) {},
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // Boxed Alert Content Notice
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildDialogHeader(title: _t('select_language'), context: context),
-                      const SizedBox(height: 24),
-                      RadioListTile<String>(
-                        title: Text(_t('english')),
-                        value: 'en',
-                        groupValue: _selectedLanguage,
-                        activeColor: const Color(0xff1293d4),
-                        onChanged: (val) {
-                          if (val != null) {
-                            _saveLanguagePreference(val);
-                            Navigator.pop(context);
-                          }
-                        },
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEF3C7),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.info_outline_rounded,
+                          color: Color(0xFFD97706),
+                          size: 20,
+                        ),
                       ),
-                      const Divider(height: 1),
-                      RadioListTile<String>(
-                        title: Text(_t('arabic')),
-                        value: 'ar',
-                        groupValue: _selectedLanguage,
-                        activeColor: const Color(0xff1293d4),
-                        onChanged: (val) {
-                          if (val != null) {
-                            _saveLanguagePreference(val);
-                            Navigator.pop(context);
-                          }
-                        },
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              "Language Support Alert",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              "In this version, only English language is supported.",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFB45309),
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  void _showHelpDialog() {
+  void _showHelpDialog([SchoolModel? school]) {
+    if (school != null) {
+      _supportNameCtrl.text = school.schoolName;
+      _supportEmailCtrl.text = school.officialEmail.isNotEmpty
+          ? school.officialEmail
+          : school.email;
+    }
+    _supportMsgCtrl.clear();
+
     final isAr = _selectedLanguage == 'ar';
     showDialog(
       context: context,
@@ -620,26 +678,67 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                                             ),
                                             onPressed: isSubmittingLocal
                                                 ? null
-                                                : () {
+                                                : () async {
                                                     if (!supportFormKeyLocal.currentState!.validate()) return;
                                                     setModalState(() => isSubmittingLocal = true);
-                                                    Future.delayed(const Duration(milliseconds: 1000), () {
+                                                    try {
+                                                      final targetSchoolId = (school?.schoolId.isNotEmpty == true)
+                                                          ? school!.schoolId
+                                                          : SessionManager.schoolId;
+
+                                                      final collectionRef = FirebaseFirestore.instance
+                                                          .collection(FirebaseConstant.helpAndSupport);
+
+                                                      final snapshot = await collectionRef.get();
+                                                      int count = snapshot.docs.length + 1;
+                                                      String generatedId = "H&S@${count.toString().padLeft(3, '0')}";
+
+                                                      while ((await collectionRef.doc(generatedId).get()).exists) {
+                                                        count++;
+                                                        generatedId = "H&S@${count.toString().padLeft(3, '0')}";
+                                                      }
+
+                                                      final ticket = HelpAndSupportModel(
+                                                        id: generatedId,
+                                                        name: _supportNameCtrl.text.trim(),
+                                                        schoolName: school?.schoolName ?? _supportNameCtrl.text.trim(),
+                                                        officialEmail: _supportEmailCtrl.text.trim(),
+                                                        message: _supportMsgCtrl.text.trim(),
+                                                        createdAt: DateTime.now(),
+                                                        status: 'Pending',
+                                                        schoolId: targetSchoolId,
+                                                      );
+
+                                                      await collectionRef.doc(generatedId).set(ticket.toMap());
+
                                                       if (context.mounted) {
                                                         AlertInfo.show(
                                                           context: context,
-                                                          text: _t('support_success'),
+                                                          text: "${_t('support_success')} (ID: $generatedId)",
                                                           typeInfo: TypeInfo.success,
                                                           backgroundColor: const Color(0xFF27AE60),
                                                           iconColor: Colors.white,
                                                           textColor: Colors.white,
                                                           position: MessagePosition.top,
                                                         );
-                                                        _supportNameCtrl.clear();
-                                                        _supportEmailCtrl.clear();
                                                         _supportMsgCtrl.clear();
                                                         Navigator.pop(context);
                                                       }
-                                                    });
+                                                    } catch (e) {
+                                                      if (context.mounted) {
+                                                        AlertInfo.show(
+                                                          context: context,
+                                                          text: "Error submitting ticket: $e",
+                                                          typeInfo: TypeInfo.error,
+                                                          backgroundColor: Colors.redAccent,
+                                                          iconColor: Colors.white,
+                                                          textColor: Colors.white,
+                                                          position: MessagePosition.top,
+                                                        );
+                                                      }
+                                                    } finally {
+                                                      setModalState(() => isSubmittingLocal = false);
+                                                    }
                                                   },
                                             child: isSubmittingLocal
                                                 ? const SizedBox(
@@ -657,22 +756,113 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                               ),
                               const SizedBox(height: 24),
                               // Contacts
-                              Text(
-                                _t('support_contacts'),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                              // Contact & Support Quick Actions Card
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _t('support_contacts'),
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Email Row + Quick Email Button
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xff1293d4).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(Icons.email_outlined, color: Color(0xff1293d4), size: 20),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(_t('support_email'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                              const SizedBox(height: 2),
+                                              const Text("app.scholo@gmail.com", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                                            ],
+                                          ),
+                                        ),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFEA4335),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            elevation: 0,
+                                          ),
+                                          onPressed: () async {
+                                            final mailtoUri = Uri.parse("https://mail.google.com/mail/?view=cm&fs=1&to=app.scholo@gmail.com");
+                                            final fallbackUri = Uri.parse("mailto:app.scholo@gmail.com");
+                                            if (await canLaunchUrl(mailtoUri)) {
+                                              await launchUrl(mailtoUri, webOnlyWindowName: '_blank');
+                                            } else if (await canLaunchUrl(fallbackUri)) {
+                                              await launchUrl(fallbackUri, webOnlyWindowName: '_blank');
+                                            }
+                                          },
+                                          icon: const Icon(Icons.send_rounded, size: 14),
+                                          label: const Text("Email Us", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    const Divider(height: 1),
+                                    const SizedBox(height: 12),
+                                    // WhatsApp Row + Quick WhatsApp Button
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366), size: 20),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(_t('support_phone'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                                              const SizedBox(height: 2),
+                                              const Text("+91 9544234298", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                                            ],
+                                          ),
+                                        ),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF25D366),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            elevation: 0,
+                                          ),
+                                          onPressed: () async {
+                                            final uri = Uri.parse("https://wa.me/919544234298");
+                                            if (await canLaunchUrl(uri)) {
+                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                            }
+                                          },
+                                          icon: const Icon(Icons.chat_rounded, size: 14),
+                                          label: const Text("WhatsApp", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 10),
-                              ListTile(
-                                leading: const Icon(Icons.email, color: Color(0xff1293d4)),
-                                title: Text(_t('support_email'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                subtitle: const Text("support@scholo.com"),
-                              ),
-                              ListTile(
-                                leading: const Icon(Icons.phone, color: Color(0xff1293d4)),
-                                title: Text(_t('support_phone'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                subtitle: const Text("+1 (800) 555-0199"),
-                              ),
-                              const Divider(),
                               const SizedBox(height: 16),
                               Text(
                                 _t('faqs'),
@@ -1293,14 +1483,14 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                           _buildMenuCard(
                             icon: Icons.translate,
                             title: _t('tab_language'),
-                            subtitle: _selectedLanguage == 'ar' ? 'العربية' : 'English',
+                            subtitle: 'English (Default)',
                             onTap: _showLanguageDialog,
                           ),
                           _buildMenuCard(
                             icon: Icons.help_outline,
                             title: _t('tab_help'),
                             subtitle: _selectedLanguage == 'ar' ? 'التذاكر والدعم' : 'FAQs & Support Tickets',
-                            onTap: _showHelpDialog,
+                            onTap: () => _showHelpDialog(school),
                           ),
                           _buildMenuCard(
                             icon: Icons.gavel,
@@ -1321,6 +1511,12 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                             onTap: _showAboutDialog,
                           ),
                           _buildMenuCard(
+                            icon: Icons.devices_rounded,
+                            title: 'Admin Devices',
+                            subtitle: _selectedLanguage == 'ar' ? 'الأجهزة والجلسات النشطة' : 'Logged-in Devices & FCM Sessions',
+                            onTap: _showAdminDevicesDialog,
+                          ),
+                          _buildMenuCard(
                             icon: Icons.logout,
                             title: _t('tab_logout'),
                             subtitle: _selectedLanguage == 'ar' ? 'تسجيل الخروج من النظام' : 'Sign Out of Administration',
@@ -1339,6 +1535,372 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         ),
       ),
     );
+  }
+
+  // ── 📱 ADMIN DEVICES & FCM SESSIONS MODAL ─────────────────────────
+  void _showAdminDevicesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final devicesAsync = ref.watch(adminDevicesStreamProvider);
+            final currentDeviceIdAsync = ref.watch(currentDeviceIdProvider);
+            final currentDeviceId = currentDeviceIdAsync.value ?? '';
+            final schoolId = SessionManager.schoolId;
+
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Container(
+                width: 820,
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1193D4).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.devices_rounded, color: Color(0xFF1193D4), size: 24),
+                            ),
+                            const SizedBox(width: 14),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text(
+                                  "Admin Devices & FCM Sessions",
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  "Monitor logged-in devices, active push tokens, and remote session security",
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+
+                    Expanded(
+                      child: devicesAsync.when(
+                        data: (devices) {
+                          if (devices.isEmpty) {
+                            return const Center(
+                              child: Text("No registered devices found.", style: TextStyle(color: Colors.grey)),
+                            );
+                          }
+
+                          final activeDevices = devices.where((d) => d.isActive).toList();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Summary & Bulk Actions Row
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          "Active Sessions: ${activeDevices.length}",
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          "Total Registered: ${devices.length}",
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (activeDevices.length > 1)
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.redAccent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Logout All Other Devices?'),
+                                            content: const Text('This will revoke access for all other logged-in sessions except this current device.'),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                child: const Text('Logout All Others'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirm == true) {
+                                          await ref.read(adminDeviceRepositoryProvider).logoutAllOtherDevices(schoolId, currentDeviceId);
+                                          if (context.mounted) {
+                                            AlertInfo.show(
+                                              context: context,
+                                              text: 'All other devices logged out successfully!',
+                                              typeInfo: TypeInfo.success,
+                                              backgroundColor: Colors.green,
+                                              textColor: Colors.white,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.no_cell_rounded, size: 14),
+                                      label: const Text('Logout All Other Devices', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Device Items List
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: devices.length,
+                                  itemBuilder: (ctx, idx) {
+                                    final item = devices[idx];
+                                    final isThisDevice = item.deviceId == currentDeviceId;
+                                    return _buildAdminDeviceCard(ctx, item, isThisDevice, schoolId, ref);
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF1193D4))),
+                        error: (err, stack) => Center(child: Text("Error loading devices: $err", style: const TextStyle(color: Colors.red))),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminDeviceCard(
+    BuildContext context,
+    AdminDeviceModel device,
+    bool isThisDevice,
+    String schoolId,
+    WidgetRef ref,
+  ) {
+    IconData icon = Icons.laptop_chromebook_rounded;
+    Color iconColor = const Color(0xFF3B82F6);
+
+    final platformLower = device.platform.toLowerCase();
+    if (platformLower.contains('android')) {
+      icon = Icons.phone_android_rounded;
+      iconColor = const Color(0xFF10B981);
+    } else if (platformLower.contains('ios') || platformLower.contains('apple')) {
+      icon = Icons.phone_iphone_rounded;
+      iconColor = const Color(0xFF8B5CF6);
+    } else if (platformLower.contains('win')) {
+      icon = Icons.desktop_windows_rounded;
+      iconColor = const Color(0xFF0284C7);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isThisDevice ? const Color(0xFFF0F9FF) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isThisDevice ? const Color(0xFF0284C7) : const Color(0xFFE2E8F0),
+          width: isThisDevice ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "${device.deviceName} (${device.platform})",
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                        ),
+                        if (isThisDevice) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              "THIS DEVICE",
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: device.isActive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: device.isActive ? Colors.green.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            device.isActive ? "ACTIVE" : "LOGGED OUT",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: device.isActive ? Colors.green : Colors.red,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Manufacturer: ${device.manufacturer} • Model: ${device.model} • OS: ${device.osVersion} • App v${device.appVersion}",
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 10),
+
+          // Details Grid (First login, last login, last seen, FCM token)
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _buildDeviceDetailItem(Icons.key_rounded, "Device ID", device.deviceId),
+              _buildDeviceDetailItem(Icons.login_rounded, "First Login", _formatDate(device.firstLoginAt)),
+              _buildDeviceDetailItem(Icons.access_time_rounded, "Last Login", _formatDate(device.lastLoginAt)),
+              _buildDeviceDetailItem(Icons.visibility_rounded, "Last Seen", _formatDate(device.lastSeenAt)),
+              if (device.logoutAt != null)
+                _buildDeviceDetailItem(Icons.logout_rounded, "Logged Out At", _formatDate(device.logoutAt!)),
+              _buildDeviceDetailItem(
+                Icons.notifications_active_rounded,
+                "FCM Token",
+                device.fcmToken.isNotEmpty
+                    ? "${device.fcmToken.substring(0, device.fcmToken.length > 18 ? 18 : device.fcmToken.length)}..."
+                    : "No Token",
+              ),
+            ],
+          ),
+
+          if (device.isActive && !isThisDevice) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  await ref.read(adminDeviceRepositoryProvider).logoutDevice(schoolId, device.deviceId);
+                  if (context.mounted) {
+                    AlertInfo.show(
+                      context: context,
+                      text: 'Device access revoked successfully',
+                      typeInfo: TypeInfo.success,
+                      backgroundColor: Colors.redAccent,
+                      textColor: Colors.white,
+                    );
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded, size: 14),
+                label: const Text("Logout Device", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceDetailItem(IconData icon, String label, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: const Color(0xFF64748B)),
+        const SizedBox(width: 4),
+        Text(
+          "$label: ",
+          style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    return "${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
   // --- MOCK TEXT DOCS ---

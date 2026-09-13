@@ -10,11 +10,15 @@ class OtherFilesModel {
   final String tittle;
   final String subtitle;
   final String division;
+  final String uploaderName;
+  final String uploaderId;
 
   final DateTime uploadedAt;
   final DateTime? deletedDate;
 
   final bool delete;
+  final bool isCameraInstant;
+
   final String teacherId;
   final String schoolId;
 
@@ -24,13 +28,17 @@ class OtherFilesModel {
     required this.fileUrl,
     required this.tittle,
     required this.subtitle,
+    required this.uploaderName,
+    required this.uploaderId,
     required this.uploadedAt,
+    required this.isCameraInstant,
     required this.delete,
     required this.teacherId,
     this.deletedDate,
     required this.classNo,
     required this.division,
     this.schoolId = '',
+
   });
 
   // --------------------------------------------------
@@ -42,7 +50,10 @@ class OtherFilesModel {
     String? fileUrl,
     String? tittle,
     String? subtitle,
+    String? uploaderName,
+    String? uploaderId,
     DateTime? uploadedAt,
+    bool? isCameraInstant,
     bool? delete,
     String? teacherId,
     DateTime? deletedDate,
@@ -56,7 +67,10 @@ class OtherFilesModel {
       fileUrl: fileUrl ?? this.fileUrl,
       tittle: tittle ?? this.tittle,
       subtitle: subtitle ?? this.subtitle,
+      uploaderName: uploaderName ?? this.uploaderName,
+      uploaderId: uploaderId ?? this.uploaderId,
       uploadedAt: uploadedAt ?? this.uploadedAt,
+      isCameraInstant: isCameraInstant ?? this.isCameraInstant,
       delete: delete ?? this.delete,
       teacherId: teacherId ?? this.teacherId,
       deletedDate: deletedDate ?? this.deletedDate,
@@ -78,6 +92,9 @@ class OtherFilesModel {
       'subtitle': subtitle,
       'classNo': classNo,
       'division': division,
+      'uploaderName': uploaderName,
+      'uploaderId': uploaderId,
+      'isCameraInstant': isCameraInstant,
       'uploadedAt': Timestamp.fromDate(uploadedAt),
 
       'delete': delete,
@@ -133,6 +150,9 @@ class OtherFilesModel {
       tittle: map['tittle'] ?? map['title'] ?? '',
       subtitle: map['subtitle'] ?? '',
       delete: map['delete'] ?? false,
+      uploaderName: map['uploaderName'] ?? '',
+      uploaderId: map['uploaderId'] ?? '',
+      isCameraInstant: map['isCameraInstant'] ?? false,
       teacherId: map['teacherId'] ?? '',
       classNo: parsedClassNo,
       division: map['division'] ?? '',

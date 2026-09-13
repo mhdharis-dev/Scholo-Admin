@@ -12,6 +12,7 @@ import '../features/teacherView/class_dashbord/screen/classWiseTeacherView_scree
 import '../features/trashbin/screen/trashBin_screen.dart';
 import '../features/notifications/screen/notifications _Page.dart';
 import '../features/settings/screen/settings_screen.dart';
+import '../features/subscription/screen/subscription_screen.dart';
 
 // Import newly routed detail and sub-pages
 import '../features/teacherView/class_dashbord/screen/teacherViewDashbord.dart';
@@ -160,6 +161,10 @@ final router = GoRouter(
         GoRoute(
           path: '/admin/settings',
           builder: (_, __) => const AdminSettingsScreen(),
+        ),
+        GoRoute(
+          path: '/admin/subscription',
+          builder: (_, __) => const SubscriptionScreen(),
         ),
       ],
     ),

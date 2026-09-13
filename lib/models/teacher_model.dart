@@ -20,6 +20,8 @@ class TeacherModel {
   final String schoolId;
 
   final bool delete;
+  final bool isLanguageTeacher;
+  bool get isLangaugeTeacher => isLanguageTeacher;
 
   final DateTime createdDate;
   final DateTime dateOfBirth;
@@ -42,6 +44,7 @@ class TeacherModel {
     required this.gender,
     required this.imageUrl,
     required this.delete,
+    this.isLanguageTeacher = false,
     required this.createdDate,
     required this.dateOfBirth,
     this.schoolId = '',
@@ -68,6 +71,7 @@ class TeacherModel {
     String? imageUrl,
     String? schoolId,
     bool? delete,
+    bool? isLanguageTeacher,
     DateTime? createdDate,
     DateTime? dateOfBirth,
     DateTime? deletedDate,
@@ -89,6 +93,7 @@ class TeacherModel {
       imageUrl: imageUrl ?? this.imageUrl,
       schoolId: schoolId ?? this.schoolId,
       delete: delete ?? this.delete,
+      isLanguageTeacher: isLanguageTeacher ?? this.isLanguageTeacher,
       createdDate: createdDate ?? this.createdDate,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       deletedDate: deletedDate ?? this.deletedDate,
@@ -114,6 +119,7 @@ class TeacherModel {
       'gender': gender,
       'imageUrl': imageUrl,
       'delete': delete,
+      'isLanguageTeacher': isLanguageTeacher,
       'schoolId': schoolId.isEmpty ? SessionManager.schoolId : schoolId,
 
       'createdDate': Timestamp.fromDate(createdDate),
@@ -147,6 +153,7 @@ class TeacherModel {
       gender: map['gender'] ?? '',
       imageUrl: map['imageUrl'] ?? '',
       delete: map['delete'] ?? false,
+      isLanguageTeacher: map['isLanguageTeacher'] ?? false,
       schoolId: map['schoolId'] ?? '',
 
       createdDate: (map['createdDate'] as Timestamp).toDate(),
@@ -166,4 +173,15 @@ class TeacherModel {
 
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TeacherModel &&
+          runtimeType == other.runtimeType &&
+          ((id.isNotEmpty && other.id.isNotEmpty && id == other.id) ||
+              (id.isEmpty && other.id.isEmpty && teacherName == other.teacherName));
+
+  @override
+  int get hashCode => id.isNotEmpty ? id.hashCode : teacherName.hashCode;
 }

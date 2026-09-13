@@ -951,6 +951,29 @@ class _TableAndOtherFilePageScreenState
                     ),
                   ),
                 ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xff22C55E),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      item.isCameraInstant ? Icons.camera_alt_rounded : Icons.description_rounded,
+                      size: 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -985,7 +1008,32 @@ class _TableAndOtherFilePageScreenState
                     color: Color(0xff94A3B8),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person_rounded,
+                      size: 12,
+                      color: Color(0xff64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        item.uploaderName.isNotEmpty
+                            ? item.uploaderName
+                            : (item.teacherId.isNotEmpty ? "Teacher" : "Principal"),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xff475569),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     _buildActionIconBtn(
@@ -1245,19 +1293,41 @@ class _TableAndOtherFilePageScreenState
       ),
       child: Row(
         children: [
-          // File Icon Box
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: themeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              fileIcon,
-              color: themeColor,
-              size: 24,
-            ),
+          // File Icon Box with Green Circle Status Badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: themeColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  fileIcon,
+                  color: themeColor,
+                  size: 24,
+                ),
+              ),
+              Positioned(
+                top: -3,
+                right: -3,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff22C55E),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Icon(
+                    item.isCameraInstant ? Icons.camera_alt_rounded : Icons.description_rounded,
+                    size: 10,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 16),
           // Title / Subtitle / Badge
@@ -1307,6 +1377,31 @@ class _TableAndOtherFilePageScreenState
                     fontWeight: FontWeight.w500,
                     color: Color(0xff94A3B8),
                   ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person_rounded,
+                      size: 12,
+                      color: Color(0xff64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        item.uploaderName.isNotEmpty
+                            ? item.uploaderName
+                            : (item.teacherId.isNotEmpty ? "Teacher" : "Principal"),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xff475569),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

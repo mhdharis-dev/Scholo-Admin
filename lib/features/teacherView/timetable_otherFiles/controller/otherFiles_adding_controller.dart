@@ -19,6 +19,9 @@ class OtherFilesAddingController
     required String fileName,
     required String division,
     required int classNo,
+    String uploaderName = '',
+    String uploaderId = '',
+    bool isCameraInstant = false,
   }) async {
     state = const AsyncLoading();
 
@@ -31,6 +34,9 @@ class OtherFilesAddingController
           fileName: fileName,
           division: division,
           classNo: classNo,
+          uploaderName: uploaderName,
+          uploaderId: uploaderId,
+          isCameraInstant: isCameraInstant,
         ));
   }
 }

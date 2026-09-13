@@ -1669,14 +1669,20 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
         .where("delete", isEqualTo: false)
         .get();
 
-    final allTeachers = snapshot.docs
-        .map((e) => TeacherModel.fromMap(e.data()))
-        .toList();
+    final allTeachers = snapshot.docs.map((e) {
+      final map = Map<String, dynamic>.from(e.data());
+      if (map['id'] == null || map['id'].toString().isEmpty) {
+        map['id'] = e.id;
+      }
+      return TeacherModel.fromMap(map);
+    }).toList();
 
     if (isEditingClassTeacher) {
       selectedTeacher = mainTeacher;
     } else if (editTeacher != null) {
-      final matches = allTeachers.where((t) => t.id == editTeacher.teacherId);
+      final matches = allTeachers.where((t) =>
+          (t.id.isNotEmpty && t.id == editTeacher.teacherId) ||
+          (t.teacherName.isNotEmpty && t.teacherName.trim().toLowerCase() == editTeacher.teacherName.trim().toLowerCase()));
       if (matches.isNotEmpty) {
         selectedTeacher = matches.first;
       }
@@ -1690,7 +1696,9 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
     final teacherList = isEditingClassTeacher
         ? [mainTeacher]
         : allTeachers.where((t) {
-            if (editTeacher != null && t.id == editTeacher.teacherId) {
+            if (editTeacher != null &&
+                ((t.id.isNotEmpty && t.id == editTeacher.teacherId) ||
+                 (t.teacherName.isNotEmpty && t.teacherName.trim().toLowerCase() == editTeacher.teacherName.trim().toLowerCase()))) {
               return true;
             }
             return t.id != widget.teacherId && !existingIds.contains(t.id);
@@ -1740,7 +1748,9 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
 
                       // Teacher Dropdown
                       DropdownButtonFormField<TeacherModel>(
-                        initialValue: selectedTeacher,
+                        initialValue: teacherList.contains(selectedTeacher)
+                            ? selectedTeacher
+                            : teacherList.where((t) => t == selectedTeacher).firstOrNull,
                         decoration: InputDecoration(
                           labelText: "Select Teacher",
                           filled: true,
@@ -1756,7 +1766,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                             child: Text(teacher.teacherName),
                           );
                         }).toList(),
-                        onChanged: (editTeacher != null || isEditingClassTeacher)
+                        onChanged: isEditingClassTeacher
                             ? null
                             : (value) {
                                 setState(() {
@@ -1913,13 +1923,14 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                                 employeeId: selectedTeacher!.employeeId,
                                 mobileNo: int.tryParse(selectedTeacher!.mobileNo) ?? 0,
                                 isPermanent: true,
+                                isLanguageTeacher: selectedTeacher!.isLanguageTeacher,
                               );
 
                               List<OtherTeacherModel> updatedList = [];
                               if (editTeacher == null) {
                                 updatedList = [...list, updatedOtherTeacher];
                               } else {
-                                updatedList = list.map((t) {
+                                updatedList = list.map<OtherTeacherModel>((t) {
                                   if (t.teacherId == editTeacher.teacherId) {
                                     return updatedOtherTeacher;
                                   }

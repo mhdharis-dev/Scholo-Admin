@@ -5,7 +5,6 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:easy_sidemenu/easy_sidemenu.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
@@ -36,8 +35,6 @@ class AdminPanel extends ConsumerStatefulWidget {
 }
 
 class _AdminPanelState extends ConsumerState<AdminPanel> {
-  final SideMenuController _sideMenuController = SideMenuController();
-
   late Future<List<Map<String, String>>> _searchDataFuture;
 
   final GlobalKey _profileKey = GlobalKey();
@@ -353,6 +350,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                           _infoRow("Mobile", student.mobileNo),
                           _infoRow("Parent Name", student.parentName),
                           _infoRow("Address", student.address),
+                          _infoRow("Language", student.language.isNotEmpty ? student.language : "-"),
+                          _infoRow("Clubs / NSS / NCC", student.clubs_nss_ncc.isNotEmpty ? student.clubs_nss_ncc : "-"),
                           _infoRow(
                             "Date of Birth",
                             "${student.dateOfBirth.day}/${student.dateOfBirth.month}/${student.dateOfBirth.year}",
@@ -528,6 +527,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                           ),
                           _infoRow("Email", teacher.email),
                           _infoRow("Password", teacher.password),
+                          _infoRow("Language Teacher", teacher.isLanguageTeacher ? "Yes" : "No"),
 
                         ],
                       ),
@@ -581,6 +581,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   String? _selectedClass;
   String? _selectedDiv;
+  bool _isLanguageTeacher = false;
 
   Widget _buildTextFieldWithValidation(
       TextEditingController controller,
@@ -646,6 +647,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _monthController.text = teacher.dateOfBirth.month.toString();
       _yearController.text = teacher.dateOfBirth.year.toString();
       _uploadedImageUrl = teacher.imageUrl;
+      _isLanguageTeacher = teacher.isLanguageTeacher;
     } else {
       editingTeacher = null;
       _teacherIdController.clear();
@@ -663,6 +665,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _yearController.clear();
       _uploadedImageUrl = null;
       _selectedFile = null;
+      _isLanguageTeacher = false;
     }
 
     showModalBottomSheet(
@@ -783,7 +786,23 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _buildDateOfBirthField(),
+            _buildDateOfBirthField(context: context),
+            const SizedBox(height: 12),
+            StatefulBuilder(
+              builder: (context, setStateSB) {
+                return CheckboxListTile(
+                  title: const Text("Is Language Teacher?", style: TextStyle(fontWeight: FontWeight.bold)),
+                  value: _isLanguageTeacher,
+                  activeColor: const Color(0xff1193D4),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: (val) {
+                    setStateSB(() => _isLanguageTeacher = val ?? false);
+                    setState(() => _isLanguageTeacher = val ?? false);
+                  },
+                );
+              },
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _isUploading
@@ -941,24 +960,25 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                     int.parse(_dayController.text),
                   );
 
-                  final teacher = TeacherModel(
-                    id: editingTeacher?.id ?? '',
-                    employeeId: _teacherIdController.text,
-                    mobileNo: _mobileController.text,
-                    teacherName: _nameController.text,
-                    classNo: int.parse(_selectedClass!),
-                    division: _selectedDiv!,
-                    subject: _subjectController.text,
-                    email: _emailController.text,
-                    password: _passwordController.text,
-                    address: _addressController.text,
-                    gender: _selectedGender!,
-                    imageUrl: _uploadedImageUrl ?? '',
-                    delete: false,
-                    createdDate:
-                    editingTeacher?.createdDate ?? DateTime.now(),
-                    dateOfBirth: dob,
-                  );
+                    final teacher = TeacherModel(
+                      id: editingTeacher?.id ?? '',
+                      employeeId: _teacherIdController.text,
+                      mobileNo: _mobileController.text,
+                      teacherName: _nameController.text,
+                      classNo: int.parse(_selectedClass!),
+                      division: _selectedDiv!,
+                      subject: _subjectController.text,
+                      email: _emailController.text,
+                      password: _passwordController.text,
+                      address: _addressController.text,
+                      gender: _selectedGender!,
+                      imageUrl: _uploadedImageUrl ?? '',
+                      delete: false,
+                      isLanguageTeacher: _isLanguageTeacher,
+                      createdDate:
+                      editingTeacher?.createdDate ?? DateTime.now(),
+                      dateOfBirth: dob,
+                    );
 
                   if (editingTeacher != null) {
                     await repo.updateTeacher(teacher);
@@ -1025,6 +1045,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _mobileController.text = student.mobileNo;
       _parentController.text = student.parentName;
       _addressController.text = student.address;
+      _languageController.text = student.language;
+      _clubsController.text = student.clubs_nss_ncc;
       _selectedGender = student.gender;
       _classNo = _classNoToString(student.classNo);
       _division = student.division;
@@ -1041,6 +1063,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _mobileController.clear();
       _parentController.clear();
       _addressController.clear();
+      _languageController.clear();
+      _clubsController.clear();
       _selectedGender = null;
       _selectedTeacherName = null;
       _selectedTeacherId = null;
@@ -1132,13 +1156,26 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                 const SizedBox(height: 12),
                 _buildClassAndDivisionDropdowns(classes, setSheetState),
                 const SizedBox(height: 12),
-                _buildDateOfBirthField(),
+                _buildDateOfBirthField(context: context, setSheetState: setSheetState),
                 const SizedBox(height: 12),
                 _buildValidatedField(_parentController, "Parent Name",inputFormatters: [ FilteringTextInputFormatter.allow(
                   RegExp(r"[a-zA-Z\s]"),),]),
                 const SizedBox(height: 12),
                 _buildValidatedField(_addressController, "Address",inputFormatters: [ FilteringTextInputFormatter.allow(
                   RegExp(r"[a-zA-Z\s]"),),]),
+                const SizedBox(height: 12),
+                const SizedBox(height: 12),
+                _buildLanguageDropdownField(
+                  context: context,
+                  controller: _languageController,
+                  setSheetState: setSheetState,
+                ),
+                const SizedBox(height: 12),
+                _buildClubsDropdownField(
+                  context: context,
+                  controller: _clubsController,
+                  setSheetState: setSheetState,
+                ),
                 const SizedBox(height: 12),
                 _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
                 const SizedBox(height: 12),
@@ -1333,6 +1370,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                         imageUrl: _uploadedImageUrl ?? '',
                         dateOfBirth: dob,
                         createdDate: editingStudent?.createdDate ?? DateTime.now(),
+                        schoolId: SessionManager.schoolId,
+                        language: _languageController.text.trim(),
+                        clubs_nss_ncc: _clubsController.text.trim(),
                       );
 
                       final studentCollectionRef = FirebaseFirestore.instance
@@ -1417,6 +1457,8 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   final _parentController = TextEditingController();
   final _mobileController = TextEditingController();
   final _addressController = TextEditingController();
+  final _languageController = TextEditingController();
+  final _clubsController = TextEditingController();
   final _dayController = TextEditingController();
   final _monthController = TextEditingController();
   final _yearController = TextEditingController();
@@ -1521,25 +1563,369 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     );
   }
 
+  Future<String?> _showAddNewDialog({
+    required BuildContext context,
+    required String title,
+    required String hint,
+  }) {
+    final textController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: textController,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff1193D4),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(context, textController.text),
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 🔹 Language Dropdown Field with '+ Add new'
+  Widget _buildLanguageDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseLanguages = ['Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
+    final dynamicLanguages = <String>[...baseLanguages];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicLanguages.contains(currentVal)) {
+      dynamicLanguages.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicLanguages.map((lang) {
+        return DropdownMenuItem<String>(
+          value: lang,
+          child: Text(lang, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
+        ),
+      ),
+    ];
+
+    String? selectedValue = dynamicLanguages.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Second / Third Language", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Second / Third Language',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customLang = await _showAddNewDialog(
+            context: context,
+            title: "Add New Language",
+            hint: "e.g. French, German, Spanish...",
+          );
+          if (customLang != null && customLang.trim().isNotEmpty) {
+            final trimmed = customLang.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
+  /// 🔹 Clubs / NSS / NCC Dropdown Field with '+ Add new'
+  Widget _buildClubsDropdownField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required void Function(void Function()) setSheetState,
+  }) {
+    final baseClubs = ['NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
+    final dynamicClubs = <String>[...baseClubs];
+
+    final currentVal = controller.text.trim();
+    if (currentVal.isNotEmpty && !dynamicClubs.contains(currentVal)) {
+      dynamicClubs.add(currentVal);
+    }
+
+    const addNewKey = '__ADD_NEW__';
+
+    final items = <DropdownMenuItem<String>>[
+      ...dynamicClubs.map((club) {
+        return DropdownMenuItem<String>(
+          value: club,
+          child: Text(club, style: const TextStyle(fontSize: 14)),
+        );
+      }),
+      const DropdownMenuItem<String>(
+        value: addNewKey,
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 18, color: Color(0xff1193D4)),
+            SizedBox(width: 6),
+            Text("Add new", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xff1193D4))),
+          ],
+        ),
+      ),
+    ];
+
+    String? selectedValue = dynamicClubs.contains(currentVal) ? currentVal : null;
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      hint: Text("Clubs / NSS / NCC", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+      decoration: InputDecoration(
+        labelText: 'Clubs / NSS / NCC',
+        labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: items,
+      onChanged: (val) async {
+        if (val == addNewKey) {
+          final customClub = await _showAddNewDialog(
+            context: context,
+            title: "Add New Club / Activity",
+            hint: "e.g. Robotics Club, Arts Club...",
+          );
+          if (customClub != null && customClub.trim().isNotEmpty) {
+            final trimmed = customClub.trim();
+            controller.text = trimmed;
+            setSheetState(() {});
+          }
+        } else if (val != null) {
+          controller.text = val;
+          setSheetState(() {});
+        }
+      },
+    );
+  }
+
   /// 🔹 Date of Birth Field
-  Widget _buildDateOfBirthField() {
-    return Row(
-      children: [
-        Expanded(child: _buildValidatedField(_dayController, "DD", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildValidatedField(_monthController, "MM" ,inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(2),
-        ],)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildValidatedField(_yearController, "YYYY", inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(4),
-        ],)),
-      ],
+  Widget _buildDateOfBirthField({
+    BuildContext? context,
+    void Function(void Function())? setSheetState,
+  }) {
+    final days = List.generate(31, (i) => (i + 1).toString().padLeft(2, '0'));
+    final months = [
+      {'val': '01', 'name': '01 - Jan'},
+      {'val': '02', 'name': '02 - Feb'},
+      {'val': '03', 'name': '03 - Mar'},
+      {'val': '04', 'name': '04 - Apr'},
+      {'val': '05', 'name': '05 - May'},
+      {'val': '06', 'name': '06 - Jun'},
+      {'val': '07', 'name': '07 - Jul'},
+      {'val': '08', 'name': '08 - Aug'},
+      {'val': '09', 'name': '09 - Sep'},
+      {'val': '10', 'name': '10 - Oct'},
+      {'val': '11', 'name': '11 - Nov'},
+      {'val': '12', 'name': '12 - Dec'},
+    ];
+    final currentYear = DateTime.now().year;
+    final years = List.generate(80, (i) => (currentYear - i).toString());
+
+    String? currentDay = days.contains(_dayController.text.padLeft(2, '0'))
+        ? _dayController.text.padLeft(2, '0')
+        : null;
+    String? currentMonth = months.any((m) => m['val'] == _monthController.text.padLeft(2, '0'))
+        ? _monthController.text.padLeft(2, '0')
+        : null;
+    String? currentYearVal = years.contains(_yearController.text)
+        ? _yearController.text
+        : null;
+
+    void updateState() {
+      if (setSheetState != null) {
+        setSheetState(() {});
+      } else {
+        setState(() {});
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          // Day Dropdown
+          Expanded(
+            flex: 2,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentDay,
+                hint: const Text("DD", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: days.map((d) {
+                  return DropdownMenuItem<String>(
+                    value: d,
+                    child: Text(d, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _dayController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Month Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentMonth,
+                hint: const Text("MM", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: months.map((m) {
+                  return DropdownMenuItem<String>(
+                    value: m['val'],
+                    child: Text(m['name']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _monthController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text("/", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          // Year Dropdown
+          Expanded(
+            flex: 3,
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentYearVal,
+                hint: const Text("YYYY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                isExpanded: true,
+                items: years.map((y) {
+                  return DropdownMenuItem<String>(
+                    value: y,
+                    child: Text(y, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    _yearController.text = val;
+                    updateState();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (context != null) ...[
+            const SizedBox(width: 8),
+            // Calendar Icon DatePicker Button
+            InkWell(
+              onTap: () async {
+                int initYear = int.tryParse(_yearController.text) ?? (currentYear - 10);
+                int initMonth = int.tryParse(_monthController.text) ?? 1;
+                int initDay = int.tryParse(_dayController.text) ?? 1;
+                if (initYear < 1950 || initYear > currentYear) initYear = currentYear - 10;
+                if (initMonth < 1 || initMonth > 12) initMonth = 1;
+                if (initDay < 1 || initDay > 31) initDay = 1;
+
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime(initYear, initMonth, initDay),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                );
+
+                if (picked != null) {
+                  _dayController.text = picked.day.toString().padLeft(2, '0');
+                  _monthController.text = picked.month.toString().padLeft(2, '0');
+                  _yearController.text = picked.year.toString();
+                  updateState();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xff1193D4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.calendar_today_rounded, color: Color(0xff1193D4), size: 18),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1670,6 +2056,246 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     );
   }
 
+  Widget _buildCustomSidebar(
+    BuildContext context,
+    SchoolModel? school,
+    int activeIndex,
+  ) {
+    final menuItems = [
+      const _SideMenuItemData(
+        title: 'Dashboard',
+        icon: CupertinoIcons.square_split_2x2_fill,
+        route: '/admin/dashboard',
+      ),
+      const _SideMenuItemData(
+        title: 'Teacher',
+        icon: CupertinoIcons.person_alt_circle_fill,
+        route: '/admin/teachers',
+      ),
+      const _SideMenuItemData(
+        title: 'Student',
+        icon: CupertinoIcons.person_3_fill,
+        route: '/admin/students',
+      ),
+      const _SideMenuItemData(
+        title: 'Events',
+        icon: Icons.calendar_month_outlined,
+        route: '/admin/events',
+      ),
+      const _SideMenuItemData(
+        title: 'Class Rooms',
+        icon: Icons.co_present,
+        route: '/admin/classrooms',
+      ),
+      const _SideMenuItemData(
+        title: 'Trash Bin',
+        icon: Icons.delete,
+        route: '/admin/trash',
+      ),
+      const _SideMenuItemData(
+        title: 'Subscription',
+        icon: Icons.workspace_premium_outlined,
+        route: '/admin/subscription',
+      ),
+      const _SideMenuItemData(
+        title: 'Settings',
+        icon: Icons.settings,
+        route: '/admin/settings',
+      ),
+    ];
+
+    return Container(
+      width: 260,
+      decoration: const BoxDecoration(color: Color(0xff1293d4)),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header card
+                      Container(
+                        margin: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Image.asset(
+                                  ImageConstant.logoWithText,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              school?.schoolName ?? "Scholo Admin",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Administrator",
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Menu Items
+                      ...List.generate(menuItems.length, (index) {
+                        final item = menuItems[index];
+                        final isSelected = activeIndex == index;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 3,
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                context.go(item.route);
+                              },
+                              hoverColor: Colors.white.withValues(alpha: 0.15),
+                              child: Container(
+                                height: 48,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      item.icon,
+                                      size: 22,
+                                      color: isSelected
+                                          ? const Color(0xff1293d4)
+                                          : Colors.white.withValues(alpha: 0.85),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Text(
+                                        item.title,
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? const Color(0xff1293d4)
+                                              : Colors.white.withValues(alpha: 0.85),
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      const Spacer(),
+                      const SizedBox(height: 12),
+                      // Footer Logout Button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
+                            ),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => _logout(context),
+                              hoverColor: Colors.white.withValues(alpha: 0.1),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: 12,
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.logout, color: Colors.white, size: 20),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      "Logout",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(classesStreamProvider);
@@ -1687,183 +2313,19 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       activeIndex = 4;
     } else if (location.startsWith('/admin/trash')) {
       activeIndex = 5;
-    } else if (location.startsWith('/admin/settings')) {
+    } else if (location.startsWith('/admin/subscription')) {
       activeIndex = 6;
+    } else if (location.startsWith('/admin/settings')) {
+      activeIndex = 7;
     } else if (location.startsWith('/admin/notifications')) {
       activeIndex = -1;
-    }
-
-    if (activeIndex != -1 && _sideMenuController.currentPage != activeIndex) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _sideMenuController.changePage(activeIndex);
-      });
     }
 
     return Scaffold(
       body: Row(
         children: [
           // 🔹 Sidebar
-          Container(
-            decoration: const BoxDecoration(color: Color(0xff1293d4)),
-            child: SideMenu(
-              controller: _sideMenuController,
-              style: SideMenuStyle(
-                displayMode: SideMenuDisplayMode.auto,
-                openSideMenuWidth: 260,
-                selectedColor: Colors.white,
-                selectedIconColor: const Color(0xff1293d4),
-                selectedTitleTextStyle: const TextStyle(
-                  color: Color(0xff1293d4),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-                unselectedIconColor: Colors.white.withValues(alpha: 0.85),
-                unselectedTitleTextStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-                backgroundColor: const Color(0xff1293d4),
-                iconSize: 22,
-                itemHeight: 52,
-                itemBorderRadius: BorderRadius.circular(12),
-                itemOuterPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                hoverColor: Colors.white.withValues(alpha: 0.15),
-              ),
-              title: Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Image.asset(
-                          ImageConstant.logoWithText,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      school?.schoolName ?? "Scholo Admin",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Administrator",
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              items: [
-                SideMenuItem(
-                  title: 'Dashboard',
-                  icon: const Icon(CupertinoIcons.square_split_2x2_fill),
-                  onTap: (index, _) => context.go('/admin/dashboard'),
-                ),
-                SideMenuItem(
-                  title: 'Teacher',
-                  icon: const Icon(CupertinoIcons.person_alt_circle_fill),
-                  onTap: (index, _) => context.go('/admin/teachers'),
-                ),
-                SideMenuItem(
-                  title: 'Student',
-                  icon: const Icon(CupertinoIcons.person_3_fill),
-                  onTap: (index, _) => context.go('/admin/students'),
-                ),
-                SideMenuItem(
-                  title: 'Events',
-                  icon: const Icon(Icons.calendar_month_outlined),
-                  onTap: (index, _) => context.go('/admin/events'),
-                ),
-                SideMenuItem(
-                  title: 'Class Rooms',
-                  icon: const Icon(Icons.co_present),
-                  onTap: (index, _) => context.go('/admin/classrooms'),
-                ),
-                SideMenuItem(
-                  title: 'Trash Bin',
-                  icon: const Icon(Icons.delete),
-                  onTap: (index, _) => context.go('/admin/trash'),
-                ),
-                SideMenuItem(
-                  title: 'Settings',
-                  icon: const Icon(Icons.settings),
-                  onTap: (index, _) => context.go('/admin/settings'),
-                ),
-              ],
-              footer: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _logout(context),
-                      hoverColor: Colors.white.withValues(alpha: 0.1),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.logout, color: Colors.white, size: 20),
-                            SizedBox(width: 10),
-                            Text(
-                              "Logout",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildCustomSidebar(context, school, activeIndex),
 
           // 🔹 Main Area (Top Bar + Pages)
           Expanded(
@@ -1888,87 +2350,95 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
 
-                      // 🔍 Search Field (Same Logic)
-                      SizedBox(
-                        height: 45,
-                        width: 520,
-                        child: FutureBuilder<List<Map<String, String>>>(
-                          future: _searchDataFuture,
-                          builder: (context, snapshot) {
-                            final items = snapshot.data ?? [];
-                            final isWaiting = snapshot.connectionState == ConnectionState.waiting;
-                            final hasError = snapshot.hasError;
+                      // 🔍 Search Field (Responsive for desktop & laptop)
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: SizedBox(
+                              height: 45,
+                              child: FutureBuilder<List<Map<String, String>>>(
+                                future: _searchDataFuture,
+                                builder: (context, snapshot) {
+                                  final items = snapshot.data ?? [];
+                                  final isWaiting = snapshot.connectionState == ConnectionState.waiting;
+                                  final hasError = snapshot.hasError;
 
-                            if (hasError) {
-                              debugPrint('Error loading search data: ${snapshot.error}');
-                            }
+                                  if (hasError) {
+                                    debugPrint('Error loading search data: ${snapshot.error}');
+                                  }
 
-                            return SearchField(
-                              suggestions: items.map((e) {
-                                return SearchFieldListItem<String>(
-                                  e['name']!,
-                                  item: e['name'],
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
+                                  return SearchField(
+                                    suggestions: items.map((e) {
+                                      return SearchFieldListItem<String>(
                                         e['name']!,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      Text(
-                                        e['role'] == 'Teacher'
-                                            ? 'Teacher'
-                                            : 'Student (${e['classNo'] ?? ''}${e['division'] ?? ''})',
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 12,
+                                        item: e['name'],
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              e['name']!,
+                                              style: const TextStyle(fontSize: 14),
+                                            ),
+                                            Text(
+                                              e['role'] == 'Teacher'
+                                                  ? 'Teacher'
+                                                  : 'Student (${e['classNo'] ?? ''}${e['division'] ?? ''})',
+                                              style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                         ),
+                                      );
+                                    }).toList(),
+
+                                    suggestionState: Suggestion.expand,
+
+                                    hint: 'Search students, teachers, or classes...',
+
+                                    // ✅ UI Updated Here Only
+                                    searchInputDecoration: SearchInputDecoration(
+                                      filled: true,
+                                      fillColor: Colors.grey.shade100,
+                                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                                      suffixIcon: isWaiting
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: Padding(
+                                                padding: EdgeInsets.all(12.0),
+                                                child: CircularProgressIndicator(strokeWidth: 2),
+                                              ),
+                                            )
+                                          : (hasError
+                                              ? const Icon(Icons.error_outline, color: Colors.red)
+                                              : null),
+                                      contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(30), // pill shape
+                                        borderSide: BorderSide.none,
                                       ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                                    ),
 
-                              suggestionState: Suggestion.expand,
-
-                              hint: 'Search students, teachers, or classes...',
-
-                              // ✅ UI Updated Here Only
-                              searchInputDecoration: SearchInputDecoration(
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                                suffixIcon: isWaiting
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: Padding(
-                                          padding: EdgeInsets.all(12.0),
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        ),
-                                      )
-                                    : (hasError
-                                        ? const Icon(Icons.error_outline, color: Colors.red)
-                                        : null),
-                                contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30), // pill shape
-                                  borderSide: BorderSide.none,
-                                ),
+                                    onSuggestionTap: (item) {
+                                      _handleSearchSelection(item.searchKey, context);
+                                    },
+                                    onSubmit: (value) {
+                                      _handleSearchSelection(value, context);
+                                    },
+                                  );
+                                },
                               ),
-
-                              onSuggestionTap: (item) {
-                                _handleSearchSelection(item.searchKey, context);
-                              },
-                              onSubmit: (value) {
-                                _handleSearchSelection(value, context);
-                              },
-                            );
-                          },
+                            ),
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 16),
 
                       // ✅ Right Side Profile Section
                       Row(
@@ -2633,3 +3103,16 @@ class _ArrowPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+class _SideMenuItemData {
+  final String title;
+  final IconData icon;
+  final String route;
+
+  const _SideMenuItemData({
+    required this.title,
+    required this.icon,
+    required this.route,
+  });
+}
+

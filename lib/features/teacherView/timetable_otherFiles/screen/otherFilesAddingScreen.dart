@@ -5,6 +5,8 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../controller/otherFiles_adding_controller.dart';
+import '../../../../auth/controller/login_controller.dart';
+import '../../../../core/config/session_manager.dart';
 
 
 class OtherFilesAddingScreen extends ConsumerStatefulWidget {
@@ -48,6 +50,7 @@ class _OtherFileAddingScreenState
           }
         },
         error: (e, _) {
+          print(e.toString());
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
           );
@@ -109,7 +112,7 @@ class _OtherFileAddingScreenState
                 const SizedBox(height: 25),
 
                 const Text(
-                  "UPLOAD File (PDF)",
+                  "UPLOAD FILE (PDF, Image, Document)",
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
@@ -147,14 +150,14 @@ class _OtherFileAddingScreenState
                       child: Column(
                         children: [
                           const Icon(
-                            Icons.picture_as_pdf,
+                            Icons.upload_file_rounded,
                             size: 45,
                             color: Color(0xff4C6FFF),
                           ),
                           const SizedBox(height: 12),
                           Text(
                             selectedFileBytes == null
-                                ? "Click to upload your PDF here"
+                                ? "Click to upload your file here (PDF, Image, Doc)"
                                 : '$selectedFileName',
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
@@ -206,6 +209,16 @@ class _OtherFileAddingScreenState
                                 return;
                               }
 
+                              final school = ref.read(schoolStreamProvider).asData?.value;
+                              final principalName = school?.principalName.trim() ?? '';
+                              final schoolName = school?.schoolName.trim() ?? '';
+                              final adminUploaderName = principalName.isNotEmpty
+                                  ? "$principalName (Principal)"
+                                  : (schoolName.isNotEmpty ? "$schoolName (Principal)" : "Principal");
+                              final adminUploaderId = (school?.schoolId.isNotEmpty == true)
+                                  ? school!.schoolId
+                                  : (SessionManager.schoolId.isNotEmpty ? SessionManager.schoolId : widget.teacherId);
+
                               ref
                                   .read(
                                     otherFilesAddingControllerProvider.notifier,
@@ -218,6 +231,9 @@ class _OtherFileAddingScreenState
                                     fileName: selectedFileName!,
                                     classNo: widget.classNo,
                                     division: widget.division,
+                                    uploaderName: adminUploaderName,
+                                    uploaderId: adminUploaderId,
+                                    isCameraInstant: false,
                                   );
                             },
                             icon: const Icon(Icons.upload_file, size: 18),

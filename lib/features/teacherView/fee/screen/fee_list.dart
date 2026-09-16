@@ -272,6 +272,7 @@ class _FeeListScreenState extends ConsumerState<FeeListScreen> {
     final pendingAsync = ref.watch(pendingFeesProvider(widget.teacherId));
     final completedAsync = ref.watch(completedFeesProvider(widget.teacherId));
     final totalStudentsAsync = ref.watch(totalStudentsProvider(widget.teacherId));
+    // ignore: unused_local_variable
     final deleteFee = ref.read(deleteFeeProvider);
 
     return Scaffold(

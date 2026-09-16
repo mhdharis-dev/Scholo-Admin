@@ -92,6 +92,7 @@ class MonthWiseReportRepository {
 
 
   // 🔒 Web-safe deep conversion
+  // ignore: unused_element
   Map<String, dynamic> _deepConvertMap(Map<String, dynamic> input) {
     final Map<String, dynamic> result = {};
     input.forEach((k, v) {

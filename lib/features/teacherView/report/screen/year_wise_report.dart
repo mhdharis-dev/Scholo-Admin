@@ -185,6 +185,7 @@ class _YearWiseReportScreenState
   // Shared PDF helpers
   // --------------------------------------------------
 
+  // ignore: unused_element
   PdfColor _statusToColor(String status) {
     final s = status.toLowerCase();
 
@@ -203,11 +204,13 @@ class _YearWiseReportScreenState
     return PdfColors.white;
   }
 
+  // ignore: unused_element
   pw.Widget _summaryCell(String text) => pw.Padding(
     padding: const pw.EdgeInsets.all(6),
     child: pw.Text(text, style: const pw.TextStyle(fontSize: 10)),
   );
 
+  // ignore: unused_element
   pw.Widget _legendCircle(PdfColor color, String label) => pw.Row(
     children: [
       pw.Container(
@@ -223,6 +226,7 @@ class _YearWiseReportScreenState
     ],
   );
 
+  // ignore: unused_element
   pw.Widget _headerCell(String text) => pw.Padding(
     padding: const pw.EdgeInsets.all(4),
     child: pw.Center(
@@ -236,6 +240,7 @@ class _YearWiseReportScreenState
     ),
   );
 
+  // ignore: unused_element
   pw.Widget _dataCell(String text) => pw.Padding(
     padding: const pw.EdgeInsets.all(3),
     child: pw.Center(
@@ -246,6 +251,7 @@ class _YearWiseReportScreenState
     ),
   );
 
+  // ignore: unused_element
   pw.Widget _circleCell(PdfColor color) => pw.Center(
     child: pw.Container(
       width: 8,

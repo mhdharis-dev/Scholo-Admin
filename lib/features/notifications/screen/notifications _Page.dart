@@ -125,7 +125,7 @@ class _PdfEmbeddedViewerState extends State<PdfEmbeddedViewer> {
       // Convert Cloudinary .pdf URL to .jpg image preview
       String imageUrl = widget.url;
       if (imageUrl.toLowerCase().endsWith('.pdf')) {
-        imageUrl = imageUrl.substring(0, imageUrl.length - 4) + '.jpg';
+        imageUrl = '${imageUrl.substring(0, imageUrl.length - 4)}.jpg';
       }
 
       return Center(
@@ -485,6 +485,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   }
 
   // ── PRESERVED ORIGINAL NOTIFICATION FEED & LOGIC ───────────────────
+  // ignore: unused_element
   Widget _buildOriginalNotificationsContent() {
     final notificationsAsync = ref.watch(notificationsStreamProvider);
     final teachersAsync = ref.watch(teacherControllerProvider);
@@ -1776,7 +1777,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                     Padding(
                       padding: const EdgeInsets.only(left: 12, bottom: 8),
                       child: DropdownButtonFormField<String>(
-                        value: _selectedClass.isNotEmpty ? _selectedClass : null,
+                        initialValue: _selectedClass.isNotEmpty ? _selectedClass : null,
                         decoration: const InputDecoration(labelText: "Select Class", isDense: true),
                         items: classOptions.map((c) => DropdownMenuItem(value: c, child: Text("Class $c"))).toList(),
                         onChanged: (val) {

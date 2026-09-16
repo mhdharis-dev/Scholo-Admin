@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
 import 'package:scholo_admin/features/teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:searchfield/searchfield.dart';
 import '../../core/config/session_manager.dart';
@@ -1536,6 +1535,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
   String? _classNo;
   String? _division;
 
+  // ignore: unused_field
   List<Map<String, dynamic>> _teacherList = [];
   StudentsModel? editingStudent;
 

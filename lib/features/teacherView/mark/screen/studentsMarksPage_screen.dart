@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -948,6 +947,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // ignore: unused_local_variable
     final storageKey = "${widget.teacher.id}_${widget.examTitle}";
 
     return Center(

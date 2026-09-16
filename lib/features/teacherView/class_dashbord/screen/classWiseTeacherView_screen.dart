@@ -2149,6 +2149,7 @@ class _ClassWiseTeacherViewScreenState
   }
 
   /// Add/Edit Modal Sheet
+  // ignore: unused_element
   void _showAddEditSheet([TeacherModel? teacher]) {
     final repo = ref.read(teacherControllerProvider.notifier);
 

@@ -287,6 +287,205 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: _buildNotificationServerIssueScreen(),
+    );
+  }
+
+  // ── 🚨 EXCELLENT SERVER ISSUE SCREEN (SCHOLO PROJECT UI - NO REASON TEXT, NO BUTTONS) ──
+  Widget _buildNotificationServerIssueScreen() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          width: 540,
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1193D4).withValues(alpha: 0.08),
+                blurRadius: 40,
+                spreadRadius: 2,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top Status Badge (Scholo Branded Maintenance Pill)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFFCA5A5).withValues(alpha: 0.6)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      "SERVER MAINTENANCE",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF991B1B),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 36),
+
+              // Visual Illustration Container (Scholo Transparent Logo + Ambient Glow + Disconnect Badge)
+              SizedBox(
+                width: 170,
+                height: 170,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Outer Ambient Scholo Cyan/Blue Aura Ring
+                    Container(
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF1193D4).withValues(alpha: 0.08),
+                      ),
+                    ),
+                    // Inner Soft Glow Ring
+                    Container(
+                      width: 130,
+                      height: 130,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF1193D4).withValues(alpha: 0.12),
+                        border: Border.all(
+                          color: const Color(0xFF1193D4).withValues(alpha: 0.25),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    // Main Logo Container Card
+                    Container(
+                      width: 100,
+                      height: 100,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1193D4).withValues(alpha: 0.18),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Image.asset(
+                          'assets/imagesJpg/Scholo_LogoTransperent.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (ctx, err, stack) => const Icon(
+                            Icons.school_rounded,
+                            size: 48,
+                            color: Color(0xFF1193D4),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Overlaid Disconnect Badge Icon on Bottom-Right
+                    Positioned(
+                      right: 18,
+                      bottom: 18,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.cloud_off_rounded,
+                          size: 20,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 36),
+
+              // Headline (Exact specified text, no reason, no buttons)
+              const Text(
+                "Failed to connect to the notification dispatch endpoint.",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                  height: 1.35,
+                  letterSpacing: -0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 24),
+
+              // Decorative Pulse Dots (Scholo Branded)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  3,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: index == 1 ? 26 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: index == 1
+                          ? const Color(0xFF1193D4)
+                          : const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── PRESERVED ORIGINAL NOTIFICATION FEED & LOGIC ───────────────────
+  Widget _buildOriginalNotificationsContent() {
     final notificationsAsync = ref.watch(notificationsStreamProvider);
     final teachersAsync = ref.watch(teacherControllerProvider);
     final studentsAsync = ref.watch(studentControllerProvider);
@@ -297,50 +496,47 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     final students = studentsAsync.value ?? [];
     final classes = classesAsync.value ?? [];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: notificationsAsync.when(
-        data: (notifications) {
-          return isWide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return notificationsAsync.when(
+      data: (notifications) {
+        return isWide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 6,
+                    child: _buildNotificationFeed(notifications, teachers, students),
+                  ),
+                  const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    flex: 4,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: _buildBroadcastCreationPanel(teachers, students, classes),
+                    ),
+                  ),
+                ],
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
                   children: [
-                    Expanded(
-                      flex: 6,
+                    _buildBroadcastCreationPanel(teachers, students, classes),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 650,
                       child: _buildNotificationFeed(notifications, teachers, students),
                     ),
-                    const VerticalDivider(width: 1, color: Color(0xFFE2E8F0)),
-                    Expanded(
-                      flex: 4,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: _buildBroadcastCreationPanel(teachers, students, classes),
-                      ),
-                    ),
                   ],
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildBroadcastCreationPanel(teachers, students, classes),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        height: 650,
-                        child: _buildNotificationFeed(notifications, teachers, students),
-                      ),
-                    ],
-                  ),
-                );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF1193D4)),
-        ),
-        error: (err, stack) => Center(
-          child: SelectableText(
-            'Error loading notifications: $err',
-            style: const TextStyle(color: Colors.red),
-          ),
+                ),
+              );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF1193D4)),
+      ),
+      error: (err, stack) => Center(
+        child: SelectableText(
+          'Error loading notifications: $err',
+          style: const TextStyle(color: Colors.red),
         ),
       ),
     );

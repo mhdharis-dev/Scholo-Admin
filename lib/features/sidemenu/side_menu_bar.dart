@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,7 @@ import '../../models/school_model.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 import '../../auth/controller/login_controller.dart';
 import 'package:alert_info/alert_info.dart';
+import 'package:scholo_admin/features/settings/repository/admin_device_repository.dart';
 
 class AdminPanel extends ConsumerStatefulWidget {
   final Widget child;
@@ -39,6 +41,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   final GlobalKey _profileKey = GlobalKey();
   OverlayEntry? _overlayEntry;
+  StreamSubscription<bool>? _sessionSubscription;
 
   @override
   void initState() {
@@ -50,6 +53,63 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
     _nameController.addListener(_updateGeneratedCredentials);
     _admissionController.addListener(_updateGeneratedCredentials);
     _teacherIdController.addListener(_updateGeneratedCredentials);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initDeviceAndSessionMonitoring();
+    });
+  }
+
+  Future<void> _initDeviceAndSessionMonitoring() async {
+    final schoolId = SessionManager.schoolId;
+    if (schoolId.isEmpty) return;
+
+    final repo = ref.read(adminDeviceRepositoryProvider);
+    final deviceId = await AdminDeviceRepository.getOrCreateDeviceId();
+
+    // Register or update current device & FCM token
+    await repo.registerOrUpdateCurrentDevice(schoolId: schoolId);
+
+    // Monitor session status in real-time (Instagram-style remote logout detection)
+    _sessionSubscription?.cancel();
+    _sessionSubscription = repo.listenToCurrentDeviceSession(schoolId, deviceId).listen((isActive) async {
+      if (!isActive) {
+        _sessionSubscription?.cancel();
+        await repo.logoutCurrentDevice(schoolId);
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                  SizedBox(width: 8),
+                  Text('Logged Out'),
+                ],
+              ),
+              content: const Text(
+                'Another user removed this account from this device.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff1293d4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.go('/login');
+                  },
+                  child: const Text('Continue', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    });
   }
 
   void _updateGeneratedCredentials() {
@@ -78,6 +138,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   @override
   void dispose() {
+    _sessionSubscription?.cancel();
     _hideProfileTooltip();
     super.dispose();
   }
@@ -212,6 +273,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text("Confirm Logout"),
           content: const Text("Are you sure you want to log out?"),
           actions: [
@@ -220,11 +282,12 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             ElevatedButton(
-              child: const Text("Logout"),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff1293d4)),
+              child: const Text("Logout", style: TextStyle(color: Colors.white)),
               onPressed: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.clear();
-                SessionManager.schoolId = null;
+                _sessionSubscription?.cancel();
+                final schoolId = SessionManager.schoolId;
+                await ref.read(adminDeviceRepositoryProvider).logoutCurrentDevice(schoolId);
                 if (context.mounted) {
                   Navigator.of(context).pop();
                   context.go('/login');

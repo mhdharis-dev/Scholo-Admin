@@ -234,9 +234,8 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff1293d4)),
                 child: Text(_t('logout_btn'), style: const TextStyle(color: Colors.white)),
                 onPressed: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.clear();
-                  SessionManager.schoolId = null;
+                  final schoolId = SessionManager.schoolId;
+                  await ref.read(adminDeviceRepositoryProvider).logoutCurrentDevice(schoolId);
                   if (context.mounted) {
                     Navigator.of(context).pop();
                     context.go('/login');
@@ -988,53 +987,273 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
 
   void _showAboutDialog() {
     final isAr = _selectedLanguage == 'ar';
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return Directionality(
           textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
-          child: Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Container(
-              width: 480,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildDialogHeader(title: _t('tab_about'), context: context),
-                  const SizedBox(height: 24),
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: const BoxDecoration(
-                      color: Color(0xff1293d4),
-                      shape: BoxShape.circle,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 720,
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header Banner with Blue Gradient
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(28),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF1D9BF0), Color(0xFF1193D4)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  "ENTERPRISE v1.0.2",
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Logo circle
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Image.asset(
+                              'assets/imagesJpg/Scholo_LogoTransperent.png',
+                              height: 64,
+                              width: 64,
+                              fit: BoxFit.contain,
+                              errorBuilder: (ctx, err, stack) => const Icon(Icons.school_rounded, size: 50, color: Color(0xFF1193D4)),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "SCHOLO",
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 4,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Next-Gen Cloud School Management & Administration",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.school_outlined, size: 36, color: Colors.white),
+
+                    // Main Details Section
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Features Grid
+                          const Text(
+                            "PLATFORM HIGHLIGHTS",
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 1.1),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              _buildAboutFeatureChip(Icons.how_to_reg_rounded, "Real-Time Attendance"),
+                              _buildAboutFeatureChip(Icons.notifications_active_rounded, "FCM Push Notifications"),
+                              _buildAboutFeatureChip(Icons.receipt_long_rounded, "Subscription & Invoice PDF"),
+                              _buildAboutFeatureChip(Icons.security_rounded, "Multi-Device Remote Security"),
+                            ],
+                          ),
+
+                          const SizedBox(height: 24),
+                          const Divider(height: 1),
+                          const SizedBox(height: 20),
+
+                          // Information Cards
+                          const Text(
+                            "SYSTEM SPECIFICATIONS",
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B), letterSpacing: 1.1),
+                          ),
+                          const SizedBox(height: 12),
+
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              children: [
+                                _buildAboutDetailRow(Icons.memory_rounded, "App Version", "1.0.2 (Build 4120)"),
+                                const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                                _buildAboutDetailRow(
+                                  Icons.verified_user_rounded,
+                                  "System Status",
+                                  "Operational • All Systems Online",
+                                  valueColor: const Color(0xFF10B981),
+                                ),
+                                const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                                _buildAboutDetailRow(Icons.business_rounded, "Developer & License", "ScholoMates Inc"),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Quick Action Buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _showTermsDialog();
+                                  },
+                                  icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF475569)),
+                                  label: const Text("Terms", style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    _showPrivacyDialog();
+                                  },
+                                  icon: const Icon(Icons.privacy_tip_outlined, size: 16, color: Color(0xFF475569)),
+                                  label: const Text("Privacy", style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+                          Center(
+                            child: Text(
+                              "© 2026 Scholo Inc. All Rights Reserved.",
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Scholo Management System",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildReadOnlyField(_t('app_version'), "1.0.2 (Build 4120)"),
-                  _buildReadOnlyField(_t('developer'), "Scholo Software Inc."),
-                  _buildReadOnlyField(_t('system_status'), _t('status_online')),
-                  const SizedBox(height: 16),
-                  Text(
-                    "© 2026 Scholo Inc. All rights reserved.",
-                    style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAboutFeatureChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1193D4).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF1193D4).withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF1193D4)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutDetailRow(IconData icon, String label, String value, {Color? valueColor}) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF64748B)),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: valueColor ?? const Color(0xFF0F172A),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1645,47 +1864,87 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                                       ),
                                     ],
                                   ),
-                                  if (activeDevices.length > 1)
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.redAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            title: const Text('Logout All Other Devices?'),
-                                            content: const Text('This will revoke access for all other logged-in sessions except this current device.'),
-                                            actions: [
-                                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                                                onPressed: () => Navigator.pop(ctx, true),
-                                                child: const Text('Logout All Others'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-
-                                        if (confirm == true) {
-                                          await ref.read(adminDeviceRepositoryProvider).logoutAllOtherDevices(schoolId, currentDeviceId);
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1193D4),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        icon: const Icon(Icons.notifications_active_rounded, size: 14),
+                                        label: const Text('Allow Permission & Save FCM Token', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                        onPressed: () async {
+                                          final token = await ref
+                                              .read(adminDeviceRepositoryProvider)
+                                              .requestAndSaveFcmToken(schoolId: schoolId, deviceId: currentDeviceId);
                                           if (context.mounted) {
-                                            AlertInfo.show(
-                                              context: context,
-                                              text: 'All other devices logged out successfully!',
-                                              typeInfo: TypeInfo.success,
-                                              backgroundColor: Colors.green,
-                                              textColor: Colors.white,
-                                            );
+                                            if (token.isNotEmpty) {
+                                              AlertInfo.show(
+                                                context: context,
+                                                text: 'FCM Token saved successfully!',
+                                                typeInfo: TypeInfo.success,
+                                                backgroundColor: Colors.green,
+                                                textColor: Colors.white,
+                                              );
+                                            } else {
+                                              AlertInfo.show(
+                                                context: context,
+                                                text: 'Could not obtain FCM token or permission denied.',
+                                                typeInfo: TypeInfo.error,
+                                                backgroundColor: Colors.orange,
+                                                textColor: Colors.white,
+                                              );
+                                            }
                                           }
-                                        }
-                                      },
-                                      icon: const Icon(Icons.no_cell_rounded, size: 14),
-                                      label: const Text('Logout All Other Devices', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                    ),
+                                        },
+                                      ),
+                                      if (activeDevices.length > 1)
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.redAccent,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          onPressed: () async {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text('Logout All Other Devices?'),
+                                                content: const Text('This will revoke access for all other logged-in sessions except this current device.'),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                                    onPressed: () => Navigator.pop(ctx, true),
+                                                    child: const Text('Logout All Others'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (confirm == true) {
+                                              await ref.read(adminDeviceRepositoryProvider).logoutAllOtherDevices(schoolId, currentDeviceId);
+                                              if (context.mounted) {
+                                                AlertInfo.show(
+                                                  context: context,
+                                                  text: 'All other devices logged out successfully!',
+                                                  typeInfo: TypeInfo.success,
+                                                  backgroundColor: Colors.green,
+                                                  textColor: Colors.white,
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(Icons.no_cell_rounded, size: 14),
+                                          label: const Text('Logout All Other Devices', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ),
+                                    ],
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 14),

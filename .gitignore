@@ -39,6 +39,9 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Node dependencies
+**/node_modules/
+
 # Firebase hosting cache
 .firebase/
 

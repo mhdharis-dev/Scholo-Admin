@@ -606,13 +606,6 @@ class _TimeTableLayoutMakerPageState
       daySlots[index][key] = newValue;
 
       for (int i = index; i < daySlots.length; i++) {
-        TimeOfDay start = _parseTime(daySlots[i]['start']);
-        TimeOfDay end = _parseTime(daySlots[i]['end']);
-
-        int startMinutes = start.hour * 60 + start.minute;
-        int endMinutes = end.hour * 60 + end.minute;
-        int duration = endMinutes - startMinutes;
-
         if (i + 1 < daySlots.length) {
           String currentEnd = daySlots[i]['end'];
           daySlots[i + 1]['start'] = currentEnd;

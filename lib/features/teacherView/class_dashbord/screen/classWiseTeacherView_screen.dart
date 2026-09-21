@@ -13,6 +13,7 @@ import '../../../../models/teacher_model.dart';
 import '../../../../models/class_model.dart';
 import '../../../../models/students_model.dart';
 import '../../../teachers/controller/teacher_controller.dart';
+import '../../../teachers/helper/teacher_duplicate_helper.dart';
 import '../controller/class_wise_teacher_view_controller.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 
@@ -2414,19 +2415,40 @@ class _ClassWiseTeacherViewScreenState
                         return;
                       }
 
-                      setState(() => _isUploading = true);
-                      try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await repo.uploadImage(
-                            _selectedFile!,
-                          );
-                        }
-
                         final dob = DateTime(
                           int.parse(_yearController.text),
                           int.parse(_monthController.text),
                           int.parse(_dayController.text),
                         );
+
+                        // 🔥 Duplicate Teacher Prevention Check
+                        final existingTeachers = ref.read(teacherControllerProvider).value ?? <TeacherModel>[];
+                        final duplicateTeacher = TeacherDuplicateChecker.findDuplicate(
+                          existingTeachers: existingTeachers,
+                          newEmployeeId: _teacherIdController.text,
+                          newName: _nameController.text,
+                          newMobile: _mobileController.text,
+                          newDob: dob,
+                          currentEditingTeacherId: editingTeacher?.id,
+                        );
+
+                        if (duplicateTeacher != null) {
+                          if (context.mounted) {
+                            await TeacherDuplicateChecker.showDuplicateAlertDialog(
+                              context: context,
+                              existingTeacher: duplicateTeacher,
+                            );
+                          }
+                          return;
+                        }
+
+                        setState(() => _isUploading = true);
+                        try {
+                          if (_selectedFile != null) {
+                            _uploadedImageUrl = await repo.uploadImage(
+                              _selectedFile!,
+                            );
+                          }
 
                         final teacher = TeacherModel(
                           id: editingTeacher?.id ?? '',

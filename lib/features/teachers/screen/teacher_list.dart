@@ -13,6 +13,7 @@ import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_cont
 import '../controller/teacher_controller.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 import 'package:alert_info/alert_info.dart';
+import '../helper/teacher_duplicate_helper.dart';
 
 class TeacherListScreen extends ConsumerStatefulWidget {
   const TeacherListScreen({super.key});
@@ -836,44 +837,31 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                                   return;
                                 }
 
-                                // Client-side Duplicate Teacher Pre-Check
-                                final existingTeachers = ref.read(teacherControllerProvider).value ?? [];
-                                final currentEmpId = _teacherIdController.text.trim().toLowerCase();
-                                final currentEmail = _emailController.text.trim().toLowerCase();
-                                final currentMobile = _mobileController.text.replaceAll(RegExp(r'\D'), '');
+                                final dob = DateTime(
+                                  int.parse(_yearController.text),
+                                  int.parse(_monthController.text),
+                                  int.parse(_dayController.text),
+                                );
 
-                                for (final t in existingTeachers) {
-                                  if (t.delete) continue;
-                                  if (editingTeacher != null && (t.id == editingTeacher!.id || (editingTeacher!.employeeId.isNotEmpty && t.employeeId.trim().toLowerCase() == editingTeacher!.employeeId.trim().toLowerCase()))) {
-                                    continue; // Skip self when updating
-                                  }
+                                // 🔥 Duplicate Teacher Prevention Check
+                                final existingTeachers = ref.read(teacherControllerProvider).value ?? <TeacherModel>[];
+                                final duplicateTeacher = TeacherDuplicateChecker.findDuplicate(
+                                  existingTeachers: existingTeachers,
+                                  newEmployeeId: _teacherIdController.text,
+                                  newName: _nameController.text,
+                                  newMobile: _mobileController.text,
+                                  newDob: dob,
+                                  currentEditingTeacherId: editingTeacher?.id,
+                                );
 
-                                  final tEmpId = t.employeeId.trim().toLowerCase();
-                                  final tId = t.id.trim().toLowerCase();
-                                  final tEmail = t.email.trim().toLowerCase();
-                                  final tMobile = t.mobileNo.replaceAll(RegExp(r'\D'), '');
-
-                                  String? duplicateError;
-                                  if (currentEmpId.isNotEmpty && (tEmpId == currentEmpId || tId == currentEmpId)) {
-                                    duplicateError = 'Teacher ID "${_teacherIdController.text.trim()}" is already assigned to ${t.teacherName}.';
-                                  } else if (currentEmail.isNotEmpty && tEmail == currentEmail) {
-                                    duplicateError = 'Email address "${_emailController.text.trim()}" is already registered to ${t.teacherName}.';
-                                  } else if (currentMobile.isNotEmpty && tMobile == currentMobile) {
-                                    duplicateError = 'Mobile number "${_mobileController.text.trim()}" is already registered to ${t.teacherName}.';
-                                  }
-
-                                  if (duplicateError != null) {
-                                    AlertInfo.show(
+                                if (duplicateTeacher != null) {
+                                  if (context.mounted) {
+                                    await TeacherDuplicateChecker.showDuplicateAlertDialog(
                                       context: context,
-                                      text: duplicateError,
-                                      typeInfo: TypeInfo.error,
-                                      iconColor: Colors.white,
-                                      backgroundColor: Colors.redAccent,
-                                      textColor: Colors.white,
-                                      position: MessagePosition.top,
+                                      existingTeacher: duplicateTeacher,
                                     );
-                                    return;
                                   }
+                                  return;
                                 }
 
                                 setSheetState(() => _isUploading = true);
@@ -884,12 +872,6 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                                       _selectedFile!,
                                     );
                                   }
-
-                                  final dob = DateTime(
-                                    int.parse(_yearController.text),
-                                    int.parse(_monthController.text),
-                                    int.parse(_dayController.text),
-                                  );
 
                                   final teacher = TeacherModel(
                                     id: editingTeacher?.id ?? '',

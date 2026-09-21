@@ -32,6 +32,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _login() async {
+    if (_formkey.currentState != null && !_formkey.currentState!.validate()) {
+      return;
+    }
+
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -390,6 +394,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       controller: controller,
       keyboardType: keyboardType,
       autofillHints: autofillHints,
+      onFieldSubmitted: (_) => _login(),
+      validator: (val) {
+        final v = val?.trim() ?? '';
+        if (v.isEmpty) return 'Email address is required';
+        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+        if (!emailRegex.hasMatch(v)) return 'Please enter a valid email address';
+        return null;
+      },
       style: const TextStyle(fontSize: 15, color: Color(0xff1E293B)),
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: const Color(0xff94A3B8), size: 20),
@@ -424,6 +436,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       obscureText: _show,
       obscuringCharacter: "•",
       autofillHints: const [AutofillHints.password],
+      onFieldSubmitted: (_) => _login(),
+      validator: (val) {
+        if (val == null || val.trim().isEmpty) return 'Password is required';
+        return null;
+      },
       style: const TextStyle(fontSize: 15, color: Color(0xff1E293B)),
       decoration: InputDecoration(
         prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xff94A3B8), size: 20),

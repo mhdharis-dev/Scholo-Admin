@@ -144,15 +144,26 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     final phone = _phoneController.text.trim();
     final phoneError = getPhoneValidationErrorMessage(phone);
     if (phoneError.isNotEmpty) {
-      AlertInfo.show(
-        context: context,
-        text: _selectedLanguage == 'ar' ? 'رقم الهاتف غير صالح' : phoneError,
-        typeInfo: TypeInfo.error,
-        backgroundColor: Colors.redAccent,
-        iconColor: Colors.white,
-        textColor: Colors.white,
-        position: MessagePosition.top,
-      );
+      if (mounted) {
+        final errText = _selectedLanguage == 'ar' ? 'رقم الهاتف غير صالح' : phoneError;
+        AlertInfo.show(
+          context: context,
+          text: errText,
+          typeInfo: TypeInfo.error,
+          backgroundColor: Colors.redAccent,
+          iconColor: Colors.white,
+          textColor: Colors.white,
+          position: MessagePosition.top,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
       return;
     }
 
@@ -178,14 +189,47 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       await ref.read(updateSchoolProvider)(updatedSchool);
 
       if (mounted) {
+        final successText = _t('save_success');
         AlertInfo.show(
           context: context,
-          text: _t('save_success'),
+          text: successText,
           typeInfo: TypeInfo.success,
           backgroundColor: const Color(0xFF27AE60),
           iconColor: Colors.white,
           textColor: Colors.white,
           position: MessagePosition.top,
+        );
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        successText,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        "Your school details (email, phone, address, etc.) have been updated successfully.",
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF27AE60),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 4),
+          ),
         );
         setState(() {
           _logoFile = null;
@@ -196,14 +240,23 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errStr = '${_t('save_error')}: $e';
         AlertInfo.show(
           context: context,
-          text: '${_t('save_error')}: $e',
+          text: errStr,
           typeInfo: TypeInfo.error,
           backgroundColor: Colors.redAccent,
           iconColor: Colors.white,
           textColor: Colors.white,
           position: MessagePosition.top,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errStr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         );
       }
     } finally {

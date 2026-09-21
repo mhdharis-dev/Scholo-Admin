@@ -14,6 +14,7 @@ import '../controller/teacher_controller.dart';
 import 'package:scholo_admin/core/widgets/phone_field.dart';
 import 'package:alert_info/alert_info.dart';
 import '../helper/teacher_duplicate_helper.dart';
+import 'package:scholo_admin/core/widgets/error_state_widget.dart';
 
 class TeacherListScreen extends ConsumerStatefulWidget {
   const TeacherListScreen({super.key});
@@ -1995,11 +1996,10 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(
-                  child: Text(
-                    'Error loading data: $e',
-                    style: const TextStyle(color: Colors.redAccent),
-                  ),
+                error: (e, st) => ErrorStateWidget(
+                  error: e,
+                  stackTrace: st,
+                  onRetry: () => ref.invalidate(teacherControllerProvider),
                 ),
               ),
             ),

@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:scholo_admin/core/constant/firebase_constant.dart';
 import 'package:scholo_admin/core/config/session_manager.dart';
+import 'package:scholo_admin/features/teachers/controller/teacher_controller.dart';
 import '../../teacherView/class_dashbord/controller/class_wise_teacher_view_controller.dart';
 import 'package:scholo_admin/models/students_model.dart';
 import 'package:scholo_admin/models/class_model.dart';
@@ -24,6 +25,9 @@ import '../../../core/constant/image_constant.dart';
 import '../../../models/event_model.dart';
 import '../../../models/fees_model.dart';
 import '../../../models/teacher_model.dart';
+import 'package:scholo_admin/features/students/helper/student_duplicate_helper.dart';
+import 'package:scholo_admin/features/students/controller/student_controller.dart';
+import 'package:scholo_admin/features/teachers/helper/teacher_duplicate_helper.dart';
 import 'package:alert_info/alert_info.dart';
 
 // -----------------------------------------------------------------------------
@@ -1786,7 +1790,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           final trimmed = text.trim();
           final lowerLabel = label.toLowerCase();
 
-          if (lowerLabel.contains("employee id") || lowerLabel.contains("teacher id")) {
+          if (lowerLabel.contains("admission")) {
+            final admNo = int.tryParse(trimmed);
+            if (trimmed.isEmpty) {
+              errorText = "Admission number cannot be empty";
+              isValid = false;
+            } else if (admNo == null || admNo <= 0) {
+              errorText = "Invalid admission number";
+              isValid = false;
+            } else {
+              final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+              final isDuplicate = existingStudents.any((s) => !s.delete && s.admissionNo == admNo);
+              if (isDuplicate) {
+                errorText = "Admission No already exists!";
+                isValid = false;
+              }
+            }
+          } else if (lowerLabel.contains("roll")) {
+            final rollNo = int.tryParse(trimmed);
+            if (trimmed.isEmpty) {
+              errorText = "Roll number cannot be empty";
+              isValid = false;
+            } else if (rollNo == null || rollNo <= 0) {
+              errorText = "Invalid roll number";
+              isValid = false;
+            }
+          } else if (lowerLabel.contains("employee id") || lowerLabel.contains("teacher id")) {
             if (trimmed.isEmpty) {
               errorText = "$label cannot be empty";
               isValid = false;
@@ -1794,8 +1823,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               final existingTeachers = ref.read(teacherControllerProvider).value ?? <TeacherModel>[];
               final isDuplicate = existingTeachers.any((t) =>
                   !t.delete &&
-                  t.id.trim().toLowerCase() == trimmed.toLowerCase() &&
-                  (editingTeacher == null || editingTeacher!.id != t.id));
+                  t.id.trim().toLowerCase() == trimmed.toLowerCase());
               if (isDuplicate) {
                 errorText = "Teacher ID already exists!";
                 isValid = false;
@@ -1819,10 +1847,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             }
           } else if (lowerLabel.contains("name")) {
             if (trimmed.isEmpty) {
-              errorText = "Name cannot be empty";
+              errorText = "$label cannot be empty";
               isValid = false;
             } else if (trimmed.length < 2) {
-              errorText = "Name must be at least 2 characters";
+              errorText = "$label must be at least 2 characters";
               isValid = false;
             }
           } else {
@@ -2634,8 +2662,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               );
                               return;
                             }
+                            final dob = DateTime(
+                                int.parse(_yearController.text),
+                                int.parse(_monthController.text),
+                                int.parse(_dayController.text),
+                              );
 
-                            setState(() => _isUploading = true);
+                              // 🔥 Duplicate Teacher Prevention Check
+                              final existingTeachers = ref.read(teacherControllerProvider).value ?? <TeacherModel>[];
+                              final duplicateTeacher = TeacherDuplicateChecker.findDuplicate(
+                                existingTeachers: existingTeachers,
+                                newEmployeeId: _teacherIdController.text,
+                                newName: _nameController.text,
+                                newMobile: _mobileController.text,
+                                newDob: dob,
+                              );
+
+                              if (duplicateTeacher != null) {
+                                await TeacherDuplicateChecker.showDuplicateAlertDialog(
+                                  context: context,
+                                  existingTeacher: duplicateTeacher,
+                                );
+                                return;
+                              }
+
+                              setState(() => _isUploading = true);
 
                             try {
                               if (_selectedFile != null) {
@@ -2643,11 +2694,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   teacherImageUploadProvider,
                                 )(_selectedFile!);
                               }
-                              final dob = DateTime(
-                                int.parse(_yearController.text),
-                                int.parse(_monthController.text),
-                                int.parse(_dayController.text),
-                              );
 
                               final teacher = TeacherModel(
                                 id: '',
@@ -2699,7 +2745,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             }
                           },
                     child: _isUploading
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text("Add Teacher"),
                   ),
                 ),
@@ -3177,21 +3223,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             return;
                           }
 
-                          setSheetState(() => _isUploading = true);
-                          setState(() => _isUploading = true);
-
-                          try {
-                            if (_selectedFile != null) {
-                              _uploadedImageUrl = await _uploadToCloudinary(
-                                _selectedFile!,
-                              );
-                            }
-
                             final dob = DateTime(
                               int.parse(_yearController.text),
                               int.parse(_monthController.text),
                               int.parse(_dayController.text),
                             );
+
+                            // 🔥 Duplicate Student Prevention Check
+                            final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                            final duplicateStudent = StudentDuplicateChecker.findDuplicate(
+                              existingStudents: existingStudents,
+                              newAdmissionNo: int.tryParse(_admissionController.text.trim()) ?? 0,
+                              newName: _nameController.text.trim(),
+                              newMobile: _mobileController.text.trim(),
+                              newDob: dob,
+                            );
+
+                            if (duplicateStudent != null) {
+                              await StudentDuplicateChecker.showDuplicateAlertDialog(
+                                context: context,
+                                existingStudent: duplicateStudent,
+                              );
+                              return;
+                            }
+
+                            setSheetState(() => _isUploading = true);
+                            setState(() => _isUploading = true);
+
+                            try {
+                              if (_selectedFile != null) {
+                                _uploadedImageUrl = await _uploadToCloudinary(
+                                  _selectedFile!,
+                                );
+                              }
 
                             final student = StudentsModel(
                               studentId: '',

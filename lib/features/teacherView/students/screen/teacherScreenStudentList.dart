@@ -20,6 +20,8 @@ import '../../../../core/config/session_manager.dart';
 import '../../../../core/constant/image_constant.dart';
 import '../../../../models/students_model.dart';
 import '../../../../models/teacher_model.dart';
+import 'package:scholo_admin/features/students/controller/student_controller.dart';
+import 'package:scholo_admin/features/students/helper/student_duplicate_helper.dart';
 import 'package:alert_info/alert_info.dart';
 
 class AssignedClass {
@@ -298,7 +300,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
   /// 🔹 Password Validation
   bool _isPasswordValid(String password) => password.length >= 6;
 
-  /// 🔹 Validated Field
+  /// 🔹 Validated Field Widget with real-time validation, duplicate check & error showing
   Widget _buildValidatedField(
     TextEditingController controller,
     String label, {
@@ -307,47 +309,128 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     bool readOnly = false,
     List<TextInputFormatter>? inputFormatters,
   }) {
-    bool isValid = true;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final text = controller.text;
+        String? errorText;
+        bool isValid = true;
+        final bool isTouched = text.isNotEmpty;
 
-    return StatefulBuilder(
-      builder: (context, setStateField) {
+        if (isTouched) {
+          final trimmed = text.trim();
+          final lowerLabel = label.toLowerCase();
+
+          if (lowerLabel.contains("admission")) {
+            final admNo = int.tryParse(trimmed);
+            if (trimmed.isEmpty) {
+              errorText = "Admission number cannot be empty";
+              isValid = false;
+            } else if (admNo == null || admNo <= 0) {
+              errorText = "Invalid admission number";
+              isValid = false;
+            } else {
+              final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+              final isDuplicate = existingStudents.any((s) =>
+                  !s.delete &&
+                  s.admissionNo == admNo &&
+                  (editingStudent == null || editingStudent!.studentId != s.studentId));
+              if (isDuplicate) {
+                errorText = "Admission No already exists!";
+                isValid = false;
+              }
+            }
+          } else if (lowerLabel.contains("roll")) {
+            final rollNo = int.tryParse(trimmed);
+            if (trimmed.isEmpty) {
+              errorText = "Roll number cannot be empty";
+              isValid = false;
+            } else if (rollNo == null || rollNo <= 0) {
+              errorText = "Invalid roll number";
+              isValid = false;
+            }
+          } else if (isEmail) {
+            if (trimmed.isEmpty) {
+              errorText = "Email cannot be empty";
+              isValid = false;
+            } else if (!_isEmailValid(trimmed)) {
+              errorText = "Invalid email format";
+              isValid = false;
+            }
+          } else if (isPassword) {
+            if (trimmed.isEmpty) {
+              errorText = "Password cannot be empty";
+              isValid = false;
+            } else if (!_isPasswordValid(trimmed)) {
+              errorText = "Password must be at least 6 characters";
+              isValid = false;
+            }
+          } else if (lowerLabel.contains("name")) {
+            if (trimmed.isEmpty) {
+              errorText = "$label cannot be empty";
+              isValid = false;
+            } else if (trimmed.length < 2) {
+              errorText = "$label must be at least 2 characters";
+              isValid = false;
+            }
+          } else {
+            if (trimmed.isEmpty) {
+              errorText = "$label cannot be empty";
+              isValid = false;
+            }
+          }
+        }
+
+        final Color borderColor = !isTouched
+            ? Colors.grey.shade200
+            : (isValid ? const Color(0xFF10B981) : Colors.redAccent);
+
         return TextField(
           controller: controller,
           readOnly: readOnly,
           inputFormatters: inputFormatters,
-          onChanged: (v) {
-            setStateField(() {
-              if (isEmail) isValid = _isEmailValid(v);
-              if (isPassword) isValid = _isPasswordValid(v);
-            });
-          },
           decoration: InputDecoration(
             labelText: label,
-            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            labelStyle: TextStyle(
+              color: isTouched
+                  ? (isValid ? const Color(0xFF10B981) : Colors.redAccent)
+                  : Colors.grey.shade600,
+              fontSize: 14,
+            ),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: isTouched && !isValid
+                ? Colors.red.shade50
+                : (isTouched && isValid ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC)),
+            errorText: isTouched && !isValid ? errorText : null,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              borderSide: BorderSide(color: borderColor, width: isTouched ? 1.5 : 1.0),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              borderSide: BorderSide(
+                color: isTouched ? (isValid ? const Color(0xFF10B981) : Colors.redAccent) : const Color(0xff1193D4),
+                width: 1.5,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
             ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            suffixIcon: (isEmail || isPassword)
-                ? (controller.text.isEmpty
-                      ? null
-                      : Icon(
-                          isValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                          color: isValid ? Colors.green : Colors.red,
-                        ))
-                : null,
+            suffixIcon: !isTouched
+                ? null
+                : Icon(
+                    isValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    color: isValid ? const Color(0xFF10B981) : Colors.redAccent,
+                  ),
           ),
         );
       },
@@ -1113,17 +1196,36 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                         return;
                       }
 
-                      setState(() => _isUploading = true);
-                      try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
-                        }
-
                         final dob = DateTime(
                           int.parse(_yearController.text),
                           int.parse(_monthController.text),
                           int.parse(_dayController.text),
                         );
+
+                        // 🔥 Duplicate Student Prevention Check
+                        final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                        final duplicateStudent = StudentDuplicateChecker.findDuplicate(
+                          existingStudents: existingStudents,
+                          newAdmissionNo: int.tryParse(_admissionController.text.trim()) ?? 0,
+                          newName: _nameController.text.trim(),
+                          newMobile: _mobileController.text.trim(),
+                          newDob: dob,
+                          currentEditingStudentId: editingStudent?.studentId,
+                        );
+
+                        if (duplicateStudent != null) {
+                          await StudentDuplicateChecker.showDuplicateAlertDialog(
+                            context: context,
+                            existingStudent: duplicateStudent,
+                          );
+                          return;
+                        }
+
+                        setState(() => _isUploading = true);
+                        try {
+                          if (_selectedFile != null) {
+                            _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
+                          }
 
                         final newStudent = StudentsModel(
                           studentId: editingStudent?.studentId ?? '',

@@ -1112,6 +1112,53 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             return;
                           }
 
+                          // Client-side Duplicate Student Pre-Check
+                          final existingStudents = ref.read(studentControllerProvider).value ?? [];
+                          final currentAdmissionNo = int.tryParse(_admissionController.text.trim()) ?? 0;
+                          final currentRollNo = int.tryParse(_rollController.text.trim()) ?? 0;
+                          final currentEmail = _emailController.text.trim().toLowerCase();
+                          final currentMobile = _mobileController.text.replaceAll(RegExp(r'\D'), '');
+                          final currentClassNo = _classNoToInt(_classNo!);
+                          final currentDivision = (_division ?? '').trim().toLowerCase();
+
+                          for (final s in existingStudents) {
+                            if (s.delete) continue;
+                            if (editingStudent != null && (s.studentId == editingStudent!.studentId || (editingStudent!.admissionNo != 0 && s.admissionNo == editingStudent!.admissionNo))) {
+                              continue; // Skip self when updating
+                            }
+
+                            final sAdmissionNo = s.admissionNo;
+                            final sRollNo = s.rollNo;
+                            final sEmail = s.email.trim().toLowerCase();
+                            final sMobile = s.mobileNo.replaceAll(RegExp(r'\D'), '');
+                            final sClassNo = s.classNo;
+                            final sDivision = s.division.trim().toLowerCase();
+
+                            String? duplicateError;
+                            if (currentAdmissionNo != 0 && sAdmissionNo == currentAdmissionNo) {
+                              duplicateError = 'Admission No. "#$currentAdmissionNo" is already assigned to ${s.studentName}.';
+                            } else if (currentEmail.isNotEmpty && sEmail == currentEmail) {
+                              duplicateError = 'Email address "${_emailController.text.trim()}" is already registered to ${s.studentName}.';
+                            } else if (currentMobile.isNotEmpty && sMobile == currentMobile) {
+                              duplicateError = 'Mobile number "${_mobileController.text.trim()}" is already registered to ${s.studentName}.';
+                            } else if (currentRollNo != 0 && sClassNo == currentClassNo && sDivision == currentDivision && sRollNo == currentRollNo) {
+                              duplicateError = 'Roll No. $currentRollNo in Class $_classNo - ${_division ?? ''} is already assigned to ${s.studentName}.';
+                            }
+
+                            if (duplicateError != null) {
+                              AlertInfo.show(
+                                context: context,
+                                text: duplicateError,
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                          }
+
                           setSheetState(() => _isUploading = true);
                           setState(() => _isUploading = true);
                           try {
@@ -1148,6 +1195,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               language: _languageController.text.trim(),
                               clubs_nss_ncc: _clubsController.text.trim(),
                             );
+
+                            final studentRepo = ref.read(studentRepositoryProvider);
+                            await studentRepo.validateNoDuplicateStudent(newStudent, isUpdate: editingStudent != null);
 
                             final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
                             final classRepo = ref.read(classWiseTeacherRepoProvider);
@@ -1195,9 +1245,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             }
                           } catch (e) {
                             if (context.mounted) {
+                              final errorMsg = e.toString().replaceFirst(RegExp(r'^(Exception|Error):\s*'), '');
                               AlertInfo.show(
                                 context: context,
-                                text: "Error: $e",
+                                text: errorMsg,
                                 typeInfo: TypeInfo.error,
                                 iconColor: Colors.white,
                                 backgroundColor: Colors.redAccent,

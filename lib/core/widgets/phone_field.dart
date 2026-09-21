@@ -152,6 +152,7 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
         widget.onChanged!(fullNumber);
       }
     }
+    setState(() {});
   }
 
   @override
@@ -163,34 +164,69 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
 
   @override
   Widget build(BuildContext context) {
+    final number = _numberController.text.trim();
+    final bool isTouched = number.isNotEmpty;
+    final minLen = _selectedCountry['min'] as int;
+    final maxLen = _selectedCountry['max'] as int;
+    final bool isPhoneValid = isTouched && number.length >= minLen && number.length <= maxLen;
+
+    final Color borderColor = !isTouched
+        ? Colors.grey.shade200
+        : (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         TextFormField(
           controller: _numberController,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           keyboardType: TextInputType.phone,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(_selectedCountry['max'] as int),
+            LengthLimitingTextInputFormatter(maxLen),
           ],
           decoration: InputDecoration(
             labelText: widget.labelText,
-            labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            labelStyle: TextStyle(
+              color: isTouched
+                  ? (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent)
+                  : Colors.grey.shade600,
+              fontSize: 13,
+            ),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: isTouched && !isPhoneValid
+                ? Colors.red.shade50
+                : (isTouched && isPhoneValid ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC)),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+              borderSide: BorderSide(color: borderColor, width: isTouched ? 1.5 : 1.0),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+              borderSide: BorderSide(
+                color: isTouched ? (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent) : const Color(0xff1193D4),
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            suffixIcon: !isTouched
+                ? null
+                : Icon(
+                    isPhoneValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    color: isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent,
+                  ),
             prefixIcon: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(

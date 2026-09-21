@@ -284,7 +284,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         const Icon(Icons.schedule_rounded, color: Color(0xFF38BDF8), size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          "Next Renewal: $formattedRenewal",
+                          // "Next Renewal: $formattedRenewal",
+                          "Next Renewal: 31 March 2027",
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 12,

@@ -836,6 +836,46 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                                   return;
                                 }
 
+                                // Client-side Duplicate Teacher Pre-Check
+                                final existingTeachers = ref.read(teacherControllerProvider).value ?? [];
+                                final currentEmpId = _teacherIdController.text.trim().toLowerCase();
+                                final currentEmail = _emailController.text.trim().toLowerCase();
+                                final currentMobile = _mobileController.text.replaceAll(RegExp(r'\D'), '');
+
+                                for (final t in existingTeachers) {
+                                  if (t.delete) continue;
+                                  if (editingTeacher != null && (t.id == editingTeacher!.id || (editingTeacher!.employeeId.isNotEmpty && t.employeeId.trim().toLowerCase() == editingTeacher!.employeeId.trim().toLowerCase()))) {
+                                    continue; // Skip self when updating
+                                  }
+
+                                  final tEmpId = t.employeeId.trim().toLowerCase();
+                                  final tId = t.id.trim().toLowerCase();
+                                  final tEmail = t.email.trim().toLowerCase();
+                                  final tMobile = t.mobileNo.replaceAll(RegExp(r'\D'), '');
+
+                                  String? duplicateError;
+                                  if (currentEmpId.isNotEmpty && (tEmpId == currentEmpId || tId == currentEmpId)) {
+                                    duplicateError = 'Teacher ID "${_teacherIdController.text.trim()}" is already assigned to ${t.teacherName}.';
+                                  } else if (currentEmail.isNotEmpty && tEmail == currentEmail) {
+                                    duplicateError = 'Email address "${_emailController.text.trim()}" is already registered to ${t.teacherName}.';
+                                  } else if (currentMobile.isNotEmpty && tMobile == currentMobile) {
+                                    duplicateError = 'Mobile number "${_mobileController.text.trim()}" is already registered to ${t.teacherName}.';
+                                  }
+
+                                  if (duplicateError != null) {
+                                    AlertInfo.show(
+                                      context: context,
+                                      text: duplicateError,
+                                      typeInfo: TypeInfo.error,
+                                      iconColor: Colors.white,
+                                      backgroundColor: Colors.redAccent,
+                                      textColor: Colors.white,
+                                      position: MessagePosition.top,
+                                    );
+                                    return;
+                                  }
+                                }
+
                                 setSheetState(() => _isUploading = true);
                                 setState(() => _isUploading = true);
                                 try {

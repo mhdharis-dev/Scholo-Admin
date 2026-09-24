@@ -576,6 +576,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
   late List<SubjectMarkModel> subjects;
   late List<TextEditingController> maxControllers;
   late List<TextEditingController> obtControllers;
+  late List<TextEditingController> ceMaxControllers;
+  late List<TextEditingController> ceObtControllers;
   late List<TextEditingController> subjectControllers;
 
   List<SubjectMarkModel> _createTemplateFrom(
@@ -586,6 +588,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
         subject: e.subject,
         maxMarks: e.maxMarks,
         obtained: 0,
+        ceMaxMarks: e.ceMaxMarks,
+        ceObtained: 0,
         grade: '',
       );
     }).toList();
@@ -593,9 +597,10 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
 
   bool _isValidRow(SubjectMarkModel s) {
     if (s.subject.trim().isEmpty) return false;
-    if (s.maxMarks <= 0) return false;
-    if (s.obtained < 0) return false;
-    if (s.obtained > s.maxMarks) return false;
+    if (s.maxMarks <= 0 && s.ceMaxMarks <= 0) return false;
+    if (s.obtained < 0 || s.ceObtained < 0) return false;
+    if (s.maxMarks > 0 && s.obtained > s.maxMarks) return false;
+    if (s.ceMaxMarks > 0 && s.ceObtained > s.ceMaxMarks) return false;
     return true;
   }
 
@@ -621,6 +626,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
             subject: "",
             maxMarks: 0,
             obtained: 0,
+            ceMaxMarks: 0,
+            ceObtained: 0,
             grade: '',
           )
         ]);
@@ -637,18 +644,29 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
       );
     }).toList();
 
+    ceMaxControllers = subjects.map((e) {
+      return TextEditingController(
+        text: e.ceMaxMarks == 0 ? "" : e.ceMaxMarks.toString(),
+      );
+    }).toList();
+
+    ceObtControllers = subjects.map((e) {
+      return TextEditingController(
+        text: e.ceObtained == 0 ? "" : e.ceObtained.toString(),
+      );
+    }).toList();
 
     subjectControllers = subjects.map((e) {
       return TextEditingController(text: e.subject);
     }).toList();
-
   }
 
+  String _grade(int max, int obt, [int ceMax = 0, int ceObt = 0]) {
+    final totalMax = max + ceMax;
+    final totalObt = obt + ceObt;
+    if (totalMax == 0) return "-";
 
-  String _grade(int max, int obt) {
-    if (max == 0) return "-";
-
-    final p = (obt / max) * 100;
+    final p = (totalObt / totalMax) * 100;
 
     if (p >= 90) return "A+";
     if (p >= 80) return "A";
@@ -691,7 +709,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
 
     return Center(
       child: Container(
-        width: 950,
+        width: 1050,
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -738,12 +756,17 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                             .setTemplate(subjects);
                       }
 
+                      final int ceTotalSum = subjects.fold(0, (sum, item) => sum + item.ceMaxMarks);
+                      final int ceObtSum = subjects.fold(0, (sum, item) => sum + item.ceObtained);
+
                       final model = StudentMarkModel(
                         studentName: widget.student.studentName,
                         studentId: widget.student.studentId,
                         delete: false,
                         marks: subjects,
                         markType: "Student Mark",
+                        ceTotalMark: ceTotalSum,
+                        ceObtainedMark: ceObtSum,
                       );
 
                       await ref
@@ -766,9 +789,11 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
               /// ================= TABLE HEADER =================
               Row(
                 children: const [
-                  Expanded(flex: 4, child: _TableTitle("SUBJECT")),
-                  Expanded(flex: 2, child: _TableTitle("MAX MARKS")),
-                  Expanded(flex: 2, child: _TableTitle("OBTAINED")),
+                  Expanded(flex: 3, child: _TableTitle("SUBJECT")),
+                  Expanded(flex: 2, child: _TableTitle("TE MAX")),
+                  Expanded(flex: 2, child: _TableTitle("TE OBT")),
+                  Expanded(flex: 2, child: _TableTitle("CE MAX")),
+                  Expanded(flex: 2, child: _TableTitle("CE OBT")),
                   Expanded(flex: 2, child: _TableTitle("GRADE")),
                   Expanded(flex: 1, child: _TableTitle("ACTION")),
                 ],
@@ -780,7 +805,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
               ...subjects.asMap().entries.map((entry) {
                 final index = entry.key;
                 final e = entry.value;
-                final grade = _grade(e.maxMarks, e.obtained);
+                final grade = _grade(e.maxMarks, e.obtained, e.ceMaxMarks, e.ceObtained);
                 e.grade = grade;
 
                 return Padding(
@@ -789,7 +814,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                     children: [
                       /// SUBJECT
                       Expanded(
-                        flex: 4,
+                        flex: 3,
                         child: TextField(
                           controller: subjectControllers[index],
                           onChanged: (v) => e.subject = v,
@@ -800,12 +825,11 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            // isDense: true,
                           ),
                         ),
                       ),
 
-                      /// MAX
+                      /// TE MAX
                       Expanded(
                         flex: 2,
                         child: _numberField(
@@ -814,7 +838,6 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                             final max = int.tryParse(v) ?? 0;
                             subjects[index].maxMarks = max;
 
-                            // auto adjust obtained if needed
                             if (subjects[index].obtained > max) {
                               subjects[index].obtained = max;
                               obtControllers[index].text = max.toString();
@@ -823,6 +846,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                             subjects[index].grade = _grade(
                               subjects[index].maxMarks,
                               subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
                             );
 
                             setState(() {});
@@ -830,7 +855,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                         ),
                       ),
 
-                      /// OBTAINED
+                      /// TE OBTAINED
                       Expanded(
                         flex: 2,
                         child: _numberField(
@@ -838,7 +863,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                           onChanged: (v) {
                             final obt = int.tryParse(v) ?? 0;
 
-                            if (obt > subjects[index].maxMarks) {
+                            if (obt > subjects[index].maxMarks && subjects[index].maxMarks > 0) {
                               obtControllers[index].text = subjects[index]
                                   .maxMarks
                                   .toString();
@@ -849,6 +874,62 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                             subjects[index].grade = _grade(
                               subjects[index].maxMarks,
                               subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
+                            );
+
+                            setState(() {});
+                          },
+                        ),
+                      ),
+
+                      /// CE MAX
+                      Expanded(
+                        flex: 2,
+                        child: _numberField(
+                          controller: ceMaxControllers[index],
+                          onChanged: (v) {
+                            final ceMax = int.tryParse(v) ?? 0;
+                            subjects[index].ceMaxMarks = ceMax;
+
+                            if (subjects[index].ceObtained > ceMax) {
+                              subjects[index].ceObtained = ceMax;
+                              ceObtControllers[index].text = ceMax.toString();
+                            }
+
+                            subjects[index].grade = _grade(
+                              subjects[index].maxMarks,
+                              subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
+                            );
+
+                            setState(() {});
+                          },
+                        ),
+                      ),
+
+                      /// CE OBTAINED
+                      Expanded(
+                        flex: 2,
+                        child: _numberField(
+                          controller: ceObtControllers[index],
+                          onChanged: (v) {
+                            final ceObt = int.tryParse(v) ?? 0;
+
+                            if (ceObt > subjects[index].ceMaxMarks && subjects[index].ceMaxMarks > 0) {
+                              ceObtControllers[index].text = subjects[index]
+                                  .ceMaxMarks
+                                  .toString();
+                              return;
+                            }
+
+                            subjects[index].ceObtained = ceObt;
+                            subjects[index].grade = _grade(
+                              subjects[index].maxMarks,
+                              subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
                             );
 
                             setState(() {});
@@ -890,6 +971,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                               subjectControllers.removeAt(index);
                               maxControllers.removeAt(index);
                               obtControllers.removeAt(index);
+                              ceMaxControllers.removeAt(index);
+                              ceObtControllers.removeAt(index);
                             });
                           },
                         ),
@@ -913,12 +996,16 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEntryBottomSheet> {
                         subject: "",
                         maxMarks: 0,
                         obtained: 0,
+                        ceMaxMarks: 0,
+                        ceObtained: 0,
                         grade: '',
                       ),
                     );
 
                     maxControllers.add(TextEditingController());
                     obtControllers.add(TextEditingController());
+                    ceMaxControllers.add(TextEditingController());
+                    ceObtControllers.add(TextEditingController());
                     subjectControllers.add(TextEditingController());
                   });
                 },

@@ -73,8 +73,8 @@ class MarksheetPdfHelper {
       int studentMaxSum = 0;
       for (final sm in studentMark.marks) {
         if (sm.obtained >= 0) {
-          studentObtSum += sm.obtained;
-          studentMaxSum += sm.maxMarks;
+          studentObtSum += (sm.obtained + sm.ceObtained);
+          studentMaxSum += (sm.maxMarks + sm.ceMaxMarks);
         }
       }
 
@@ -108,9 +108,11 @@ class MarksheetPdfHelper {
 
         if (subMark.obtained >= 0) {
           count++;
-          sum += subMark.obtained;
-          if (subMark.obtained > highest) highest = subMark.obtained;
-          final double percentage = subMark.maxMarks > 0 ? (subMark.obtained / subMark.maxMarks) * 100 : 0.0;
+          final subObt = subMark.obtained + subMark.ceObtained;
+          final subMax = subMark.maxMarks + subMark.ceMaxMarks;
+          sum += subObt;
+          if (subObt > highest) highest = subObt;
+          final double percentage = subMax > 0 ? (subObt / subMax) * 100 : 0.0;
           if (percentage >= 35) {
             pass++;
           } else {
@@ -146,8 +148,8 @@ class MarksheetPdfHelper {
       int studentMaxSum = 0;
       for (final sm in studentMark.marks) {
         if (sm.obtained >= 0) {
-          studentObtSum += sm.obtained;
-          studentMaxSum += sm.maxMarks;
+          studentObtSum += (sm.obtained + sm.ceObtained);
+          studentMaxSum += (sm.maxMarks + sm.ceMaxMarks);
         }
       }
       studentRankings.add({
@@ -395,8 +397,8 @@ class MarksheetPdfHelper {
                     int tObt = 0;
                     for (final s in studentMark.marks) {
                       if (s.obtained >= 0) {
-                        tMax += s.maxMarks;
-                        tObt += s.obtained;
+                        tMax += (s.maxMarks + s.ceMaxMarks);
+                        tObt += (s.obtained + s.ceObtained);
                       }
                     }
 
@@ -467,8 +469,10 @@ class MarksheetPdfHelper {
                               orElse: () => SubjectMarkModel(subject: '', maxMarks: 0, obtained: -1, grade: ''),
                             );
 
-                            final maxText = subMark.obtained == -1 ? "-" : subMark.maxMarks.toString();
-                            final obtText = subMark.obtained == -1 ? "-" : subMark.obtained.toString();
+                            final subMax = subMark.maxMarks + subMark.ceMaxMarks;
+                            final subObt = subMark.obtained + subMark.ceObtained;
+                            final maxText = subMark.obtained == -1 ? "-" : subMax.toString();
+                            final obtText = subMark.obtained == -1 ? "-" : subObt.toString();
 
                             return pw.Table(
                               columnWidths: {
@@ -675,8 +679,12 @@ class MarksheetPdfHelper {
 
     // 1. Calculate scores and percentage
     final totalSubjects = mark.marks.length;
-    final totalMaxMarks = mark.marks.fold<int>(0, (acc, s) => acc + s.maxMarks);
-    final totalObtained = mark.marks.fold<int>(0, (acc, s) => acc + s.obtained);
+    final totalTeMax = mark.marks.fold<int>(0, (acc, s) => acc + s.maxMarks);
+    final totalTeObt = mark.marks.fold<int>(0, (acc, s) => acc + (s.obtained >= 0 ? s.obtained : 0));
+    final totalCeMax = mark.marks.fold<int>(0, (acc, s) => acc + s.ceMaxMarks);
+    final totalCeObt = mark.marks.fold<int>(0, (acc, s) => acc + (s.obtained >= 0 ? s.ceObtained : 0));
+    final totalMaxMarks = totalTeMax + totalCeMax;
+    final totalObtained = totalTeObt + totalCeObt;
     final double overallPercentage = totalMaxMarks > 0 ? (totalObtained / totalMaxMarks) * 100 : 0.0;
     
     // Grading logic matching the mockup
@@ -708,8 +716,8 @@ class MarksheetPdfHelper {
       int sumMax = 0;
       for (final s in m.marks) {
         if (s.obtained >= 0) {
-          sumObt += s.obtained;
-          sumMax += s.maxMarks;
+          sumObt += (s.obtained + s.ceObtained);
+          sumMax += (s.maxMarks + s.ceMaxMarks);
         }
       }
       studentRankings.add({
@@ -728,18 +736,23 @@ class MarksheetPdfHelper {
     // --- PERFORMANCE METRICS ---
     SubjectMarkModel? highestSub;
     SubjectMarkModel? lowestSub;
+    int highestVal = -1;
+    int lowestVal = 999999;
     for (final s in mark.marks) {
       if (s.obtained >= 0) {
-        if (highestSub == null || s.obtained > highestSub.obtained) {
+        final obt = s.obtained + s.ceObtained;
+        if (obt > highestVal) {
+          highestVal = obt;
           highestSub = s;
         }
-        if (lowestSub == null || s.obtained < lowestSub.obtained) {
+        if (obt < lowestVal) {
+          lowestVal = obt;
           lowestSub = s;
         }
       }
     }
-    final highestStr = highestSub != null ? "${highestSub.subject} (${highestSub.obtained})" : "-";
-    final lowestStr = lowestSub != null ? "${lowestSub.subject} (${lowestSub.obtained})" : "-";
+    final highestStr = highestSub != null ? "${highestSub.subject} ($highestVal)" : "-";
+    final lowestStr = lowestSub != null ? "${lowestSub.subject} ($lowestVal)" : "-";
     final double averageMark = totalSubjects > 0 ? totalObtained / totalSubjects : 0.0;
 
     // --- REAL ATTENDANCE CALCULATIONS FROM FIRESTORE ---
@@ -911,31 +924,37 @@ class MarksheetPdfHelper {
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                   columnWidths: const {
-                    0: pw.FlexColumnWidth(2.5),
-                    1: pw.FlexColumnWidth(1),
-                    2: pw.FlexColumnWidth(1),
-                    3: pw.FlexColumnWidth(1),
-                    4: pw.FlexColumnWidth(1),
+                    0: pw.FlexColumnWidth(2.2),
+                    1: pw.FlexColumnWidth(1.0),
+                    2: pw.FlexColumnWidth(1.0),
+                    3: pw.FlexColumnWidth(1.0),
+                    4: pw.FlexColumnWidth(1.0),
+                    5: pw.FlexColumnWidth(1.2),
+                    6: pw.FlexColumnWidth(1.0),
                   },
                   children: [
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                       children: [
                         _buildTableHeaderCell("Subject", alignLeft: true),
-                        _buildTableHeaderCell("Max Marks"),
-                        _buildTableHeaderCell("Obtained Marks"),
-                        _buildTableHeaderCell("Percentage"),
+                        _buildTableHeaderCell("TE Max"),
+                        _buildTableHeaderCell("TE Obt"),
+                        _buildTableHeaderCell("CE Max"),
+                        _buildTableHeaderCell("CE Obt"),
+                        _buildTableHeaderCell("Total Obt"),
                         _buildTableHeaderCell("Grade"),
                       ],
                     ),
                     ...mark.marks.map((s) {
-                      final double pct = s.maxMarks > 0 ? (s.obtained / s.maxMarks) * 100 : 0.0;
+                      final totObt = s.obtained == -1 ? -1 : (s.obtained + s.ceObtained);
                       return pw.TableRow(
                         children: [
                           _buildTableCell(s.subject, alignLeft: true),
                           _buildTableCell(s.maxMarks.toString()),
                           _buildTableCell(s.obtained == -1 ? "-" : s.obtained.toString()),
-                          _buildTableCell(s.obtained == -1 ? "-" : "${pct.toStringAsFixed(1)}%"),
+                          _buildTableCell(s.ceMaxMarks.toString()),
+                          _buildTableCell(s.obtained == -1 ? "-" : s.ceObtained.toString()),
+                          _buildTableCell(totObt == -1 ? "-" : totObt.toString()),
                           _buildTableCell(s.obtained == -1 ? "-" : s.grade),
                         ],
                       );
@@ -944,9 +963,11 @@ class MarksheetPdfHelper {
                       decoration: pw.BoxDecoration(color: PdfColor.fromHex("#E2F4FD")), // Light blue highlight
                       children: [
                         _buildTableCell("Grand Total", alignLeft: true, isBold: true),
-                        _buildTableCell(totalMaxMarks.toString(), isBold: true),
+                        _buildTableCell(totalTeMax.toString(), isBold: true),
+                        _buildTableCell(totalTeObt.toString(), isBold: true),
+                        _buildTableCell(totalCeMax.toString(), isBold: true),
+                        _buildTableCell(totalCeObt.toString(), isBold: true),
                         _buildTableCell(totalObtained.toString(), isBold: true),
-                        _buildTableCell("${overallPercentage.toStringAsFixed(2)}%", isBold: true),
                         _buildTableCell(overallGrade, isBold: true),
                       ],
                     ),

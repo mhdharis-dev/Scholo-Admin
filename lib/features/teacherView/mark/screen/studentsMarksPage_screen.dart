@@ -841,6 +841,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
   late List<SubjectMarkModel> subjects;
   late List<TextEditingController> maxControllers;
   late List<TextEditingController> obtControllers;
+  late List<TextEditingController> ceMaxControllers;
+  late List<TextEditingController> ceObtControllers;
   late List<TextEditingController> subjectControllers;
 
   List<SubjectMarkModel> _createTemplateFrom(List<SubjectMarkModel> source) {
@@ -849,6 +851,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
         subject: e.subject,
         maxMarks: e.maxMarks,
         obtained: 0,
+        ceMaxMarks: e.ceMaxMarks,
+        ceObtained: 0,
         grade: '',
       );
     }).toList();
@@ -856,9 +860,10 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
 
   bool _isValidRow(SubjectMarkModel s) {
     if (s.subject.trim().isEmpty) return false;
-    if (s.maxMarks <= 0) return false;
-    if (s.obtained < 0) return false;
-    if (s.obtained > s.maxMarks) return false;
+    if (s.maxMarks <= 0 && s.ceMaxMarks <= 0) return false;
+    if (s.obtained < 0 || s.ceObtained < 0) return false;
+    if (s.maxMarks > 0 && s.obtained > s.maxMarks) return false;
+    if (s.ceMaxMarks > 0 && s.ceObtained > s.ceMaxMarks) return false;
     return true;
   }
 
@@ -884,6 +889,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                   subject: "",
                   maxMarks: 0,
                   obtained: 0,
+                  ceMaxMarks: 0,
+                  ceObtained: 0,
                   grade: '',
                 ),
               ]);
@@ -900,15 +907,29 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
       );
     }).toList();
 
+    ceMaxControllers = subjects.map((e) {
+      return TextEditingController(
+        text: e.ceMaxMarks == 0 ? "" : e.ceMaxMarks.toString(),
+      );
+    }).toList();
+
+    ceObtControllers = subjects.map((e) {
+      return TextEditingController(
+        text: e.ceObtained == 0 ? "" : e.ceObtained.toString(),
+      );
+    }).toList();
+
     subjectControllers = subjects.map((e) {
       return TextEditingController(text: e.subject);
     }).toList();
   }
 
-  String _grade(int max, int obt) {
-    if (max == 0) return "-";
+  String _grade(int max, int obt, int ceMax, int ceObt) {
+    final totalMax = max + ceMax;
+    final totalObt = obt + ceObt;
+    if (totalMax == 0) return "-";
 
-    final p = (obt / max) * 100;
+    final p = (totalObt / totalMax) * 100;
 
     if (p >= 90) return "A+";
     if (p >= 80) return "A";
@@ -952,7 +973,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
 
     return Center(
       child: Container(
-        width: 950,
+        width: 1050,
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1018,6 +1039,24 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                             final divisionMap = classMap[divKey];
                             if (divisionMap is! Map<String, dynamic>) return;
 
+                            int ceTotalMark = 0;
+                            int ceObtainedMark = 0;
+
+                            for (var s in subjects) {
+                              ceTotalMark += s.ceMaxMarks;
+                              ceObtainedMark += s.ceObtained;
+                            }
+
+                            final updatedMarkModel = StudentMarkModel(
+                              studentId: widget.student.studentId,
+                              studentName: widget.student.studentName,
+                              delete: false,
+                              marks: subjects,
+                              ceTotalMark: ceTotalMark,
+                              ceObtainedMark: ceObtainedMark,
+                              markType: 'Student Mark',
+                            );
+
                             final studentsMark = divisionMap["studentsMark"];
                             if (studentsMark is List) {
                               final list = List<Map<String, dynamic>>.from(
@@ -1027,13 +1066,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                               for (int i = 0; i < list.length; i++) {
                                 if (list[i]["studentId"] ==
                                     widget.student.studentId) {
-                                  list[i] = StudentMarkModel(
-                                    studentId: widget.student.studentId,
-                                    studentName: widget.student.studentName,
-                                    delete: false,
-                                    marks: subjects,
-                                    markType: 'Student Mark',
-                                  ).toMap();
+                                  list[i] = updatedMarkModel.toMap();
                                   break;
                                 }
                               }
@@ -1048,13 +1081,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                               );
                               if (matchedStudentId.isNotEmpty) {
                                 await docRef.update({
-                                  "$classKey.$divKey.studentsMark.$matchedStudentId": StudentMarkModel(
-                                    studentId: widget.student.studentId,
-                                    studentName: widget.student.studentName,
-                                    delete: false,
-                                    marks: subjects,
-                                    markType: 'Student Mark',
-                                  ).toMap(),
+                                  "$classKey.$divKey.studentsMark.$matchedStudentId": updatedMarkModel.toMap(),
                                 });
                               }
                             }
@@ -1073,9 +1100,11 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
               /// ================= TABLE HEADER =================
               Row(
                 children: const [
-                  Expanded(flex: 4, child: _TableTitle("SUBJECT")),
-                  Expanded(flex: 2, child: _TableTitle("MAX MARKS")),
-                  Expanded(flex: 2, child: _TableTitle("OBTAINED")),
+                  Expanded(flex: 3, child: _TableTitle("SUBJECT")),
+                  Expanded(flex: 2, child: _TableTitle("TE MAX")),
+                  Expanded(flex: 2, child: _TableTitle("TE OBT")),
+                  Expanded(flex: 2, child: _TableTitle("CE MAX")),
+                  Expanded(flex: 2, child: _TableTitle("CE OBT")),
                   Expanded(flex: 2, child: _TableTitle("GRADE")),
                   Expanded(flex: 1, child: _TableTitle("ACTION")),
                 ],
@@ -1087,7 +1116,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
               ...subjects.asMap().entries.map((entry) {
                 final index = entry.key;
                 final e = entry.value;
-                final grade = _grade(e.maxMarks, e.obtained);
+                final grade = _grade(e.maxMarks, e.obtained, e.ceMaxMarks, e.ceObtained);
                 e.grade = grade;
 
                 return Padding(
@@ -1096,7 +1125,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                     children: [
                       /// SUBJECT
                       Expanded(
-                        flex: 4,
+                        flex: 3,
                         child: TextField(
                           controller: subjectControllers[index],
                           onChanged: (v) => e.subject = v,
@@ -1107,12 +1136,11 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            // isDense: true,
                           ),
                         ),
                       ),
 
-                      /// MAX
+                      /// TE MAX
                       Expanded(
                         flex: 2,
                         child: _numberField(
@@ -1121,8 +1149,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                             final max = int.tryParse(v) ?? 0;
                             subjects[index].maxMarks = max;
 
-                            // auto adjust obtained if needed
-                            if (subjects[index].obtained > max) {
+                            if (subjects[index].obtained > max && max > 0) {
                               subjects[index].obtained = max;
                               obtControllers[index].text = max.toString();
                             }
@@ -1130,6 +1157,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                             subjects[index].grade = _grade(
                               subjects[index].maxMarks,
                               subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
                             );
 
                             setState(() {});
@@ -1137,7 +1166,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                         ),
                       ),
 
-                      /// OBTAINED
+                      /// TE OBTAINED
                       Expanded(
                         flex: 2,
                         child: _numberField(
@@ -1145,7 +1174,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                           onChanged: (v) {
                             final obt = int.tryParse(v) ?? 0;
 
-                            if (obt > subjects[index].maxMarks) {
+                            if (subjects[index].maxMarks > 0 && obt > subjects[index].maxMarks) {
                               obtControllers[index].text = subjects[index]
                                   .maxMarks
                                   .toString();
@@ -1156,6 +1185,62 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                             subjects[index].grade = _grade(
                               subjects[index].maxMarks,
                               subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
+                            );
+
+                            setState(() {});
+                          },
+                        ),
+                      ),
+
+                      /// CE MAX
+                      Expanded(
+                        flex: 2,
+                        child: _numberField(
+                          controller: ceMaxControllers[index],
+                          onChanged: (v) {
+                            final ceMax = int.tryParse(v) ?? 0;
+                            subjects[index].ceMaxMarks = ceMax;
+
+                            if (subjects[index].ceObtained > ceMax && ceMax > 0) {
+                              subjects[index].ceObtained = ceMax;
+                              ceObtControllers[index].text = ceMax.toString();
+                            }
+
+                            subjects[index].grade = _grade(
+                              subjects[index].maxMarks,
+                              subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
+                            );
+
+                            setState(() {});
+                          },
+                        ),
+                      ),
+
+                      /// CE OBTAINED
+                      Expanded(
+                        flex: 2,
+                        child: _numberField(
+                          controller: ceObtControllers[index],
+                          onChanged: (v) {
+                            final ceObt = int.tryParse(v) ?? 0;
+
+                            if (subjects[index].ceMaxMarks > 0 && ceObt > subjects[index].ceMaxMarks) {
+                              ceObtControllers[index].text = subjects[index]
+                                  .ceMaxMarks
+                                  .toString();
+                              return;
+                            }
+
+                            subjects[index].ceObtained = ceObt;
+                            subjects[index].grade = _grade(
+                              subjects[index].maxMarks,
+                              subjects[index].obtained,
+                              subjects[index].ceMaxMarks,
+                              subjects[index].ceObtained,
                             );
 
                             setState(() {});
@@ -1197,6 +1282,8 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                               subjectControllers.removeAt(index);
                               maxControllers.removeAt(index);
                               obtControllers.removeAt(index);
+                              ceMaxControllers.removeAt(index);
+                              ceObtControllers.removeAt(index);
                             });
                           },
                         ),
@@ -1220,12 +1307,16 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
                         subject: "",
                         maxMarks: 0,
                         obtained: 0,
+                        ceMaxMarks: 0,
+                        ceObtained: 0,
                         grade: '',
                       ),
                     );
 
                     maxControllers.add(TextEditingController());
                     obtControllers.add(TextEditingController());
+                    ceMaxControllers.add(TextEditingController());
+                    ceObtControllers.add(TextEditingController());
                     subjectControllers.add(TextEditingController());
                   });
                 },
@@ -1238,7 +1329,7 @@ class _MarkEntryBottomSheetState extends ConsumerState<MarkEditBottomSheet> {
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  "• Grades are automatically calculated based on obtained percentage.",
+                  "• Grades are automatically calculated based on total TE + CE percentage.",
                   style: TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ),

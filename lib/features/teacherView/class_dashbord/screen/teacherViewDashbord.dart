@@ -876,11 +876,25 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                     .toList(),
                               });
 
-                              if (isPermanent == false) {
-                                Future.delayed(Duration.zero, () {
+                              if (context.mounted) {
+                                Navigator.pop(context);
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      editTeacher == null
+                                          ? (!isPermanent
+                                              ? "Substitution Added Successfully"
+                                              : "New ${subjectController.text.trim()} Teacher Added Successfully")
+                                          : "${subjectController.text.trim()} Teacher Detail Updated Successfully",
+                                    ),
+                                  ),
+                                );
+
+                                if (!isPermanent) {
                                   showDialog(
                                     context: context,
-                                    builder: (context) => AlertDialog(
+                                    builder: (dialogContext) => AlertDialog(
                                       title: const Text("Substitution Info"),
                                       content: const Text(
                                         "This substitution will expire at the end of the day.",
@@ -888,39 +902,21 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                       actions: [
                                         TextButton(
                                           onPressed: () {
-                                            Navigator.pop(context);
-                                            Navigator.pop(context);
-
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                       "Substitution Added Successfully",
-                                                ),
-                                              ),
-                                            );
+                                            Navigator.pop(dialogContext);
                                           },
                                           child: const Text("OK"),
                                         ),
                                       ],
                                     ),
                                   );
-                                });
-                              }else {
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      editTeacher == null
-                                          ? "New ${subjectController.text.trim()}Teacher Added Successfully"
-                                          : "${subjectController.text.trim()}Teacher Detail Updated Successfully",
-                                    ),
-                                  ),
-                                );
+                                }
                               }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Error: $e")),
-                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Error: $e")),
+                                );
+                              }
                             }
                           },
                         ),

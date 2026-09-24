@@ -11,6 +11,9 @@ class StudentMarkModel {
   // ✅ nullable
   final DateTime? deletedAt;
 
+  final int ceTotalMark;
+  final int ceObtainedMark;
+
   /// 🔹 list of subject + mark
   final List<SubjectMarkModel> marks;
 
@@ -20,6 +23,8 @@ class StudentMarkModel {
     required this.markType,
     required this.delete,
     this.deletedAt,
+    this.ceTotalMark = 0,
+    this.ceObtainedMark = 0,
     required this.marks,
   });
 
@@ -32,6 +37,8 @@ class StudentMarkModel {
     bool? delete,
     DateTime? deletedAt,
     String? studentId,
+    int? ceTotalMark,
+    int? ceObtainedMark,
     List<SubjectMarkModel>? marks,
   }) {
     return StudentMarkModel(
@@ -41,6 +48,8 @@ class StudentMarkModel {
       marks: marks ?? this.marks,
       markType: markType ?? this.markType,
       deletedAt: deletedAt ?? this.deletedAt,
+      ceTotalMark: ceTotalMark ?? this.ceTotalMark,
+      ceObtainedMark: ceObtainedMark ?? this.ceObtainedMark,
     );
   }
 
@@ -58,8 +67,10 @@ class StudentMarkModel {
           ? null
           : Timestamp.fromDate(deletedAt!),
 
-      'marks': marks.map((e) => e.toMap()).toList(),
+      'ceTotal': ceTotalMark,
+      'ceObtained': ceObtainedMark,
 
+      'marks': marks.map((e) => e.toMap()).toList(),
     };
   }
 
@@ -76,6 +87,9 @@ class StudentMarkModel {
       deletedAt: map['deletedAt'] != null
           ? (map['deletedAt'] as Timestamp).toDate()
           : null,
+
+      ceTotalMark: (map['ceTotal'] as num?)?.toInt() ?? (map['ceTotalMark'] as num?)?.toInt() ?? 0,
+      ceObtainedMark: (map['ceObtained'] as num?)?.toInt() ?? (map['ceObtainedMark'] as num?)?.toInt() ?? 0,
 
       marks: (map['marks'] as List<dynamic>? ?? [])
           .map((e) => SubjectMarkModel.fromMap(e))

@@ -756,9 +756,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                       CircleAvatar(
                         radius: 20,
                         backgroundColor: const Color(0xFFE2E8F0),
-                        backgroundImage: student.imageUrl.isNotEmpty
-                            ? NetworkImage(student.imageUrl)
-                            : const AssetImage(ImageConstant.temporaryStudentImage) as ImageProvider,
+                        backgroundImage: ImageConstant.getStudentImageProvider(
+                          gender: student.gender,
+                          imageUrl: student.imageUrl,
+                        ),
                       ),
                       const SizedBox(width: 14),
 

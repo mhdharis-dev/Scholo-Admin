@@ -185,6 +185,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             } else if (admNo == null || admNo <= 0) {
               errorText = "Invalid admission number";
               isValid = false;
+            } else if (trimmed.length < 4) {
+              errorText = "Admission number must be at least 4 digits";
+              isValid = false;
             } else {
               final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
               final isDuplicate = existingStudents.any((s) =>
@@ -196,32 +199,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 isValid = false;
               }
             }
-          } else if (lowerLabel.contains("roll")) {
-            final rollNo = int.tryParse(trimmed);
-            if (trimmed.isEmpty) {
-              errorText = "Roll number cannot be empty";
-              isValid = false;
-            } else if (rollNo == null || rollNo <= 0) {
-              errorText = "Invalid roll number";
-              isValid = false;
-            }
-          } else if (isEmail) {
-            if (trimmed.isEmpty) {
-              errorText = "Email cannot be empty";
-              isValid = false;
-            } else if (!_isEmailValid(trimmed)) {
-              errorText = "Invalid email format";
-              isValid = false;
-            }
-          } else if (isPassword) {
-            if (trimmed.isEmpty) {
-              errorText = "Password cannot be empty";
-              isValid = false;
-            } else if (!_isPasswordValid(trimmed)) {
-              errorText = "Password must be at least 6 characters";
-              isValid = false;
-            }
-          } else if (lowerLabel.contains("name")) {
+          } else if (lowerLabel.contains("name") && !lowerLabel.contains("parent")) {
             if (trimmed.isEmpty) {
               errorText = "$label cannot be empty";
               isValid = false;
@@ -229,9 +207,35 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
               errorText = "$label must be at least 2 characters";
               isValid = false;
             }
-          } else {
-            if (trimmed.isEmpty) {
-              errorText = "$label cannot be empty";
+          } else if (lowerLabel.contains("roll")) {
+            if (trimmed.isNotEmpty) {
+              final rollNo = int.tryParse(trimmed);
+              if (rollNo == null || rollNo <= 0) {
+                errorText = "Invalid roll number";
+                isValid = false;
+              } else if (_classNo != null && _division != null) {
+                final allStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                final isTaken = StudentHelper.isRollNoTaken(
+                  students: allStudents,
+                  classNo: _classNoToInt(_classNo!),
+                  division: _division!,
+                  rollNo: rollNo,
+                  currentEditingStudentId: editingStudent?.studentId,
+                );
+                if (isTaken) {
+                  errorText = "Roll No $rollNo already assigned in $_classNo-$_division!";
+                  isValid = false;
+                }
+              }
+            }
+          } else if (isEmail) {
+            if (trimmed.isNotEmpty && !_isEmailValid(trimmed)) {
+              errorText = "Invalid email format";
+              isValid = false;
+            }
+          } else if (isPassword) {
+            if (trimmed.isNotEmpty && !_isPasswordValid(trimmed)) {
+              errorText = "Password must be at least 6 characters";
               isValid = false;
             }
           }
@@ -518,20 +522,29 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     required void Function(void Function()) setSheetState,
     List<StudentsModel>? students,
   }) {
-    final baseLanguages = ['Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
+    final baseLanguages = ['None', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
     final dynamicLanguages = <String>[...baseLanguages];
 
     if (students != null) {
       for (final s in students) {
         final lang = s.language.trim();
-        if (lang.isNotEmpty && !dynamicLanguages.contains(lang)) {
-          dynamicLanguages.add(lang);
+        if (StudentHelper.isNoneVariant(lang)) continue;
+        if (lang.isNotEmpty) {
+          for (var part in lang.split(RegExp(r'[,/|]'))) {
+            final trimmed = part.trim();
+            if (trimmed.isNotEmpty && !StudentHelper.isNoneVariant(trimmed) && !dynamicLanguages.contains(trimmed)) {
+              dynamicLanguages.add(trimmed);
+            }
+          }
+          if (!StudentHelper.isNoneVariant(lang) && !dynamicLanguages.contains(lang)) {
+            dynamicLanguages.add(lang);
+          }
         }
       }
     }
 
     final currentVal = controller.text.trim();
-    if (currentVal.isNotEmpty && !dynamicLanguages.contains(currentVal)) {
+    if (currentVal.isNotEmpty && !StudentHelper.isNoneVariant(currentVal) && !dynamicLanguages.contains(currentVal)) {
       dynamicLanguages.add(currentVal);
     }
 
@@ -556,7 +569,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       ),
     ];
 
-    String? selectedValue = dynamicLanguages.contains(currentVal) ? currentVal : null;
+    String? selectedValue = StudentHelper.isNoneVariant(currentVal)
+        ? 'None'
+        : (dynamicLanguages.contains(currentVal) ? currentVal : null);
 
     return DropdownButtonFormField<String>(
       value: selectedValue,
@@ -587,7 +602,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             hint: "e.g. French, German, Spanish...",
           );
           if (customLang != null && customLang.trim().isNotEmpty) {
-            final trimmed = customLang.trim();
+            final trimmed = StudentHelper.normalizeToNone(customLang);
             controller.text = trimmed;
             setSheetState(() {});
           }
@@ -606,20 +621,29 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     required void Function(void Function()) setSheetState,
     List<StudentsModel>? students,
   }) {
-    final baseClubs = ['NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
+    final baseClubs = ['None', 'NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
     final dynamicClubs = <String>[...baseClubs];
 
     if (students != null) {
       for (final s in students) {
         final club = s.clubs_nss_ncc.trim();
-        if (club.isNotEmpty && !dynamicClubs.contains(club)) {
-          dynamicClubs.add(club);
+        if (StudentHelper.isNoneVariant(club)) continue;
+        if (club.isNotEmpty) {
+          for (var part in club.split(RegExp(r'[,/|]'))) {
+            final trimmed = part.trim();
+            if (trimmed.isNotEmpty && !StudentHelper.isNoneVariant(trimmed) && !dynamicClubs.contains(trimmed)) {
+              dynamicClubs.add(trimmed);
+            }
+          }
+          if (!StudentHelper.isNoneVariant(club) && !dynamicClubs.contains(club)) {
+            dynamicClubs.add(club);
+          }
         }
       }
     }
 
     final currentVal = controller.text.trim();
-    if (currentVal.isNotEmpty && !dynamicClubs.contains(currentVal)) {
+    if (currentVal.isNotEmpty && !StudentHelper.isNoneVariant(currentVal) && !dynamicClubs.contains(currentVal)) {
       dynamicClubs.add(currentVal);
     }
 
@@ -644,7 +668,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       ),
     ];
 
-    String? selectedValue = dynamicClubs.contains(currentVal) ? currentVal : null;
+    String? selectedValue = StudentHelper.isNoneVariant(currentVal)
+        ? 'None'
+        : (dynamicClubs.contains(currentVal) ? currentVal : null);
 
     return DropdownButtonFormField<String>(
       value: selectedValue,
@@ -675,7 +701,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             hint: "e.g. Robotics Club, Arts Club...",
           );
           if (customClub != null && customClub.trim().isNotEmpty) {
-            final trimmed = customClub.trim();
+            final trimmed = StudentHelper.normalizeToNone(customClub);
             controller.text = trimmed;
             setSheetState(() {});
           }
@@ -690,8 +716,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   /// 🔹 Gender Dropdown
   Widget _buildDropdown(String hint, String? value, List<String> items,
       ValueChanged<String?> onChanged) {
+    final effectiveValue = (value != null && items.contains(value)) ? value : null;
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      initialValue: effectiveValue,
       items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)))).toList(),
       onChanged: onChanged,
       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
@@ -790,6 +817,17 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                       );
                       _selectedTeacherId = selectedClassModel.teacherId;
                       _selectedTeacherName = selectedClassModel.teacherName;
+
+                      // Auto generate roll number for selected class & division
+                      if (editingStudent == null || _rollController.text.trim().isEmpty) {
+                        final allStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                        final nextRoll = StudentHelper.generateNextRollNo(
+                          students: allStudents,
+                          classNo: _classNoToInt(_classNo!),
+                          division: _division!,
+                        );
+                        _rollController.text = nextRoll.toString();
+                      }
                     }
                   });
                 },
@@ -839,18 +877,18 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       _nameController.text = student.studentName;
       _emailController.text = student.email;
       _passwordController.text = student.password;
-      _rollController.text = student.rollNo.toString();
+      _rollController.text = student.rollNo == 0 ? '' : student.rollNo.toString();
       _admissionController.text = student.admissionNo.toString();
-      _mobileController.text = student.mobileNo;
-      _parentController.text = student.parentName;
-      _addressController.text = student.address;
-      _languageController.text = student.language;
-      _clubsController.text = student.clubs_nss_ncc;
-      _selectedGender = student.gender;
+      _mobileController.text = student.mobileNo == 'None' ? '' : student.mobileNo;
+      _parentController.text = student.parentName == 'None' ? '' : student.parentName;
+      _addressController.text = student.address == 'None' ? '' : student.address;
+      _languageController.text = StudentHelper.isNoneVariant(student.language) ? 'None' : student.language;
+      _clubsController.text = StudentHelper.isNoneVariant(student.clubs_nss_ncc) ? 'None' : student.clubs_nss_ncc;
+      _selectedGender = (student.gender.isEmpty || student.gender == 'None') ? null : student.gender;
       _classNo = _classNoToString(student.classNo);
-      _division = student.division;
-      _selectedTeacherName = student.teacherName;
-      _selectedTeacherId = student.teacherId;
+      _division = student.division == 'None' ? null : student.division;
+      _selectedTeacherName = student.teacherName == 'None' ? null : student.teacherName;
+      _selectedTeacherId = student.teacherId == 'None' ? null : student.teacherId;
       _uploadedImageUrl = student.imageUrl;
       _dayController.text = student.dateOfBirth.day.toString();
       _monthController.text = student.dateOfBirth.month.toString();
@@ -865,8 +903,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       _mobileController.clear();
       _parentController.clear();
       _addressController.clear();
-      _languageController.clear();
-      _clubsController.clear();
+      _languageController.text = 'None';
+      _clubsController.text = 'None';
       _dayController.clear();
       _monthController.clear();
       _yearController.clear();
@@ -953,12 +991,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             child: CircleAvatar(
                               radius: 54,
                               backgroundColor: Colors.grey[200],
-                              backgroundImage: _selectedFile != null
-                                  ? FileImage(_selectedFile!)
-                                  : (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty
-                                  ? NetworkImage(_uploadedImageUrl!)
-                                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                              as ImageProvider),
+                              backgroundImage: ImageConstant.getStudentImageProvider(
+                                gender: _selectedGender,
+                                imageUrl: _uploadedImageUrl,
+                                selectedFile: _selectedFile,
+                              ),
                             ),
                           ),
                           Positioned(
@@ -985,7 +1022,6 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     const SizedBox(height: 24),
                     _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6)
                     ]),
                     const SizedBox(height: 14),
                     _buildValidatedField(_nameController, "Name", inputFormatters: [
@@ -994,7 +1030,6 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     const SizedBox(height: 14),
                     _buildValidatedField(_rollController, "Roll No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(2),
                     ]),
                     const SizedBox(height: 14),
                     _buildPhoneField(),
@@ -1060,10 +1095,23 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           final month = _monthController.text.trim();
                           final year = _yearController.text.trim();
 
-                          if (admissionNo.isEmpty || admissionNo.length != 6) {
+                          if (admissionNo.isEmpty || admissionNo.length < 4) {
                             AlertInfo.show(
                               context: context,
-                              text: 'Admission number must be exactly 6 digits',
+                              text: 'Admission number must be at least 4 digits',
+                              typeInfo: TypeInfo.error,
+                              iconColor: Colors.white,
+                              backgroundColor: Colors.redAccent,
+                              textColor: Colors.white,
+                              position: MessagePosition.top,
+                            );
+                            return;
+                          }
+                          final parsedAdmNo = int.tryParse(admissionNo);
+                          if (parsedAdmNo == null || parsedAdmNo <= 0) {
+                            AlertInfo.show(
+                              context: context,
+                              text: 'Invalid admission number',
                               typeInfo: TypeInfo.error,
                               iconColor: Colors.white,
                               backgroundColor: Colors.redAccent,
@@ -1084,10 +1132,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             );
                             return;
                           }
-                          if (rollNo.isEmpty) {
+                          if (name.length < 2) {
                             AlertInfo.show(
                               context: context,
-                              text: 'Roll number cannot be empty',
+                              text: 'Name must be at least 2 characters',
                               typeInfo: TypeInfo.error,
                               iconColor: Colors.white,
                               backgroundColor: Colors.redAccent,
@@ -1096,122 +1144,69 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             );
                             return;
                           }
-                          final phoneError = getPhoneValidationErrorMessage(mobile);
-                          if (phoneError.isNotEmpty) {
-                            AlertInfo.show(
-                              context: context,
-                              text: phoneError,
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
+
+                          // Optional mobile format check (only when user entered a phone number)
+                          if (mobile.isNotEmpty && !StudentHelper.isNoneVariant(mobile)) {
+                            final phoneError = getPhoneValidationErrorMessage(mobile);
+                            if (phoneError.isNotEmpty) {
+                              AlertInfo.show(
+                                context: context,
+                                text: phoneError,
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
                           }
-                          if (_selectedGender == null || _selectedGender!.isEmpty) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Please select a gender',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
-                          if (_classNo == null || _division == null) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Please select Class and Division',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
+
+                          // Optional DOB parsing (fallback to default if not provided)
                           final dayVal = int.tryParse(day);
                           final monthVal = int.tryParse(month);
                           final yearVal = int.tryParse(year);
-                          if (dayVal == null || dayVal < 1 || dayVal > 31 ||
-                              monthVal == null || monthVal < 1 || monthVal > 12 ||
-                              yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
-                          if (parent.isEmpty) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Parent name cannot be empty',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
-                          if (address.isEmpty) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Address cannot be empty',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
-                          if (!_isEmailValid(email)) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Please enter a valid Email',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
-                          }
-                          if (!_isPasswordValid(password)) {
-                            AlertInfo.show(
-                              context: context,
-                              text: 'Password must be at least 6 characters',
-                              typeInfo: TypeInfo.error,
-                              iconColor: Colors.white,
-                              backgroundColor: Colors.redAccent,
-                              textColor: Colors.white,
-                              position: MessagePosition.top,
-                            );
-                            return;
+                          DateTime dob;
+                          if (dayVal != null && dayVal >= 1 && dayVal <= 31 &&
+                              monthVal != null && monthVal >= 1 && monthVal <= 12 &&
+                              yearVal != null && yearVal >= 1900 && yearVal <= DateTime.now().year) {
+                            dob = DateTime(yearVal, monthVal, dayVal);
+                          } else {
+                            dob = DateTime(2000, 1, 1);
                           }
 
-                          final dob = DateTime(
-                            int.parse(_yearController.text),
-                            int.parse(_monthController.text),
-                            int.parse(_dayController.text),
-                          );
-
-                          // 🔥 Duplicate Student Prevention Check
                           final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+
+                          // Unique Roll Number Check within Class & Division
+                          final parsedRollNo = rollNo.isEmpty ? 0 : (int.tryParse(rollNo) ?? 0);
+                          if (parsedRollNo > 0 && _classNo != null && _division != null) {
+                            final isRollTaken = StudentHelper.isRollNoTaken(
+                              students: existingStudents,
+                              classNo: _classNoToInt(_classNo!),
+                              division: _division!,
+                              rollNo: parsedRollNo,
+                              currentEditingStudentId: editingStudent?.studentId,
+                            );
+                            if (isRollTaken) {
+                              AlertInfo.show(
+                                context: context,
+                                text: 'Roll number $parsedRollNo is already assigned in $_classNo-$_division',
+                                typeInfo: TypeInfo.error,
+                                iconColor: Colors.white,
+                                backgroundColor: Colors.redAccent,
+                                textColor: Colors.white,
+                                position: MessagePosition.top,
+                              );
+                              return;
+                            }
+                          }
+
+                          // 🔥 Unique Admission Number Check (Mobile uniqueness check removed)
                           final duplicateStudent = StudentDuplicateChecker.findDuplicate(
                             existingStudents: existingStudents,
-                            newAdmissionNo: int.tryParse(_admissionController.text.trim()) ?? 0,
-                            newName: _nameController.text.trim(),
-                            newMobile: _mobileController.text.trim(),
+                            newAdmissionNo: parsedAdmNo,
+                            newName: name,
+                            newMobile: mobile,
                             newDob: dob,
                             currentEditingStudentId: editingStudent?.studentId,
                           );
@@ -1231,28 +1226,32 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
                             }
 
+                            final firstName = name.split(' ').first.toLowerCase();
+                            final effectiveEmail = email.isNotEmpty ? email : "$firstName$admissionNo@scholo.com";
+                            final effectivePassword = password.isNotEmpty ? password : "$firstName@$admissionNo";
+
                             final newStudent = StudentsModel(
                               studentId: editingStudent?.studentId ?? '',
-                              admissionNo: int.parse(_admissionController.text),
-                              rollNo: int.parse(_rollController.text),
-                              studentName: _nameController.text,
-                              mobileNo: _mobileController.text,
-                              email: _emailController.text,
-                              password: _passwordController.text,
-                              address: _addressController.text,
-                              parentName: _parentController.text,
-                              classNo: _classNoToInt(_classNo!),
-                              division: _division ?? 'Not',
-                              teacherName: _selectedTeacherName ?? '',
-                              teacherId: _selectedTeacherId ?? '',
-                              gender: _selectedGender ?? '',
+                              admissionNo: parsedAdmNo,
+                              rollNo: rollNo.isEmpty ? 0 : (int.tryParse(rollNo) ?? 0),
+                              studentName: name,
+                              mobileNo: (mobile.isEmpty || StudentHelper.isNoneVariant(mobile)) ? "None" : mobile,
+                              email: effectiveEmail,
+                              password: effectivePassword,
+                              address: address.isEmpty ? "None" : address,
+                              parentName: parent.isEmpty ? "None" : parent,
+                              classNo: _classNo == null ? 0 : _classNoToInt(_classNo!),
+                              division: (_division == null || _division!.trim().isEmpty) ? "None" : _division!.trim(),
+                              teacherName: (_selectedTeacherName == null || _selectedTeacherName!.trim().isEmpty) ? "None" : _selectedTeacherName!.trim(),
+                              teacherId: (_selectedTeacherId == null || _selectedTeacherId!.trim().isEmpty) ? "None" : _selectedTeacherId!.trim(),
+                              gender: (_selectedGender == null || _selectedGender!.trim().isEmpty) ? "None" : _selectedGender!.trim(),
                               delete: false,
-                              imageUrl: _uploadedImageUrl ?? '',
+                              imageUrl: _uploadedImageUrl ?? (editingStudent?.imageUrl ?? ''),
                               dateOfBirth: dob,
                               createdDate: editingStudent?.createdDate ?? DateTime.now(),
                               schoolId: SessionManager.schoolId,
-                              language: _languageController.text.trim(),
-                              clubs_nss_ncc: _clubsController.text.trim(),
+                              language: StudentHelper.normalizeToNone(_languageController.text),
+                              clubs_nss_ncc: StudentHelper.normalizeToNone(_clubsController.text),
                             );
 
                             final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
@@ -1393,10 +1392,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             child: CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.grey[200],
-                              backgroundImage: student.imageUrl.isNotEmpty
-                                  ? NetworkImage(student.imageUrl)
-                                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                              as ImageProvider,
+                              backgroundImage: ImageConstant.getStudentImageProvider(
+                                gender: student.gender,
+                                imageUrl: student.imageUrl,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -1463,8 +1462,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           _infoRow("Mobile", student.mobileNo),
                           _infoRow("Parent Name", student.parentName),
                           _infoRow("Address", student.address),
-                          _infoRow("Language", student.language.isNotEmpty ? student.language : "-"),
-                          _infoRow("Clubs / NSS / NCC", student.clubs_nss_ncc.isNotEmpty ? student.clubs_nss_ncc : "-"),
+                          _infoRow("Language", StudentHelper.isNoneVariant(student.language) ? "None" : student.language),
+                          _infoRow("Clubs / NSS / NCC", StudentHelper.isNoneVariant(student.clubs_nss_ncc) ? "None" : student.clubs_nss_ncc),
                           _infoRow(
                             "Date of Birth",
                             "${student.dateOfBirth.day}/${student.dateOfBirth.month}/${student.dateOfBirth.year}",
@@ -1577,9 +1576,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundImage: student.imageUrl.isNotEmpty
-                        ? NetworkImage(student.imageUrl)
-                        : const AssetImage(ImageConstant.temporaryStudentImage) as ImageProvider,
+                    backgroundImage: ImageConstant.getStudentImageProvider(
+                      gender: student.gender,
+                      imageUrl: student.imageUrl,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1650,10 +1650,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           // Email
           Expanded(
             flex: 4,
-            child: Text(
-              student.email,
-              style: const TextStyle(color: Color(0xFF475569)),
-              overflow: TextOverflow.ellipsis,
+            child: Tooltip(
+              message: student.email,
+              child: Text(
+                student.email,
+                style: const TextStyle(color: Color(0xFF475569)),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           // Password
@@ -1820,20 +1823,24 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     divList.sort();
     final divSet = ['All', ...divList];
 
-    // Collect unique languages
-    final langSet = <String>{'All', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'};
+    // Collect unique languages with inbuilt 'None'
+    final langSet = <String>{'All', 'None', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'};
     for (var s in students) {
-      if (s.language.isNotEmpty) langSet.add(s.language);
+      final l = s.language.trim();
+      if (l.isNotEmpty && !StudentHelper.isNoneVariant(l)) {
+        langSet.add(l);
+      }
     }
 
-    // Collect unique clubs / activities (NSS, NCC, Clubs + custom added clubs)
-    final clubList = <String>['All', 'NSS', 'NCC', 'Clubs'];
+    // Collect unique clubs / activities with inbuilt 'None'
+    final clubList = <String>['All', 'None', 'NSS', 'NCC', 'Clubs'];
     for (var s in students) {
       final cVal = s.clubs_nss_ncc.trim();
-      if (cVal.isNotEmpty) {
+      if (cVal.isNotEmpty && !StudentHelper.isNoneVariant(cVal)) {
         for (var part in cVal.split(RegExp(r'[,/|]'))) {
           final trimmed = part.trim();
           if (trimmed.isNotEmpty &&
+              !StudentHelper.isNoneVariant(trimmed) &&
               trimmed.toUpperCase() != 'NSS' &&
               trimmed.toUpperCase() != 'NCC' &&
               trimmed.toLowerCase() != 'clubs' &&
@@ -2254,8 +2261,17 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     }
 
                     if (_selectedLanguageFilter != 'All') {
-                      if (!student.language.toLowerCase().contains(_selectedLanguageFilter.toLowerCase())) {
-                        return false;
+                      if (_selectedLanguageFilter == 'None') {
+                        if (!StudentHelper.isNoneVariant(student.language)) {
+                          return false;
+                        }
+                      } else {
+                        if (StudentHelper.isNoneVariant(student.language)) {
+                          return false;
+                        }
+                        if (!student.language.toLowerCase().contains(_selectedLanguageFilter.toLowerCase())) {
+                          return false;
+                        }
                       }
                     }
 
@@ -2263,12 +2279,18 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                       final clubLower = _selectedClubFilter.toLowerCase();
                       final studentClub = student.clubs_nss_ncc.trim().toLowerCase();
 
-                      if (clubLower == 'nss') {
+                      if (_selectedClubFilter == 'None') {
+                        if (!StudentHelper.isNoneVariant(student.clubs_nss_ncc)) {
+                          return false;
+                        }
+                      } else if (StudentHelper.isNoneVariant(student.clubs_nss_ncc)) {
+                        return false;
+                      } else if (clubLower == 'nss') {
                         if (!studentClub.contains('nss')) return false;
                       } else if (clubLower == 'ncc') {
                         if (!studentClub.contains('ncc')) return false;
                       } else if (clubLower == 'clubs') {
-                        if (studentClub.isEmpty) return false;
+                        if (studentClub.isEmpty || StudentHelper.isNoneVariant(studentClub)) return false;
                       } else {
                         if (!studentClub.contains(clubLower)) return false;
                       }
@@ -2323,24 +2345,37 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: 1200,
-                            child: Column(
-                              children: [
-                                // Table Header
-                                _buildTableHeader(),
-                                // Table Rows
-                                ...List.generate(filteredStudents.length, (index) {
-                                  return _buildTableRow(filteredStudents[index], index, controller);
-                                }),
-                              ],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const double minTableWidth = 1100;
+                          final double tableWidth = constraints.maxWidth > minTableWidth
+                              ? constraints.maxWidth
+                              : minTableWidth;
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: tableWidth,
+                              height: constraints.maxHeight,
+                              child: Column(
+                                children: [
+                                  // Table Header
+                                  _buildTableHeader(),
+                                  // Table Rows
+                                  Expanded(
+                                    child: ListView.builder(
+                                      padding: EdgeInsets.zero,
+                                      itemCount: filteredStudents.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildTableRow(filteredStudents[index], index, controller);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   );

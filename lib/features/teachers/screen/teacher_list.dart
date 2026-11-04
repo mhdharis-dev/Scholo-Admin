@@ -15,6 +15,8 @@ import 'package:scholo_admin/core/widgets/phone_field.dart';
 import 'package:alert_info/alert_info.dart';
 import '../helper/teacher_duplicate_helper.dart';
 import 'package:scholo_admin/core/widgets/error_state_widget.dart';
+import '../helper/teacher_pdf_helper.dart';
+import 'package:scholo_admin/auth/controller/login_controller.dart';
 
 class TeacherListScreen extends ConsumerStatefulWidget {
   const TeacherListScreen({super.key});
@@ -51,6 +53,91 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   String? _selectedGender;
   bool _isLanguageTeacher = false;
   TeacherModel? editingTeacher;
+  bool _isDownloadingPdf = false;
+
+  Future<void> _handleDownloadPdf(List<TeacherModel> teachers) async {
+    if (teachers.isEmpty) {
+      AlertInfo.show(
+        context: context,
+        text: "No teachers available to generate PDF.",
+        typeInfo: TypeInfo.warning,
+        backgroundColor: Colors.orange,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    setState(() => _isDownloadingPdf = true);
+    try {
+      final school = ref.read(schoolStreamProvider).value;
+      await TeacherPdfHelper.downloadTeachersListPdf(
+        teachers: teachers,
+        school: school,
+        context: context,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingPdf = false);
+      }
+    }
+  }
+
+  List<TeacherModel> _filterTeachers(List<TeacherModel> teachers) {
+    final filtered = teachers.where((teacher) {
+      // 1. Search Query
+      final query = _searchQuery.toLowerCase();
+      final matchesQuery = query.isEmpty ||
+          teacher.teacherName.toLowerCase().contains(query) ||
+          teacher.employeeId.toLowerCase().contains(query) ||
+          teacher.subject.toLowerCase().contains(query) ||
+          teacher.email.toLowerCase().contains(query) ||
+          teacher.mobileNo.contains(query);
+      if (!matchesQuery) return false;
+
+      // 2. Subject Filter
+      if (_selectedSubjectFilter != 'All') {
+        if (teacher.subject.trim().toLowerCase() != _selectedSubjectFilter.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 3. Class Filter
+      if (_selectedClassFilter != 'All') {
+        if (_selectedClassFilter == 'Not Assigned') {
+          if (teacher.classNo != 0) return false;
+        } else {
+          final targetClassNo = _classNoToInt(_selectedClassFilter);
+          if (teacher.classNo != targetClassNo) return false;
+        }
+      }
+
+      // 4. Gender Filter
+      if (_selectedGenderFilter != 'All') {
+        if (teacher.gender.trim().toLowerCase() != _selectedGenderFilter.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 5. Language Teacher Filter
+      if (_selectedLanguageTeacherFilter != 'All') {
+        if (_selectedLanguageTeacherFilter == 'Language Teacher') {
+          if (!teacher.isLanguageTeacher) return false;
+        } else if (_selectedLanguageTeacherFilter == 'General Teacher') {
+          if (teacher.isLanguageTeacher) return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final classComparison = a.classNo.compareTo(b.classNo);
+      if (classComparison != 0) return classComparison;
+      return a.division.compareTo(b.division);
+    });
+
+    return filtered;
+  }
 
   @override
   void initState() {
@@ -1207,6 +1294,31 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    // Download Profile PDF Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1193D4),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _handleDownloadPdf([teacher]);
+                        },
+                        icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                        label: const Text(
+                          "Download Profile PDF",
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -1373,10 +1485,13 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
           // Email
           Expanded(
             flex: 4,
-            child: Text(
-              teacher.email,
-              style: const TextStyle(color: Color(0xFF475569)),
-              overflow: TextOverflow.ellipsis,
+            child: Tooltip(
+              message: teacher.email,
+              child: Text(
+                teacher.email,
+                style: const TextStyle(color: Color(0xFF475569)),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           // Password
@@ -1393,7 +1508,9 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
             child: Center(
               child: PopupMenuButton<String>(
                 onSelected: (value) {
-                  if (value == 'edit') {
+                  if (value == 'pdf') {
+                    _handleDownloadPdf([teacher]);
+                  } else if (value == 'edit') {
                     _showAddEditSheet(teacher);
                   } else if (value == 'delete') {
                     showDialog(
@@ -1459,6 +1576,16 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                   }
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'pdf',
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: Color(0xff1193D4)),
+                        SizedBox(width: 8),
+                        Text('Download PDF'),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'edit',
                     child: Row(
@@ -1740,6 +1867,8 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   Widget build(BuildContext context) {
     ref.watch(classesStreamProvider);
     final teachersAsync = ref.watch(teacherControllerProvider);
+    final allTeachers = teachersAsync.value ?? [];
+    final filteredTeachers = _filterTeachers(allTeachers);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -1817,7 +1946,34 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
+                
+                // Download PDF Button
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xff1193D4),
+                    side: const BorderSide(color: Color(0xff1193D4), width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: _isDownloadingPdf ? null : () => _handleDownloadPdf(filteredTeachers),
+                  icon: _isDownloadingPdf
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1193D4)),
+                        )
+                      : const Icon(Icons.picture_as_pdf_rounded, size: 20, color: Color(0xff1193D4)),
+                  label: Text(
+                    _isDownloadingPdf ? 'Generating PDF...' : 'Download PDF',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 14),
                 
                 // Add Button
                 ElevatedButton.icon(
@@ -1875,61 +2031,6 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
             Expanded(
               child: teachersAsync.when(
                 data: (teachers) {
-                  // Filter first
-                  final filteredTeachers = teachers.where((teacher) {
-                    // 1. Search Query
-                    final query = _searchQuery.toLowerCase();
-                    final matchesQuery = query.isEmpty ||
-                        teacher.teacherName.toLowerCase().contains(query) ||
-                        teacher.employeeId.toLowerCase().contains(query) ||
-                        teacher.subject.toLowerCase().contains(query) ||
-                        teacher.email.toLowerCase().contains(query) ||
-                        teacher.mobileNo.contains(query);
-                    if (!matchesQuery) return false;
-
-                    // 2. Subject Filter
-                    if (_selectedSubjectFilter != 'All') {
-                      if (teacher.subject.trim().toLowerCase() != _selectedSubjectFilter.trim().toLowerCase()) {
-                        return false;
-                      }
-                    }
-
-                    // 3. Class Filter
-                    if (_selectedClassFilter != 'All') {
-                      if (_selectedClassFilter == 'Not Assigned') {
-                        if (teacher.classNo != 0) return false;
-                      } else {
-                        final targetClassNo = _classNoToInt(_selectedClassFilter);
-                        if (teacher.classNo != targetClassNo) return false;
-                      }
-                    }
-
-                    // 4. Gender Filter
-                    if (_selectedGenderFilter != 'All') {
-                      if (teacher.gender.trim().toLowerCase() != _selectedGenderFilter.trim().toLowerCase()) {
-                        return false;
-                      }
-                    }
-
-                    // 5. Language Teacher Filter
-                    if (_selectedLanguageTeacherFilter != 'All') {
-                      if (_selectedLanguageTeacherFilter == 'Language Teacher') {
-                        if (!teacher.isLanguageTeacher) return false;
-                      } else if (_selectedLanguageTeacherFilter == 'General Teacher') {
-                        if (teacher.isLanguageTeacher) return false;
-                      }
-                    }
-
-                    return true;
-                  }).toList();
-
-                  // Sort
-                  filteredTeachers.sort((a, b) {
-                    final classComparison = a.classNo.compareTo(b.classNo);
-                    if (classComparison != 0) return classComparison;
-                    return a.division.compareTo(b.division);
-                  });
-
                   if (filteredTeachers.isEmpty) {
                     return Center(
                       child: Column(
@@ -1973,24 +2074,37 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: 1200,
-                            child: Column(
-                              children: [
-                                // Table Header
-                                _buildTableHeader(),
-                                // Table Rows
-                                ...List.generate(filteredTeachers.length, (index) {
-                                  return _buildTableRow(filteredTeachers[index], index);
-                                }),
-                              ],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const double minTableWidth = 1100;
+                          final double tableWidth = constraints.maxWidth > minTableWidth
+                              ? constraints.maxWidth
+                              : minTableWidth;
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: tableWidth,
+                              height: constraints.maxHeight,
+                              child: Column(
+                                children: [
+                                  // Table Header
+                                  _buildTableHeader(),
+                                  // Table Rows
+                                  Expanded(
+                                    child: ListView.builder(
+                                      padding: EdgeInsets.zero,
+                                      itemCount: filteredTeachers.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildTableRow(filteredTeachers[index], index);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   );

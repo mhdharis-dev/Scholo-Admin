@@ -69,16 +69,16 @@ class StudentDuplicateChecker {
   }
 
   /// Searches for a duplicate student in the existing active students list.
+  /// NOTE: Mobile number duplicate checking is removed (1 mobile number can be used for 1 or more students).
+  /// Admission number MUST be unique.
   static StudentsModel? findDuplicate({
     required List<StudentsModel> existingStudents,
     required int newAdmissionNo,
     required String newName,
-    required String newMobile,
+    String? newMobile,
     required DateTime newDob,
     String? currentEditingStudentId,
   }) {
-    final cleanMobileDigits = extractMobileDigits(newMobile);
-
     for (final student in existingStudents) {
       // Ignore self if editing an existing record
       if (currentEditingStudentId != null &&
@@ -87,40 +87,8 @@ class StudentDuplicateChecker {
         continue;
       }
 
-      // Rule 1: Unique Admission Number Check
+      // Unique Admission Number Check
       if (newAdmissionNo > 0 && student.admissionNo == newAdmissionNo) {
-        return student;
-      }
-
-      // Rule 2 & 3: Mobile Number + DOB + Name Matching
-      final existingMobileDigits = extractMobileDigits(student.mobileNo);
-
-      final isMobileMatch = cleanMobileDigits.isNotEmpty &&
-          existingMobileDigits.isNotEmpty &&
-          (cleanMobileDigits == existingMobileDigits ||
-              cleanMobileDigits.endsWith(existingMobileDigits) ||
-              existingMobileDigits.endsWith(cleanMobileDigits));
-
-      final isDobMatch = student.dateOfBirth.year == newDob.year &&
-          student.dateOfBirth.month == newDob.month &&
-          student.dateOfBirth.day == newDob.day;
-
-      final isNameMatch = areNamesMatching(newName, student.studentName);
-
-      // Duplicate if Mobile & DOB match AND Name matches/overlaps
-      if (isMobileMatch && isDobMatch && isNameMatch) {
-        return student;
-      }
-
-      // Duplicate if Mobile & DOB match exactly
-      if (isMobileMatch && isDobMatch) {
-        return student;
-      }
-
-      // Duplicate if Admission No and Name match
-      if (newAdmissionNo > 0 &&
-          student.admissionNo == newAdmissionNo &&
-          isNameMatch) {
         return student;
       }
     }
@@ -306,5 +274,77 @@ class StudentDuplicateChecker {
           ),
       ],
     );
+  }
+}
+
+
+/// Helper class for normalizing "None", "No", and their variants across languages, clubs, and filters.
+class StudentHelper {
+  /// Returns true if the value represents "None" or any of its variants:
+  /// "NO", "no", "No", "nO", "none", "None", "NONE", "nil", "n/a", etc., or empty.
+  static bool isNoneVariant(String? value) {
+    if (value == null) return true;
+    final trimmed = value.trim().toLowerCase();
+    if (trimmed.isEmpty) return true;
+    return trimmed == 'none' ||
+        trimmed == 'no' ||
+        trimmed == 'nil' ||
+        trimmed == 'n/a' ||
+        trimmed == 'na' ||
+        trimmed == 'not' ||
+        trimmed == 'null';
+  }
+
+  /// Normalizes any "No" / "None" / empty variant into "None", otherwise returns the trimmed string.
+  static String normalizeToNone(String? value) {
+    if (isNoneVariant(value)) return 'None';
+    return value!.trim();
+  }
+
+  /// Generates the next roll number for a class and division (starts at 1, or max existing roll number + 1).
+  static int generateNextRollNo({
+    required List<StudentsModel> students,
+    required int classNo,
+    required String division,
+  }) {
+    if (division.isEmpty || division.toLowerCase() == 'none' || division.toLowerCase() == 'not') {
+      return 1;
+    }
+    final classStudents = students.where((s) =>
+        !s.delete &&
+        s.classNo == classNo &&
+        s.division.trim().toLowerCase() == division.trim().toLowerCase()).toList();
+    if (classStudents.isEmpty) return 1;
+
+    int maxRoll = 0;
+    for (final s in classStudents) {
+      if (s.rollNo > maxRoll) {
+        maxRoll = s.rollNo;
+      }
+    }
+    if (maxRoll > 0) {
+      return maxRoll + 1;
+    }
+    return classStudents.length + 1;
+  }
+
+  /// Checks if a roll number is already taken by an active student in the given class and division.
+  static bool isRollNoTaken({
+    required List<StudentsModel> students,
+    required int classNo,
+    required String division,
+    required int rollNo,
+    String? currentEditingStudentId,
+  }) {
+    if (rollNo <= 0) return false;
+    if (division.isEmpty || division.toLowerCase() == 'none' || division.toLowerCase() == 'not') {
+      return false;
+    }
+    return students.any((s) =>
+        !s.delete &&
+        s.classNo == classNo &&
+        s.division.trim().toLowerCase() == division.trim().toLowerCase() &&
+        s.rollNo == rollNo &&
+        (currentEditingStudentId == null || s.studentId != currentEditingStudentId));
   }
 }

@@ -63,6 +63,8 @@ class TeacherScreenStudentList extends ConsumerStatefulWidget {
 class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentList> {
   // Controllers
   final _nameController = TextEditingController();
+  List<StudentsModel>? _cachedStudents;
+  TeacherModel? _mainTeacher;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _rollController = TextEditingController();
@@ -177,22 +179,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
       if (isLang) {
         final langLabel = subj.isNotEmpty ? subj : "Language";
-        classesList.add(AssignedClass(
-          classNo: 999,
-          division: 'All',
-          isClassTeacher: mainTeacher.classNo != 0,
-          label: "All Classes ($langLabel)",
-        ));
 
-        for (int c = 1; c <= 12; c++) {
-          classesList.add(AssignedClass(
-            classNo: c,
-            division: 'All',
-            isClassTeacher: false,
-            label: "Class $c ($langLabel)",
-          ));
-        }
-
+        // 1. If teacher is a Class Teacher, add their own class FIRST
         if (mainTeacher.classNo != 0 &&
             mainTeacher.division.isNotEmpty &&
             mainTeacher.division != 'Nil' &&
@@ -203,9 +191,24 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             isClassTeacher: true,
             label: "Class ${mainTeacher.classNo}-${mainTeacher.division} (Class Teacher)",
           );
-          if (!classesList.contains(ctClass)) {
-            classesList.add(ctClass);
-          }
+          classesList.add(ctClass);
+        }
+
+        // 2. Add language class groupings
+        classesList.add(AssignedClass(
+          classNo: 999,
+          division: 'All',
+          isClassTeacher: false,
+          label: "All Classes ($langLabel)",
+        ));
+
+        for (int c = 1; c <= 12; c++) {
+          classesList.add(AssignedClass(
+            classNo: c,
+            division: 'All',
+            isClassTeacher: false,
+            label: "Class $c ($langLabel)",
+          ));
         }
       } else {
         // 1. Add Class Teacher class if assigned
@@ -246,6 +249,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       }
 
       setState(() {
+        _mainTeacher = mainTeacher;
         _isLanguageTeacher = isLang;
         _teacherSubject = subj;
         _selectedTeacherName = mainTeacher.teacherName;
@@ -253,7 +257,8 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
         _classTeacherNames.clear();
         _classTeacherNames.addAll(classTeacherMap);
         if (classesList.isNotEmpty) {
-          _selectedClassItem = classesList.first;
+          final ctIndex = classesList.indexWhere((c) => c.isClassTeacher);
+          _selectedClassItem = ctIndex != -1 ? classesList[ctIndex] : classesList.first;
           _classNo = _selectedClassItem!.classNo.toString();
           _division = _selectedClassItem!.division;
           _isClassTeacher = _selectedClassItem!.isClassTeacher;
@@ -329,6 +334,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             } else if (admNo == null || admNo <= 0) {
               errorText = "Invalid admission number";
               isValid = false;
+            } else if (trimmed.length < 4) {
+              errorText = "Admission number must be at least 4 digits";
+              isValid = false;
             } else {
               final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
               final isDuplicate = existingStudents.any((s) =>
@@ -340,32 +348,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                 isValid = false;
               }
             }
-          } else if (lowerLabel.contains("roll")) {
-            final rollNo = int.tryParse(trimmed);
-            if (trimmed.isEmpty) {
-              errorText = "Roll number cannot be empty";
-              isValid = false;
-            } else if (rollNo == null || rollNo <= 0) {
-              errorText = "Invalid roll number";
-              isValid = false;
-            }
-          } else if (isEmail) {
-            if (trimmed.isEmpty) {
-              errorText = "Email cannot be empty";
-              isValid = false;
-            } else if (!_isEmailValid(trimmed)) {
-              errorText = "Invalid email format";
-              isValid = false;
-            }
-          } else if (isPassword) {
-            if (trimmed.isEmpty) {
-              errorText = "Password cannot be empty";
-              isValid = false;
-            } else if (!_isPasswordValid(trimmed)) {
-              errorText = "Password must be at least 6 characters";
-              isValid = false;
-            }
-          } else if (lowerLabel.contains("name")) {
+          } else if (lowerLabel.contains("name") && !lowerLabel.contains("parent")) {
             if (trimmed.isEmpty) {
               errorText = "$label cannot be empty";
               isValid = false;
@@ -373,9 +356,43 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
               errorText = "$label must be at least 2 characters";
               isValid = false;
             }
-          } else {
-            if (trimmed.isEmpty) {
-              errorText = "$label cannot be empty";
+          } else if (lowerLabel.contains("roll")) {
+            if (trimmed.isNotEmpty) {
+              final rollNo = int.tryParse(trimmed);
+              if (rollNo == null || rollNo <= 0) {
+                errorText = "Invalid roll number";
+                isValid = false;
+              } else {
+                int targetClassNo = int.tryParse(_classNo ?? '0') ?? 0;
+                String targetDiv = _division ?? '';
+                if ((targetClassNo == 0 || targetClassNo == 999 || targetDiv == 'All') &&
+                    _mainTeacher != null &&
+                    _mainTeacher!.classNo != 0) {
+                  targetClassNo = _mainTeacher!.classNo;
+                  targetDiv = _mainTeacher!.division;
+                }
+                final allStudents = ref.read(studentControllerProvider).value ?? _cachedStudents ?? <StudentsModel>[];
+                final isTaken = StudentHelper.isRollNoTaken(
+                  students: allStudents,
+                  classNo: targetClassNo,
+                  division: targetDiv,
+                  rollNo: rollNo,
+                  currentEditingStudentId: editingStudent?.studentId,
+                );
+                if (isTaken) {
+                  errorText = "Roll No $rollNo already assigned in this class!";
+                  isValid = false;
+                }
+              }
+            }
+          } else if (isEmail) {
+            if (trimmed.isNotEmpty && !_isEmailValid(trimmed)) {
+              errorText = "Invalid email format";
+              isValid = false;
+            }
+          } else if (isPassword) {
+            if (trimmed.isNotEmpty && !_isPasswordValid(trimmed)) {
+              errorText = "Password must be at least 6 characters";
               isValid = false;
             }
           }
@@ -452,8 +469,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     List<String> items,
     ValueChanged<String?> onChanged,
   ) {
+    final effectiveValue = (value != null && items.contains(value)) ? value : null;
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      initialValue: effectiveValue,
       items: items.map((e) {
         return DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14)));
       }).toList(),
@@ -529,12 +547,31 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     required BuildContext context,
     required TextEditingController controller,
     required void Function(void Function()) setSheetState,
+    List<StudentsModel>? students,
   }) {
-    final baseLanguages = ['Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
+    final baseLanguages = ['None', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'];
     final dynamicLanguages = <String>[...baseLanguages];
 
+    if (students != null) {
+      for (final s in students) {
+        final lang = s.language.trim();
+        if (StudentHelper.isNoneVariant(lang)) continue;
+        if (lang.isNotEmpty) {
+          for (var part in lang.split(RegExp(r'[,/|]'))) {
+            final trimmed = part.trim();
+            if (trimmed.isNotEmpty && !StudentHelper.isNoneVariant(trimmed) && !dynamicLanguages.contains(trimmed)) {
+              dynamicLanguages.add(trimmed);
+            }
+          }
+          if (!StudentHelper.isNoneVariant(lang) && !dynamicLanguages.contains(lang)) {
+            dynamicLanguages.add(lang);
+          }
+        }
+      }
+    }
+
     final currentVal = controller.text.trim();
-    if (currentVal.isNotEmpty && !dynamicLanguages.contains(currentVal)) {
+    if (currentVal.isNotEmpty && !StudentHelper.isNoneVariant(currentVal) && !dynamicLanguages.contains(currentVal)) {
       dynamicLanguages.add(currentVal);
     }
 
@@ -559,7 +596,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       ),
     ];
 
-    String? selectedValue = dynamicLanguages.contains(currentVal) ? currentVal : null;
+    String? selectedValue = StudentHelper.isNoneVariant(currentVal)
+        ? 'None'
+        : (dynamicLanguages.contains(currentVal) ? currentVal : null);
 
     return DropdownButtonFormField<String>(
       value: selectedValue,
@@ -590,7 +629,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             hint: "e.g. French, German, Spanish...",
           );
           if (customLang != null && customLang.trim().isNotEmpty) {
-            final trimmed = customLang.trim();
+            final trimmed = StudentHelper.normalizeToNone(customLang);
             controller.text = trimmed;
             setSheetState(() {});
           }
@@ -607,12 +646,31 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     required BuildContext context,
     required TextEditingController controller,
     required void Function(void Function()) setSheetState,
+    List<StudentsModel>? students,
   }) {
-    final baseClubs = ['NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
+    final baseClubs = ['None', 'NSS', 'NCC', 'Computer Science Club', 'Maths Club'];
     final dynamicClubs = <String>[...baseClubs];
 
+    if (students != null) {
+      for (final s in students) {
+        final club = s.clubs_nss_ncc.trim();
+        if (StudentHelper.isNoneVariant(club)) continue;
+        if (club.isNotEmpty) {
+          for (var part in club.split(RegExp(r'[,/|]'))) {
+            final trimmed = part.trim();
+            if (trimmed.isNotEmpty && !StudentHelper.isNoneVariant(trimmed) && !dynamicClubs.contains(trimmed)) {
+              dynamicClubs.add(trimmed);
+            }
+          }
+          if (!StudentHelper.isNoneVariant(club) && !dynamicClubs.contains(club)) {
+            dynamicClubs.add(club);
+          }
+        }
+      }
+    }
+
     final currentVal = controller.text.trim();
-    if (currentVal.isNotEmpty && !dynamicClubs.contains(currentVal)) {
+    if (currentVal.isNotEmpty && !StudentHelper.isNoneVariant(currentVal) && !dynamicClubs.contains(currentVal)) {
       dynamicClubs.add(currentVal);
     }
 
@@ -637,7 +695,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       ),
     ];
 
-    String? selectedValue = dynamicClubs.contains(currentVal) ? currentVal : null;
+    String? selectedValue = StudentHelper.isNoneVariant(currentVal)
+        ? 'None'
+        : (dynamicClubs.contains(currentVal) ? currentVal : null);
 
     return DropdownButtonFormField<String>(
       value: selectedValue,
@@ -668,7 +728,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             hint: "e.g. Robotics Club, Arts Club...",
           );
           if (customClub != null && customClub.trim().isNotEmpty) {
-            final trimmed = customClub.trim();
+            final trimmed = StudentHelper.normalizeToNone(customClub);
             controller.text = trimmed;
             setSheetState(() {});
           }
@@ -851,14 +911,14 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _nameController.text = student.studentName;
       _emailController.text = student.email;
       _passwordController.text = student.password;
-      _rollController.text = student.rollNo.toString();
+      _rollController.text = student.rollNo == 0 ? '' : student.rollNo.toString();
       _admissionController.text = student.admissionNo.toString();
-      _mobileController.text = student.mobileNo;
-      _parentController.text = student.parentName;
-      _addressController.text = student.address;
-      _languageController.text = student.language;
-      _clubsController.text = student.clubs_nss_ncc;
-      _selectedGender = student.gender;
+      _mobileController.text = StudentHelper.isNoneVariant(student.mobileNo) ? '' : student.mobileNo;
+      _parentController.text = StudentHelper.isNoneVariant(student.parentName) ? '' : student.parentName;
+      _addressController.text = StudentHelper.isNoneVariant(student.address) ? '' : student.address;
+      _languageController.text = StudentHelper.normalizeToNone(student.language);
+      _clubsController.text = StudentHelper.normalizeToNone(student.clubs_nss_ncc);
+      _selectedGender = (student.gender.isEmpty || StudentHelper.isNoneVariant(student.gender)) ? null : student.gender;
       _classNo = student.classNo.toString();
       _division = student.division;
       _selectedTeacherName = student.teacherName;
@@ -871,180 +931,206 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _nameController.clear();
       _emailController.clear();
       _passwordController.clear();
-      _rollController.clear();
       _admissionController.clear();
       _mobileController.clear();
       _parentController.clear();
       _addressController.clear();
-      _languageController.clear();
-      _clubsController.clear();
+      _languageController.text = 'None';
+      _clubsController.text = 'None';
       _dayController.clear();
       _monthController.clear();
       _yearController.clear();
       _selectedGender = null;
       _uploadedImageUrl = null;
       _selectedFile = null;
+
+      // Auto generate roll number for teacher's class
+      int targetClassNo = int.tryParse(_classNo ?? '0') ?? 0;
+      String targetDiv = _division ?? '';
+      if ((targetClassNo == 0 || targetClassNo == 999 || targetDiv == 'All') &&
+          _mainTeacher != null &&
+          _mainTeacher!.classNo != 0) {
+        targetClassNo = _mainTeacher!.classNo;
+        targetDiv = _mainTeacher!.division;
+      }
+
+      final allStudents = ref.read(studentControllerProvider).value ?? _cachedStudents ?? <StudentsModel>[];
+      final nextRoll = StudentHelper.generateNextRollNo(
+        students: allStudents,
+        classNo: targetClassNo,
+        division: targetDiv,
+      );
+      _rollController.text = nextRoll.toString();
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Center(
-        child: Container(
-          width: 600,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 40,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(28),
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: Text(
-                    editingStudent == null ? 'Add New Student' : 'Edit Student Profile',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final schoolStudents = ref.read(studentControllerProvider).value;
+          final List<StudentsModel> students = (schoolStudents != null && schoolStudents.isNotEmpty)
+              ? schoolStudents
+              : (_cachedStudents ?? <StudentsModel>[]);
 
-                // Profile Image
-                Center(
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
+          return Center(
+            child: Container(
+              width: 600,
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 40,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(28),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      CircleAvatar(
-                        radius: 54,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: _selectedFile != null
-                            ? FileImage(_selectedFile!)
-                            : (_uploadedImageUrl != null && _uploadedImageUrl!.isNotEmpty
-                                  ? NetworkImage(_uploadedImageUrl!)
-                                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                                as ImageProvider),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: Text(
+                        editingStudent == null ? 'Add New Student' : 'Edit Student Profile',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: _pickImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xff1193D4),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Profile Image
+                    Center(
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                          ),
+                          CircleAvatar(
+                            radius: 54,
+                            backgroundColor: Colors.grey[200],
+                            backgroundImage: ImageConstant.getStudentImageProvider(
+                              gender: _selectedGender,
+                              imageUrl: _uploadedImageUrl,
+                              selectedFile: _selectedFile,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () async {
+                                await _pickImage();
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xff1193D4),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_nameController, "Name", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_rollController, "Roll No", inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildPhoneField(),
+                    const SizedBox(height: 14),
+                    _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setSheetState(() => _selectedGender = v)),
+                    const SizedBox(height: 14),
+                    _buildDateOfBirthField(context: context, setSheetState: setSheetState),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_addressController, "Address", inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
+                    ]),
+                    const SizedBox(height: 14),
+                    const SizedBox(height: 14),
+                    _buildLanguageDropdownField(
+                      context: context,
+                      controller: _languageController,
+                      setSheetState: setSheetState,
+                      students: students,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildClubsDropdownField(
+                      context: context,
+                      controller: _clubsController,
+                      setSheetState: setSheetState,
+                      students: students,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
+                    const SizedBox(height: 14),
+                    _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
+                    const SizedBox(height: 28),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1193D4),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildValidatedField(_admissionController, "Admission No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6)
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_nameController, "Name", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_rollController, "Roll No", inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(2),
-                ]),
-                const SizedBox(height: 14),
-                _buildPhoneField(),
-                const SizedBox(height: 14),
-                _buildDropdown("Gender", _selectedGender, ['Male', 'Female'], (v) => setState(() => _selectedGender = v)),
-                const SizedBox(height: 14),
-                _buildDateOfBirthField(context: context),
-                const SizedBox(height: 14),
-                _buildValidatedField(_parentController, "Parent Name", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                _buildValidatedField(_addressController, "Address", inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
-                ]),
-                const SizedBox(height: 14),
-                const SizedBox(height: 14),
-                _buildLanguageDropdownField(
-                  context: context,
-                  controller: _languageController,
-                  setSheetState: setState,
-                ),
-                const SizedBox(height: 14),
-                _buildClubsDropdownField(
-                  context: context,
-                  controller: _clubsController,
-                  setSheetState: setState,
-                ),
-                const SizedBox(height: 14),
-                _buildValidatedField(_emailController, "Email", isEmail: true, readOnly: true),
-                const SizedBox(height: 14),
-                _buildValidatedField(_passwordController, "Password", isPassword: true, readOnly: true),
-                const SizedBox(height: 28),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xff1193D4),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _isUploading
-                        ? null
-                        : () async {
+                        onPressed: _isUploading
+                            ? null
+                            : () async {
                       final admissionNo = _admissionController.text.trim();
                       final rollNo = _rollController.text.trim();
                       final name = _nameController.text.trim();
@@ -1057,10 +1143,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                       final month = _monthController.text.trim();
                       final year = _yearController.text.trim();
 
-                      if (admissionNo.isEmpty || admissionNo.length != 6) {
+                      final admNoVal = int.tryParse(admissionNo);
+                      if (admissionNo.isEmpty || admNoVal == null || admissionNo.length < 4) {
                         AlertInfo.show(
                           context: context,
-                          text: 'Admission number must be exactly 6 digits',
+                          text: 'Admission number must be at least 4 digits',
                           typeInfo: TypeInfo.error,
                           iconColor: Colors.white,
                           backgroundColor: Colors.redAccent,
@@ -1081,174 +1168,131 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                         );
                         return;
                       }
-                      if (rollNo.isEmpty) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Roll number cannot be empty',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      final phoneError = getPhoneValidationErrorMessage(mobile);
-                      if (phoneError.isNotEmpty) {
-                        AlertInfo.show(
-                          context: context,
-                          text: phoneError,
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (_selectedGender == null || _selectedGender!.isEmpty) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Please select a gender',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (_classNo == null || _division == null) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Teacher data not loaded',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      final dayVal = int.tryParse(day);
-                      final monthVal = int.tryParse(month);
-                      final yearVal = int.tryParse(year);
-                      if (dayVal == null || dayVal < 1 || dayVal > 31 ||
-                          monthVal == null || monthVal < 1 || monthVal > 12 ||
-                          yearVal == null || yearVal < 1900 || yearVal > DateTime.now().year) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Please enter a valid Date of Birth (DD/MM/YYYY)',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (parent.isEmpty) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Parent name cannot be empty',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (address.isEmpty) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Address cannot be empty',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (!_isEmailValid(email)) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Please enter a valid Email',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
-                      if (!_isPasswordValid(password)) {
-                        AlertInfo.show(
-                          context: context,
-                          text: 'Password must be at least 6 characters',
-                          typeInfo: TypeInfo.error,
-                          iconColor: Colors.white,
-                          backgroundColor: Colors.redAccent,
-                          textColor: Colors.white,
-                          position: MessagePosition.top,
-                        );
-                        return;
-                      }
 
-                        final dob = DateTime(
-                          int.parse(_yearController.text),
-                          int.parse(_monthController.text),
-                          int.parse(_dayController.text),
-                        );
-
-                        // 🔥 Duplicate Student Prevention Check
-                        final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
-                        final duplicateStudent = StudentDuplicateChecker.findDuplicate(
-                          existingStudents: existingStudents,
-                          newAdmissionNo: int.tryParse(_admissionController.text.trim()) ?? 0,
-                          newName: _nameController.text.trim(),
-                          newMobile: _mobileController.text.trim(),
-                          newDob: dob,
-                          currentEditingStudentId: editingStudent?.studentId,
-                        );
-
-                        if (duplicateStudent != null) {
-                          await StudentDuplicateChecker.showDuplicateAlertDialog(
+                      // Mobile is optional. If provided and not a 'None' variant, validate format
+                      if (mobile.isNotEmpty && !StudentHelper.isNoneVariant(mobile)) {
+                        final phoneError = getPhoneValidationErrorMessage(mobile);
+                        if (phoneError.isNotEmpty) {
+                          AlertInfo.show(
                             context: context,
-                            existingStudent: duplicateStudent,
+                            text: phoneError,
+                            typeInfo: TypeInfo.error,
+                            iconColor: Colors.white,
+                            backgroundColor: Colors.redAccent,
+                            textColor: Colors.white,
+                            position: MessagePosition.top,
                           );
                           return;
                         }
+                      }
 
-                        setState(() => _isUploading = true);
-                        try {
-                          if (_selectedFile != null) {
-                            _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
-                          }
+                      final dayVal = int.tryParse(day);
+                      final monthVal = int.tryParse(month);
+                      final yearVal = int.tryParse(year);
+                      DateTime dob;
+                      if (dayVal != null && dayVal >= 1 && dayVal <= 31 &&
+                          monthVal != null && monthVal >= 1 && monthVal <= 12 &&
+                          yearVal != null && yearVal >= 1900 && yearVal <= DateTime.now().year) {
+                        dob = DateTime(yearVal, monthVal, dayVal);
+                      } else {
+                        dob = DateTime(2000, 1, 1);
+                      }
+
+                      final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+
+                      // Unique Roll Number Check within Class & Division
+                      final parsedRollNo = rollNo.isEmpty ? 0 : (int.tryParse(rollNo) ?? 0);
+                      if (parsedRollNo > 0) {
+                        int targetClassNo = int.tryParse(_classNo ?? '0') ?? 0;
+                        String targetDivision = (_division == null || _division!.trim().isEmpty) ? "None" : _division!.trim();
+                        if ((targetClassNo == 0 || targetClassNo == 999 || targetDivision == 'All') &&
+                            _mainTeacher != null &&
+                            _mainTeacher!.classNo != 0) {
+                          targetClassNo = _mainTeacher!.classNo;
+                          targetDivision = _mainTeacher!.division;
+                        }
+
+                        final isRollTaken = StudentHelper.isRollNoTaken(
+                          students: existingStudents,
+                          classNo: targetClassNo,
+                          division: targetDivision,
+                          rollNo: parsedRollNo,
+                          currentEditingStudentId: editingStudent?.studentId,
+                        );
+                        if (isRollTaken) {
+                          AlertInfo.show(
+                            context: context,
+                            text: 'Roll number $parsedRollNo is already assigned in Class $targetClassNo - $targetDivision',
+                            typeInfo: TypeInfo.error,
+                            iconColor: Colors.white,
+                            backgroundColor: Colors.redAccent,
+                            textColor: Colors.white,
+                            position: MessagePosition.top,
+                          );
+                          return;
+                        }
+                      }
+
+                      // 🔥 Unique Admission Number Check (Mobile uniqueness check removed)
+                      final duplicateStudent = StudentDuplicateChecker.findDuplicate(
+                        existingStudents: existingStudents,
+                        newAdmissionNo: admNoVal,
+                        newName: name,
+                        newMobile: mobile,
+                        newDob: dob,
+                        currentEditingStudentId: editingStudent?.studentId,
+                      );
+
+                      if (duplicateStudent != null) {
+                        await StudentDuplicateChecker.showDuplicateAlertDialog(
+                          context: context,
+                          existingStudent: duplicateStudent,
+                        );
+                        return;
+                      }
+
+                      setSheetState(() => _isUploading = true);
+                      setState(() => _isUploading = true);
+                      try {
+                        if (_selectedFile != null) {
+                          _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
+                        }
+
+                        final firstName = name.split(' ').first.toLowerCase();
+                        final effectiveEmail = email.isNotEmpty ? email : "$firstName$admissionNo@scholo.com";
+                        final effectivePassword = password.isNotEmpty ? password : "$firstName@$admissionNo";
+
+                        int targetClassNo = int.tryParse(_classNo ?? '0') ?? 0;
+                        String targetDivision = (_division == null || _division!.trim().isEmpty) ? "None" : _division!.trim();
+
+                        // If currently in a generic grouping (999 or 'All'), fallback to teacher's own class
+                        if ((targetClassNo == 999 || targetDivision == 'All') && _mainTeacher != null && _mainTeacher!.classNo != 0) {
+                          targetClassNo = _mainTeacher!.classNo;
+                          targetDivision = _mainTeacher!.division;
+                        }
 
                         final newStudent = StudentsModel(
                           studentId: editingStudent?.studentId ?? '',
-                          admissionNo: int.parse(_admissionController.text),
-                          rollNo: int.parse(_rollController.text),
-                          studentName: _nameController.text,
-                          mobileNo: _mobileController.text,
-                          email: _emailController.text,
-                          password: _passwordController.text,
-                          address: _addressController.text,
-                          parentName: _parentController.text,
-                          classNo: int.parse(_classNo ?? '0'),
-                          division: _division ?? 'Not',
-                          teacherName: _selectedTeacherName ?? '',
+                          admissionNo: admNoVal,
+                          rollNo: rollNo.isEmpty ? 0 : (int.tryParse(rollNo) ?? 0),
+                          studentName: name,
+                          mobileNo: (mobile.isEmpty || StudentHelper.isNoneVariant(mobile)) ? "None" : mobile,
+                          email: effectiveEmail,
+                          password: effectivePassword,
+                          address: address.isEmpty ? "None" : address,
+                          parentName: parent.isEmpty ? "None" : parent,
+                          classNo: targetClassNo,
+                          division: targetDivision,
+                          teacherName: (_selectedTeacherName == null || _selectedTeacherName!.trim().isEmpty) ? "None" : _selectedTeacherName!.trim(),
                           teacherId: widget.teacherId,
-                          gender: _selectedGender ?? '',
+                          gender: (_selectedGender == null || _selectedGender!.trim().isEmpty) ? "None" : _selectedGender!.trim(),
                           delete: false,
-                          imageUrl: _uploadedImageUrl ?? '',
+                          imageUrl: _uploadedImageUrl ?? (editingStudent?.imageUrl ?? ''),
                           dateOfBirth: dob,
                           createdDate: editingStudent?.createdDate ?? DateTime.now(),
                           schoolId: SessionManager.schoolId,
-                          language: _languageController.text.trim(),
-                          clubs_nss_ncc: _clubsController.text.trim(),
+                          language: StudentHelper.normalizeToNone(_languageController.text),
+                          clubs_nss_ncc: StudentHelper.normalizeToNone(_clubsController.text),
                         );
 
                         final studentCollectionRef = FirebaseFirestore.instance.schoolCollection(FirebaseConstant.student);
@@ -1308,7 +1352,10 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           );
                         }
                       } finally {
-                        setState(() => _isUploading = false);
+                        if (context.mounted) {
+                          setSheetState(() => _isUploading = false);
+                          setState(() => _isUploading = false);
+                        }
                       }
                     },
                     child: _isUploading
@@ -1323,8 +1370,10 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
             ),
           ),
         ),
-      ),
-    );
+      );
+    },
+  ),
+);
   }
 
   void showStudentDetailsModal(BuildContext context, StudentsModel student) {
@@ -1386,10 +1435,10 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                             child: CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.grey[200],
-                              backgroundImage: student.imageUrl.isNotEmpty
-                                  ? NetworkImage(student.imageUrl)
-                                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                              as ImageProvider,
+                              backgroundImage: ImageConstant.getStudentImageProvider(
+                                gender: student.gender,
+                                imageUrl: student.imageUrl,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -1703,13 +1752,14 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(studentControllerProvider);
     final dateId = " ${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}";
 
     return Scaffold(
       backgroundColor: const Color(0xffF6F8FC),
 
       /// Floating Add Button
-      floatingActionButton: _isClassTeacher
+      floatingActionButton: (_isClassTeacher || (_mainTeacher != null && _mainTeacher!.classNo != 0))
           ? FloatingActionButton(
               shape: const CircleBorder(),
               backgroundColor: const Color(0xff1193D4),
@@ -1801,9 +1851,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isLanguageTeacher
-                          ? "Language Teacher: ${_selectedTeacherName ?? ''}${_teacherSubject.isNotEmpty ? ' ($_teacherSubject)' : ''}"
-                          : "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}",
+                      _selectedClassItem?.isClassTeacher == true
+                          ? "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}"
+                          : (_isLanguageTeacher
+                              ? "Language Teacher: ${_selectedTeacherName ?? ''}${_teacherSubject.isNotEmpty ? ' ($_teacherSubject)' : ''}"
+                              : "Class Teacher: ${_classTeacherNames["$_classNo-$_division"] ?? _selectedTeacherName ?? ''}"),
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -2003,12 +2055,16 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                       var allStudents = docs.map((doc) {
                         return StudentsModel.fromMap(doc.data() as Map<String, dynamic>);
                       }).toList();
+                      _cachedStudents = allStudents;
 
-                      // 1. Filter by Language if Language Teacher & default filter
-                      if (_isLanguageTeacher && _teacherSubject.isNotEmpty && _selectedLanguageFilter == 'All') {
+                      // 1. Filter by Language ONLY if viewing a Language grouping & default filter
+                      final bool isViewingLanguageGroup = _selectedClassItem?.division == 'All' || _classNo == '999';
+                      if (_isLanguageTeacher && isViewingLanguageGroup && _teacherSubject.isNotEmpty && _selectedLanguageFilter == 'All') {
                         allStudents = allStudents.where((s) {
-                          if (s.language.isEmpty) return true;
-                          return s.language.trim().toLowerCase() == _teacherSubject.trim().toLowerCase();
+                          if (s.language.isEmpty || StudentHelper.isNoneVariant(s.language)) return false;
+                          final sLang = s.language.trim().toLowerCase();
+                          final tSubj = _teacherSubject.trim().toLowerCase();
+                          return sLang == tSubj || sLang.split(RegExp(r'[,/|]')).any((part) => part.trim() == tSubj);
                         }).toList();
                       }
 
@@ -2023,6 +2079,12 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                       // 3. Filter by Specific Language
                       if (_selectedLanguageFilter != 'All') {
                         allStudents = allStudents.where((s) {
+                          if (_selectedLanguageFilter == 'None') {
+                            return StudentHelper.isNoneVariant(s.language);
+                          }
+                          if (StudentHelper.isNoneVariant(s.language)) {
+                            return false;
+                          }
                           return s.language.trim().toLowerCase().contains(_selectedLanguageFilter.trim().toLowerCase());
                         }).toList();
                       }
@@ -2032,12 +2094,18 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                         final clubLower = _selectedClubFilter.toLowerCase();
                         allStudents = allStudents.where((s) {
                           final studentClub = s.clubs_nss_ncc.trim().toLowerCase();
+                          if (_selectedClubFilter == 'None') {
+                            return StudentHelper.isNoneVariant(s.clubs_nss_ncc);
+                          }
+                          if (StudentHelper.isNoneVariant(s.clubs_nss_ncc)) {
+                            return false;
+                          }
                           if (clubLower == 'nss') {
                             return studentClub.contains('nss');
                           } else if (clubLower == 'ncc') {
                             return studentClub.contains('ncc');
                           } else if (clubLower == 'clubs') {
-                            return studentClub.isNotEmpty;
+                            return studentClub.isNotEmpty && !StudentHelper.isNoneVariant(studentClub);
                           } else {
                             return studentClub.contains(clubLower);
                           }
@@ -2326,19 +2394,21 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     bool hasActiveFilter = activeFilterCount > 0;
 
     // Collect unique languages
-    final langSet = <String>{'All', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'};
+    final langSet = <String>{'All', 'None', 'Arabic', 'Malayalam', 'Hindi', 'English', 'Sanskrit', 'Urdu'};
     for (var s in students) {
-      if (s.language.isNotEmpty) langSet.add(s.language);
+      final l = s.language.trim();
+      if (l.isNotEmpty && !StudentHelper.isNoneVariant(l)) langSet.add(l);
     }
 
     // Collect unique clubs / activities
-    final clubList = <String>['All', 'NSS', 'NCC', 'Clubs'];
+    final clubList = <String>['All', 'None', 'NSS', 'NCC', 'Clubs'];
     for (var s in students) {
       final cVal = s.clubs_nss_ncc.trim();
-      if (cVal.isNotEmpty) {
+      if (cVal.isNotEmpty && !StudentHelper.isNoneVariant(cVal)) {
         for (var part in cVal.split(RegExp(r'[,/|]'))) {
           final trimmed = part.trim();
           if (trimmed.isNotEmpty &&
+              !StudentHelper.isNoneVariant(trimmed) &&
               trimmed.toUpperCase() != 'NSS' &&
               trimmed.toUpperCase() != 'NCC' &&
               trimmed.toLowerCase() != 'clubs' &&
@@ -2611,10 +2681,10 @@ Widget studentCard({
                   child: CircleAvatar(
                     radius: 28,
                     backgroundColor: Colors.grey.shade200,
-                    backgroundImage: student.imageUrl.isNotEmpty
-                        ? NetworkImage(student.imageUrl)
-                        : const AssetImage(ImageConstant.temporaryStudentImage)
-                              as ImageProvider,
+                    backgroundImage: ImageConstant.getStudentImageProvider(
+                      gender: student.gender,
+                      imageUrl: student.imageUrl,
+                    ),
                   ),
                 ),
                 if (attendanceStatus != null)

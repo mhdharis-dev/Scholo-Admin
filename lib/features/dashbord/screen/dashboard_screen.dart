@@ -1807,13 +1807,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }
             }
           } else if (lowerLabel.contains("roll")) {
-            final rollNo = int.tryParse(trimmed);
-            if (trimmed.isEmpty) {
-              errorText = "Roll number cannot be empty";
-              isValid = false;
-            } else if (rollNo == null || rollNo <= 0) {
-              errorText = "Invalid roll number";
-              isValid = false;
+            if (trimmed.isNotEmpty) {
+              final rollNo = int.tryParse(trimmed);
+              if (rollNo == null || rollNo <= 0) {
+                errorText = "Invalid roll number";
+                isValid = false;
+              } else if (_classNo != null && _division != null) {
+                final allStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                final isTaken = StudentHelper.isRollNoTaken(
+                  students: allStudents,
+                  classNo: _classNoToInt(_classNo!),
+                  division: _division!,
+                  rollNo: rollNo,
+                );
+                if (isTaken) {
+                  errorText = "Roll No $rollNo already assigned in $_classNo-$_division!";
+                  isValid = false;
+                }
+              }
             }
           } else if (lowerLabel.contains("employee id") || lowerLabel.contains("teacher id")) {
             if (trimmed.isEmpty) {
@@ -1923,8 +1934,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     List<String> items,
     ValueChanged<String?> onChanged,
   ) {
+    final effectiveValue = (value != null && items.contains(value)) ? value : null;
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      initialValue: effectiveValue,
       items: items
           .map((e) => DropdownMenuItem(
                 value: e,
@@ -2840,6 +2852,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       );
                       _selectedTeacherId = selectedClassModel.teacherId;
                       _selectedTeacherName = selectedClassModel.teacherName;
+
+                      // Auto generate roll number for dashboard!
+                      final allStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+                      final nextRoll = StudentHelper.generateNextRollNo(
+                        students: allStudents,
+                        classNo: _classNoToInt(_classNo!),
+                        division: _division!,
+                      );
+                      _rollController.text = nextRoll.toString();
                     }
                   });
                 },
@@ -2980,10 +3001,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             child: CircleAvatar(
                               radius: 54,
                               backgroundColor: Colors.grey[200],
-                              backgroundImage: _selectedFile != null
-                                  ? FileImage(_selectedFile!)
-                                  : const AssetImage(ImageConstant.temporaryStudentImage)
-                                      as ImageProvider,
+                              backgroundImage: ImageConstant.getStudentImageProvider(
+                                gender: _selectedGender,
+                                imageUrl: _uploadedImageUrl,
+                                selectedFile: _selectedFile,
+                              ),
                             ),
                           ),
                           Positioned(
@@ -3010,14 +3032,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 24),
                     _buildTextFieldWithValidation(_admissionController, "Admission No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
                     ]),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_nameController, "Name"),
                     const SizedBox(height: 14),
                     _buildTextFieldWithValidation(_rollController, "Roll No", inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(2),
                     ]),
                     const SizedBox(height: 14),
                     _buildPhoneField(),
@@ -3229,8 +3249,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               int.parse(_dayController.text),
                             );
 
-                            // 🔥 Duplicate Student Prevention Check
                             final existingStudents = ref.read(studentControllerProvider).value ?? <StudentsModel>[];
+
+                            // Unique Roll Number Check within Class & Division
+                            final parsedRollNo = int.tryParse(rollNo) ?? 0;
+                            if (parsedRollNo > 0 && _classNo != null && _division != null) {
+                              final isRollTaken = StudentHelper.isRollNoTaken(
+                                students: existingStudents,
+                                classNo: _classNoToInt(_classNo!),
+                                division: _division!,
+                                rollNo: parsedRollNo,
+                              );
+                              if (isRollTaken) {
+                                AlertInfo.show(
+                                  context: context,
+                                  text: 'Roll number $parsedRollNo is already assigned in $_classNo-$_division',
+                                  typeInfo: TypeInfo.error,
+                                  iconColor: Colors.white,
+                                  backgroundColor: Colors.redAccent,
+                                  textColor: Colors.white,
+                                  position: MessagePosition.top,
+                                );
+                                return;
+                              }
+                            }
+
+                            // 🔥 Duplicate Student Prevention Check
                             final duplicateStudent = StudentDuplicateChecker.findDuplicate(
                               existingStudents: existingStudents,
                               newAdmissionNo: int.tryParse(_admissionController.text.trim()) ?? 0,
@@ -4394,10 +4438,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ['ID', "Name", "Class / Division"],
       students
           .map(
-            (s) => _rowItem(
-              '#${s.admissionNo}',
-              s.studentName,
-              "${s.classNo}-${s.division}",
+            (s) => Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    '#${s.admissionNo}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 12,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: ImageConstant.getStudentImageProvider(
+                          gender: s.gender,
+                          imageUrl: s.imageUrl,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          s.studentName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    "${s.classNo}-${s.division}",
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              ],
             ),
           )
           .toList(),

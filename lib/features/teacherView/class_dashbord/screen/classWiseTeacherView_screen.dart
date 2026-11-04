@@ -1158,9 +1158,10 @@ class _ClassWiseTeacherViewScreenState
                                         activeColor: const Color(0xff1193D4),
                                         secondary: CircleAvatar(
                                           radius: 18,
-                                          backgroundImage: s.imageUrl.isNotEmpty
-                                              ? NetworkImage(s.imageUrl)
-                                              : const AssetImage(ImageConstant.temporaryStudentImage) as ImageProvider,
+                                          backgroundImage: ImageConstant.getStudentImageProvider(
+                                            gender: s.gender,
+                                            imageUrl: s.imageUrl,
+                                          ),
                                         ),
                                         onChanged: (val) {
                                           setSheetState(() {

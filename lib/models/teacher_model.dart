@@ -11,6 +11,7 @@ class TeacherModel {
   final String teacherName;
   final String division;
   final String subject;
+  final String? subjectShort;
   final String email;
   final String password;
   final String id;
@@ -37,6 +38,7 @@ class TeacherModel {
     required this.teacherName,
     required this.division,
     required this.subject,
+    this.subjectShort,
     required this.email,
     required this.password,
     required this.id,
@@ -63,6 +65,7 @@ class TeacherModel {
     String? teacherName,
     String? division,
     String? subject,
+    String? subjectShort,
     String? email,
     String? password,
     String? id,
@@ -85,6 +88,7 @@ class TeacherModel {
       teacherName: teacherName ?? this.teacherName,
       division: division ?? this.division,
       subject: subject ?? this.subject,
+      subjectShort: subjectShort ?? this.subjectShort,
       email: email ?? this.email,
       password: password ?? this.password,
       id: id ?? this.id,
@@ -112,6 +116,7 @@ class TeacherModel {
       'teacherName': teacherName,
       'division': division,
       'subject': subject,
+      'subjectShort': subjectShort,
       'email': email,
       'password': password,
       'id': id,
@@ -146,6 +151,7 @@ class TeacherModel {
       teacherName: map['teacherName'] ?? '',
       division: map['division'] ?? '',
       subject: map['subject'] ?? '',
+      subjectShort: map['subjectShort'] as String?,
       email: map['email'] ?? '',
       password: map['password'] ?? '',
       id: map['id'] ?? '',

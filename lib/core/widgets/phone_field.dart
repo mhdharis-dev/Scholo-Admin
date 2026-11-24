@@ -87,6 +87,8 @@ class CountryPhoneField extends StatefulWidget {
   final String labelText;
   final ValueChanged<String>? onChanged;
   final FormFieldValidator<String>? validator;
+  final bool isRequired;
+  final bool enableValidation;
 
   const CountryPhoneField({
     super.key,
@@ -94,6 +96,8 @@ class CountryPhoneField extends StatefulWidget {
     this.labelText = 'Mobile No',
     this.onChanged,
     this.validator,
+    this.isRequired = true,
+    this.enableValidation = true,
   });
 
   @override
@@ -115,8 +119,9 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
   @override
   void didUpdateWidget(covariant CountryPhoneField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final currentFull = widget.controller.text;
-    final activeFull = '${_selectedCountry['code']}${_numberController.text}';
+    final currentFull = widget.controller.text.trim();
+    final number = _numberController.text.trim();
+    final activeFull = number.isEmpty ? '' : '${_selectedCountry['code']}$number';
     if (currentFull != activeFull) {
       _initFromController();
     }
@@ -124,6 +129,11 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
 
   void _initFromController() {
     final text = widget.controller.text.trim();
+    if (text.isEmpty || text == 'None') {
+      _selectedCountry = countryCodes.firstWhere((c) => c['name'] == 'IN', orElse: () => countryCodes.first);
+      _numberController.text = '';
+      return;
+    }
     Map<String, dynamic>? matchedCountry;
 
     for (final c in countryCodes) {
@@ -145,7 +155,18 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
   }
 
   void _updateWidgetController() {
-    final fullNumber = '${_selectedCountry['code']}${_numberController.text}';
+    final number = _numberController.text.trim();
+    if (number.isEmpty) {
+      if (widget.controller.text.isNotEmpty) {
+        widget.controller.text = '';
+        if (widget.onChanged != null) {
+          widget.onChanged!('');
+        }
+      }
+      setState(() {});
+      return;
+    }
+    final fullNumber = '${_selectedCountry['code']}$number';
     if (widget.controller.text != fullNumber) {
       widget.controller.text = fullNumber;
       if (widget.onChanged != null) {
@@ -168,11 +189,15 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
     final bool isTouched = number.isNotEmpty;
     final minLen = _selectedCountry['min'] as int;
     final maxLen = _selectedCountry['max'] as int;
-    final bool isPhoneValid = isTouched && number.length >= minLen && number.length <= maxLen;
+    final bool isPhoneValid = !widget.enableValidation
+        ? true
+        : (!widget.isRequired && !isTouched
+            ? true
+            : (isTouched && number.length >= minLen && number.length <= maxLen));
 
-    final Color borderColor = !isTouched
+    final Color borderColor = (!isTouched || (!widget.enableValidation && !isTouched))
         ? Colors.grey.shade200
-        : (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent);
+        : (isPhoneValid ? (widget.enableValidation ? const Color(0xFF10B981) : Colors.grey.shade300) : Colors.redAccent);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +205,7 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
       children: [
         TextFormField(
           controller: _numberController,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          autovalidateMode: widget.enableValidation ? AutovalidateMode.onUserInteraction : AutovalidateMode.disabled,
           keyboardType: TextInputType.phone,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
@@ -189,15 +214,15 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: TextStyle(
-              color: isTouched
+              color: widget.enableValidation && isTouched
                   ? (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent)
                   : Colors.grey.shade600,
               fontSize: 13,
             ),
             filled: true,
-            fillColor: isTouched && !isPhoneValid
+            fillColor: widget.enableValidation && isTouched && !isPhoneValid
                 ? Colors.red.shade50
-                : (isTouched && isPhoneValid ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC)),
+                : (widget.enableValidation && isTouched && isPhoneValid ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC)),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: borderColor, width: isTouched ? 1.5 : 1.0),
@@ -205,7 +230,7 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
-                color: isTouched ? (isPhoneValid ? const Color(0xFF10B981) : Colors.redAccent) : const Color(0xff1193D4),
+                color: isTouched ? (isPhoneValid ? (widget.enableValidation ? const Color(0xFF10B981) : const Color(0xff1193D4)) : Colors.redAccent) : const Color(0xff1193D4),
                 width: 1.5,
               ),
             ),
@@ -221,7 +246,7 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
               borderRadius: BorderRadius.circular(12),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            suffixIcon: !isTouched
+            suffixIcon: (!isTouched || !widget.enableValidation)
                 ? null
                 : Icon(
                     isPhoneValid ? Icons.check_circle_rounded : Icons.cancel_rounded,
@@ -261,8 +286,14 @@ class _CountryPhoneFieldState extends State<CountryPhoneField> {
             ),
           ),
           validator: (value) {
+            if (!widget.enableValidation) {
+              return null;
+            }
             final number = _numberController.text.trim();
             if (number.isEmpty) {
+              if (!widget.isRequired) {
+                return null;
+              }
               return 'Please enter a mobile number';
             }
             final minLen = _selectedCountry['min'] as int;

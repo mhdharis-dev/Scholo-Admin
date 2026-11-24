@@ -43,6 +43,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   final _passwordController = TextEditingController();
   final _mobileController = TextEditingController();
   final _subjectController = TextEditingController();
+  final _subjectShortController = TextEditingController();
   final _addressController = TextEditingController();
   final _dayController = TextEditingController();
   final _monthController = TextEditingController();
@@ -274,6 +275,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
     _passwordController.dispose();
     _mobileController.dispose();
     _subjectController.dispose();
+    _subjectShortController.dispose();
     _addressController.dispose();
     _dayController.dispose();
     _monthController.dispose();
@@ -648,6 +650,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       _passwordController.text = teacher.password;
       _mobileController.text = teacher.mobileNo;
       _subjectController.text = teacher.subject;
+      _subjectShortController.text = teacher.subjectShort ?? '';
       _addressController.text = teacher.address;
       _selectedClass = teacher.classNo.toString();
       _selectedDiv = teacher.division;
@@ -665,6 +668,7 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       _passwordController.clear();
       _mobileController.clear();
       _subjectController.clear();
+      _subjectShortController.clear();
       _addressController.clear();
       _selectedClass = '0';
       _selectedDiv = 'Nil';
@@ -793,6 +797,14 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                     _buildTextFieldWithValidation(_subjectController, "Subject", inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s]")),
                     ]),
+                    const SizedBox(height: 14),
+                    _buildTextFieldWithValidation(
+                      _subjectShortController,
+                      "Subject Short (Optional)",
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z0-9\s\-_/]")),
+                      ],
+                    ),
                     const SizedBox(height: 14),
                     _buildClassAndDivisionDropdowns(classes, setSheetState),
                     const SizedBox(height: 14),
@@ -1041,6 +1053,9 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
                                     classNo: _classNoToInt(_selectedClass!),
                                     division: _selectedDiv!,
                                     subject: _subjectController.text,
+                                    subjectShort: _subjectShortController.text.trim().isNotEmpty
+                                        ? _subjectShortController.text.trim()
+                                        : null,
                                     email: _emailController.text,
                                     password: _passwordController.text,
                                     address: _addressController.text,

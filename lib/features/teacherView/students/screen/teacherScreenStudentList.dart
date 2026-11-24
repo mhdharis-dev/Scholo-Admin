@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:file_picker/file_picker.dart';
@@ -80,8 +81,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
   final _searchController = TextEditingController();
 
   File? _selectedFile;
+  Uint8List? _selectedFileBytes;
+  String? _selectedFileName;
   String? _uploadedImageUrl;
   bool _isUploading = false;
+  bool _isImageRemoved = false;
 
   String? _selectedGender;
   String? _selectedTeacherName;
@@ -279,22 +283,61 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     return classNoInt.toString();
   }
 
-  Future<String> _uploadToCloudinary(File file) async {
-    final response = await CloudinaryService.studentProfile.uploadFile(
-      CloudinaryFile.fromFile(file.path, folder: 'student_images'),
-    );
-    return response.secureUrl;
+  Future<String> _uploadToCloudinary({File? file, Uint8List? bytes, String? fileName}) async {
+    try {
+      if (bytes != null && bytes.isNotEmpty) {
+        final safeIdentifier = "${DateTime.now().millisecondsSinceEpoch}_${(fileName ?? 'student').replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}";
+        final response = await CloudinaryService.studentProfile.uploadFile(
+          CloudinaryFile.fromBytesData(
+            bytes,
+            identifier: safeIdentifier,
+            folder: 'student_images',
+            resourceType: CloudinaryResourceType.Image,
+          ),
+        );
+        return response.secureUrl;
+      } else if (file != null && !kIsWeb) {
+        final response = await CloudinaryService.studentProfile.uploadFile(
+          CloudinaryFile.fromFile(file.path, folder: 'student_images'),
+        );
+        return response.secureUrl;
+      }
+    } catch (e) {
+      debugPrint("Error uploading to Cloudinary: $e");
+      rethrow;
+    }
+    return '';
   }
 
-  /// 🔹 Pick Image
-  Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['png', 'jpg', 'jpeg'],
-    );
+  /// 🔹 Pick Image (Supports Web Bytes and Native)
+  Future<void> _pickImage([StateSetter? setSheetState]) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
+        withData: true,
+      );
 
-    if (result != null && result.files.single.path != null) {
-      setState(() => _selectedFile = File(result.files.single.path!));
+      if (result != null && result.files.isNotEmpty) {
+        final picked = result.files.first;
+        _selectedFileBytes = picked.bytes;
+        _selectedFileName = picked.name;
+        _isImageRemoved = false;
+        if (picked.path != null && !kIsWeb) {
+          _selectedFile = File(picked.path!);
+        } else {
+          _selectedFile = null;
+        }
+        _uploadedImageUrl = null;
+        if (setSheetState != null) {
+          setSheetState(() {});
+        }
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
     }
   }
 
@@ -454,11 +497,13 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
     );
   }
 
-  /// 🔹 Phone Field
+  /// 🔹 Phone Field (Optional & No Validation)
   Widget _buildPhoneField() {
     return CountryPhoneField(
       controller: _mobileController,
-      labelText: 'Mobile No',
+      labelText: 'Mobile No (Optional)',
+      isRequired: false,
+      enableValidation: false,
     );
   }
 
@@ -906,6 +951,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
   }
 
   void _openStudentDialog([StudentsModel? student]) {
+    _selectedFile = null;
+    _selectedFileBytes = null;
+    _selectedFileName = null;
+    _isImageRemoved = false;
+
     if (student != null) {
       editingStudent = student;
       _nameController.text = student.studentName;
@@ -943,6 +993,9 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       _selectedGender = null;
       _uploadedImageUrl = null;
       _selectedFile = null;
+      _selectedFileBytes = null;
+      _selectedFileName = null;
+      _isImageRemoved = false;
 
       // Auto generate roll number for teacher's class
       int targetClassNo = int.tryParse(_classNo ?? '0') ?? 0;
@@ -1023,49 +1076,127 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
                     // Profile Image
                     Center(
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 3),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                          ),
-                          CircleAvatar(
-                            radius: 54,
-                            backgroundColor: Colors.grey[200],
-                            backgroundImage: ImageConstant.getStudentImageProvider(
-                              gender: _selectedGender,
-                              imageUrl: _uploadedImageUrl,
-                              selectedFile: _selectedFile,
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () async {
-                                await _pickImage();
-                                setSheetState(() {});
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xff1193D4),
+                          Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 3),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.08),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                                child: CircleAvatar(
+                                  radius: 54,
+                                  backgroundColor: Colors.grey[200],
+                                  backgroundImage: ImageConstant.getStudentImageProvider(
+                                    gender: _selectedGender,
+                                    imageUrl: _isImageRemoved ? null : _uploadedImageUrl,
+                                    selectedFile: _selectedFile,
+                                    selectedFileBytes: _selectedFileBytes,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 4,
+                                right: 4,
+                                child: Tooltip(
+                                  message: 'Upload Student Photo',
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      await _pickImage(setSheetState);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xff1193D4),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_selectedFileBytes != null ||
+                                  _selectedFile != null ||
+                                  (!_isImageRemoved && _uploadedImageUrl != null && _uploadedImageUrl!.trim().isNotEmpty))
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: Tooltip(
+                                    message: 'Reset to Default Image',
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setSheetState(() {
+                                          _selectedFile = null;
+                                          _selectedFileBytes = null;
+                                          _selectedFileName = null;
+                                          _uploadedImageUrl = null;
+                                          _isImageRemoved = true;
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.redAccent,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.2),
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(Icons.close_rounded, size: 16, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (_selectedFileBytes != null ||
+                              _selectedFile != null ||
+                              (!_isImageRemoved && _uploadedImageUrl != null && _uploadedImageUrl!.trim().isNotEmpty)) ...[
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () {
+                                setSheetState(() {
+                                  _selectedFile = null;
+                                  _selectedFileBytes = null;
+                                  _selectedFileName = null;
+                                  _uploadedImageUrl = null;
+                                  _isImageRemoved = true;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.refresh_rounded, size: 15, color: Colors.redAccent),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Reset to Default Image',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.redAccent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -1169,23 +1300,6 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                         return;
                       }
 
-                      // Mobile is optional. If provided and not a 'None' variant, validate format
-                      if (mobile.isNotEmpty && !StudentHelper.isNoneVariant(mobile)) {
-                        final phoneError = getPhoneValidationErrorMessage(mobile);
-                        if (phoneError.isNotEmpty) {
-                          AlertInfo.show(
-                            context: context,
-                            text: phoneError,
-                            typeInfo: TypeInfo.error,
-                            iconColor: Colors.white,
-                            backgroundColor: Colors.redAccent,
-                            textColor: Colors.white,
-                            position: MessagePosition.top,
-                          );
-                          return;
-                        }
-                      }
-
                       final dayVal = int.tryParse(day);
                       final monthVal = int.tryParse(month);
                       final yearVal = int.tryParse(year);
@@ -1254,8 +1368,19 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                       setSheetState(() => _isUploading = true);
                       setState(() => _isUploading = true);
                       try {
-                        if (_selectedFile != null) {
-                          _uploadedImageUrl = await _uploadToCloudinary(_selectedFile!);
+                        String studentImageUrl = '';
+                        if (_isImageRemoved) {
+                          studentImageUrl = '';
+                        } else if (_selectedFileBytes != null || _selectedFile != null) {
+                          studentImageUrl = await _uploadToCloudinary(
+                            file: _selectedFile,
+                            bytes: _selectedFileBytes,
+                            fileName: _selectedFileName,
+                          );
+                        } else if (_uploadedImageUrl != null && _uploadedImageUrl!.trim().isNotEmpty) {
+                          studentImageUrl = _uploadedImageUrl!.trim();
+                        } else if (editingStudent != null && !_isImageRemoved) {
+                          studentImageUrl = editingStudent!.imageUrl;
                         }
 
                         final firstName = name.split(' ').first.toLowerCase();
@@ -1276,7 +1401,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           admissionNo: admNoVal,
                           rollNo: rollNo.isEmpty ? 0 : (int.tryParse(rollNo) ?? 0),
                           studentName: name,
-                          mobileNo: (mobile.isEmpty || StudentHelper.isNoneVariant(mobile)) ? "None" : mobile,
+                          mobileNo: (mobile.isEmpty || StudentHelper.isNoneVariant(mobile) || (mobile.startsWith('+') && mobile.length <= 4)) ? "None" : mobile,
                           email: effectiveEmail,
                           password: effectivePassword,
                           address: address.isEmpty ? "None" : address,
@@ -1287,7 +1412,7 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
                           teacherId: widget.teacherId,
                           gender: (_selectedGender == null || _selectedGender!.trim().isEmpty) ? "None" : _selectedGender!.trim(),
                           delete: false,
-                          imageUrl: _uploadedImageUrl ?? (editingStudent?.imageUrl ?? ''),
+                          imageUrl: studentImageUrl,
                           dateOfBirth: dob,
                           createdDate: editingStudent?.createdDate ?? DateTime.now(),
                           schoolId: SessionManager.schoolId,
@@ -1329,6 +1454,11 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
 
                         if (context.mounted) {
                           Navigator.pop(context);
+                          _selectedFile = null;
+                          _selectedFileBytes = null;
+                          _selectedFileName = null;
+                          _uploadedImageUrl = null;
+                          _isImageRemoved = false;
                           AlertInfo.show(
                             context: context,
                             text: editingStudent != null ? 'Student updated successfully' : 'Student added successfully',
@@ -1373,7 +1503,13 @@ class _TeacherScreenStudentListState extends ConsumerState<TeacherScreenStudentL
       );
     },
   ),
-);
+).whenComplete(() {
+  _selectedFile = null;
+  _selectedFileBytes = null;
+  _selectedFileName = null;
+  _uploadedImageUrl = null;
+  _isImageRemoved = false;
+});
   }
 
   void showStudentDetailsModal(BuildContext context, StudentsModel student) {

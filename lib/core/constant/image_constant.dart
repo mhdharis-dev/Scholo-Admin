@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 class ImageConstant {
@@ -16,8 +17,12 @@ class ImageConstant {
     String? gender,
     String? imageUrl,
     File? selectedFile,
+    Uint8List? selectedFileBytes,
   }) {
-    if (selectedFile != null) {
+    if (selectedFileBytes != null && selectedFileBytes.isNotEmpty) {
+      return MemoryImage(selectedFileBytes);
+    }
+    if (selectedFile != null && !kIsWeb) {
       return FileImage(selectedFile);
     }
     if (imageUrl != null && imageUrl.trim().isNotEmpty) {

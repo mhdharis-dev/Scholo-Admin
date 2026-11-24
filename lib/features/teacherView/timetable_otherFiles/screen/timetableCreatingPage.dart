@@ -1920,6 +1920,7 @@ class _TimeTableCreatingPageState extends ConsumerState<TimeTableCreatingPage> {
                                 teacherName: selectedTeacher!.teacherName,
                                 teacherId: selectedTeacher!.id,
                                 subject: subjectController.text.trim(),
+                                subjectShort: selectedTeacher!.subjectShort,
                                 employeeId: selectedTeacher!.employeeId,
                                 mobileNo: int.tryParse(selectedTeacher!.mobileNo) ?? 0,
                                 isPermanent: true,

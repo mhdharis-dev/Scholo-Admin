@@ -606,6 +606,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final _passwordController = TextEditingController();
   final _mobileController = TextEditingController();
   final _subjectController = TextEditingController();
+  final _subjectShortController = TextEditingController();
   final _addressController = TextEditingController();
   final _dayController = TextEditingController();
   final _monthController = TextEditingController();
@@ -2348,6 +2349,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _passwordController.clear();
     _mobileController.clear();
     _subjectController.clear();
+    _subjectShortController.clear();
     _addressController.clear();
     _dayController.clear();
     _monthController.clear();
@@ -2460,6 +2462,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 _buildTextFieldWithValidation(_nameController, "Name"),
                 const SizedBox(height: 14),
                 _buildTextFieldWithValidation(_subjectController, "Subject"),
+                const SizedBox(height: 14),
+                _buildTextFieldWithValidation(_subjectShortController, "Subject Short (Optional)"),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -2715,6 +2719,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 classNo: int.parse(_selectedClass!),
                                 division: _selectedDiv!,
                                 subject: _subjectController.text,
+                                subjectShort: _subjectShortController.text.trim().isNotEmpty
+                                    ? _subjectShortController.text.trim()
+                                    : null,
                                 email: _emailController.text,
                                 password: _passwordController.text,
                                 address: _addressController.text,

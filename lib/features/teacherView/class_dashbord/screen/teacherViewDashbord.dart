@@ -831,6 +831,7 @@ class _TeacherDashbordScreenState extends ConsumerState<TeacherDashbordScreen> {
                                 teacherName: selectedTeacher!.teacherName,
                                 teacherId: selectedTeacher!.id,
                                 subject: subjectController.text.trim(),
+                                subjectShort: selectedTeacher!.subjectShort,
                                 employeeId: selectedTeacher!.employeeId,
                                 mobileNo: int.parse(selectedTeacher!.mobileNo),
                                 isPermanent: isPermanent,

@@ -642,6 +642,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
 
   final _teacherIdController = TextEditingController();
   final _subjectController = TextEditingController();
+  final _subjectShortController = TextEditingController();
 
   String? _selectedClass;
   String? _selectedDiv;
@@ -782,6 +783,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _passwordController.text = teacher.password;
       _mobileController.text = teacher.mobileNo;
       _subjectController.text = teacher.subject;
+      _subjectShortController.text = teacher.subjectShort ?? '';
       _addressController.text = teacher.address;
       _selectedClass = teacher.classNo.toString();
       _selectedDiv = teacher.division;
@@ -799,6 +801,7 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       _passwordController.clear();
       _mobileController.clear();
       _subjectController.clear();
+      _subjectShortController.clear();
       _addressController.clear();
       _selectedClass = null;
       _selectedDiv = null;
@@ -881,6 +884,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
             const SizedBox(height: 12),
             _buildTextFieldWithValidation(_subjectController, "Subject",inputFormatters: [ FilteringTextInputFormatter.allow(
               RegExp(r"[a-zA-Z\s]"),)]),
+            const SizedBox(height: 12),
+            _buildTextFieldWithValidation(_subjectShortController, "Subject Short (Optional)", inputFormatters: [ FilteringTextInputFormatter.allow(
+              RegExp(r"[a-zA-Z0-9\s\-_/]"),)]),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1111,6 +1117,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                       classNo: int.parse(_selectedClass!),
                       division: _selectedDiv!,
                       subject: _subjectController.text,
+                      subjectShort: _subjectShortController.text.trim().isNotEmpty
+                          ? _subjectShortController.text.trim()
+                          : null,
                       email: _emailController.text,
                       password: _passwordController.text,
                       address: _addressController.text,
@@ -2326,6 +2335,11 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
         route: '/admin/classrooms',
       ),
       const _SideMenuItemData(
+        title: 'Timetable Management',
+        icon: Icons.table_chart_rounded,
+        route: '/admin/timetable',
+      ),
+      const _SideMenuItemData(
         title: 'Trash Bin',
         icon: Icons.delete,
         route: '/admin/trash',
@@ -2435,7 +2449,9 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(12),
                               onTap: () {
-                                context.go(item.route);
+                                if (item.route.isNotEmpty) {
+                                  context.go(item.route);
+                                }
                               },
                               hoverColor: Colors.white.withValues(alpha: 0.15),
                               child: Container(
@@ -2549,12 +2565,14 @@ class _AdminPanelState extends ConsumerState<AdminPanel> {
       activeIndex = 3;
     } else if (location.startsWith('/admin/classrooms')) {
       activeIndex = 4;
-    } else if (location.startsWith('/admin/trash')) {
+    } else if (location.startsWith('/admin/timetable')) {
       activeIndex = 5;
-    } else if (location.startsWith('/admin/subscription')) {
+    } else if (location.startsWith('/admin/trash')) {
       activeIndex = 6;
-    } else if (location.startsWith('/admin/settings')) {
+    } else if (location.startsWith('/admin/subscription')) {
       activeIndex = 7;
+    } else if (location.startsWith('/admin/settings')) {
+      activeIndex = 8;
     } else if (location.startsWith('/admin/notifications')) {
       activeIndex = -1;
     }
@@ -3350,7 +3368,7 @@ class _SideMenuItemData {
   const _SideMenuItemData({
     required this.title,
     required this.icon,
-    required this.route,
+    this.route = '',
   });
 }
 

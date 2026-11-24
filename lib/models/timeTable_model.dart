@@ -83,23 +83,46 @@ class TimetableModel {
 
   // NOTE: It's usually best to pass the document ID separately when reading from Firestore
   factory TimetableModel.fromMap(Map<String, dynamic> map, String documentId) {
+    DateTime parsedCreatedDate;
+    if (map['createdDate'] is Timestamp) {
+      parsedCreatedDate = (map['createdDate'] as Timestamp).toDate();
+    } else if (map['createdDate'] is DateTime) {
+      parsedCreatedDate = map['createdDate'];
+    } else if (map['createdDate'] is String) {
+      parsedCreatedDate = DateTime.tryParse(map['createdDate']) ?? DateTime.now();
+    } else if (map['createdDate'] is int) {
+      parsedCreatedDate = DateTime.fromMillisecondsSinceEpoch(map['createdDate']);
+    } else {
+      parsedCreatedDate = DateTime.now();
+    }
+
+    DateTime? parsedDeletedDate;
+    if (map['deletedDate'] is Timestamp) {
+      parsedDeletedDate = (map['deletedDate'] as Timestamp).toDate();
+    } else if (map['deletedDate'] is DateTime) {
+      parsedDeletedDate = map['deletedDate'];
+    } else if (map['deletedDate'] is String) {
+      parsedDeletedDate = DateTime.tryParse(map['deletedDate']);
+    } else if (map['deletedDate'] is int) {
+      parsedDeletedDate = DateTime.fromMillisecondsSinceEpoch(map['deletedDate']);
+    }
+
     return TimetableModel(
-      timetableName: map['timetableName'] ?? '',
-      classTeacherName: map['classTeacherName'] ?? '',
-      classTeacherId: map['classTeacherId'] ?? '',
-      classNo: map['classNo'] ?? '',
-      division: map['division'] ?? '',
-      totalPeriods: map['totalPeriods'] ?? 0,
-      totalWorkingDays: map['totalWorkingDays'] ?? 0,
-      // FIX: Convert Firestore Timestamp back to Dart DateTime
-      createdDate: (map['createdDate'] as Timestamp).toDate(),
-      delete: map['delete'] ?? false,
-      deletedDate: map['deletedDate'] != null ? (map['deletedDate'] as Timestamp).toDate() : null,
+      timetableName: map['timetableName']?.toString() ?? '',
+      classTeacherName: map['classTeacherName']?.toString() ?? '',
+      classTeacherId: map['classTeacherId']?.toString() ?? '',
+      classNo: map['classNo']?.toString() ?? documentId,
+      division: map['division']?.toString() ?? '',
+      totalPeriods: int.tryParse(map['totalPeriods']?.toString() ?? '0') ?? 0,
+      totalWorkingDays: int.tryParse(map['totalWorkingDays']?.toString() ?? '0') ?? 0,
+      createdDate: parsedCreatedDate,
+      delete: map['delete'] == true,
+      deletedDate: parsedDeletedDate,
       // FIX: Parse the raw Map from Firestore into a Map of DayScheduleModels
       workingDays: (map['workingDays'] as Map<String, dynamic>?)?.map(
-            (key, value) => MapEntry(key, DayScheduleModel.fromMap(value)),
+            (key, value) => MapEntry(key.toString(), DayScheduleModel.fromMap(Map<String, dynamic>.from(value))),
       ) ?? {},
-      schoolId: map['schoolId'] ?? '',
+      schoolId: map['schoolId']?.toString() ?? '',
     );
   }
 }

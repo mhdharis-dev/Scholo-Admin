@@ -25,6 +25,8 @@ import '../features/teacherView/fee/screen/fee_list.dart';
 import '../features/teacherView/fee/screen/fee_collection.dart';
 import '../features/teacherView/timetable_otherFiles/screen/timetableViewPage.dart';
 import '../models/timeTable_model.dart';
+import '../features/timetable_management/screen/timetable_management_screen.dart';
+import '../features/timetable_management/screen/analyzed_timetable_editor_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/splash',
@@ -149,6 +151,21 @@ final router = GoRouter(
               ],
             ),
           ],
+        ),
+        GoRoute(
+          path: '/admin/timetable',
+          builder: (_, __) => const TimetableManagementScreen(),
+        ),
+        GoRoute(
+          path: '/admin/timetable-management',
+          builder: (_, __) => const TimetableManagementScreen(),
+        ),
+        GoRoute(
+          path: '/admin/timetable/analyzed-editor',
+          builder: (context, state) {
+            final fileName = state.uri.queryParameters['file'];
+            return AnalyzedTimetableEditorScreen(uploadedFileName: fileName);
+          },
         ),
         GoRoute(
           path: '/admin/trash',

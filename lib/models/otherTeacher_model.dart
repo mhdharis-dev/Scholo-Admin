@@ -4,6 +4,7 @@ class OtherTeacherModel {
   final String teacherName;
   final String teacherId;
   final String subject;
+  final String? subjectShort;
   final String imageUrl;
   final String email;
 
@@ -23,6 +24,7 @@ class OtherTeacherModel {
     required this.teacherName,
     required this.teacherId,
     required this.subject,
+    this.subjectShort,
     required this.imageUrl,
     required this.employeeId,
     required this.mobileNo,
@@ -40,6 +42,7 @@ class OtherTeacherModel {
     String? teacherName,
     String? teacherId,
     String? subject,
+    String? subjectShort,
     String? employeeId,
     String? imageUrl,
     int? mobileNo,
@@ -56,6 +59,7 @@ class OtherTeacherModel {
       teacherName: teacherName ?? this.teacherName,
       teacherId: teacherId ?? this.teacherId,
       subject: subject ?? this.subject,
+      subjectShort: subjectShort ?? this.subjectShort,
       imageUrl: imageUrl ?? this.imageUrl,
       employeeId: employeeId ?? this.employeeId,
       mobileNo: mobileNo ?? this.mobileNo,
@@ -75,6 +79,7 @@ class OtherTeacherModel {
       'teacherName': teacherName,
       'teacherId': teacherId,
       'subject': subject,
+      'subjectShort': subjectShort,
       'imageUrl': imageUrl,
       'employeeId': employeeId,
       'mobileNo': mobileNo,
@@ -94,6 +99,7 @@ class OtherTeacherModel {
       teacherName: map['teacherName'] ?? '',
       teacherId: map['teacherId'] ?? '',
       subject: map['subject'] ?? '',
+      subjectShort: map['subjectShort'] as String?,
       email: map['email'] ?? '',
       employeeId: map['employeeId'] ?? '',
       imageUrl: map['imageUrl'] ?? '',
